@@ -470,4 +470,89 @@ replicas: 3
 
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_render_string_with_typo_value() {
+        let engine = Engine::new(true);
+        let ctx = create_test_context();
+
+        // Common typo: "value" instead of "values"
+        let template = "name: {{ value.app.name }}";
+        let result = engine.render_string(template, &ctx, "test.yaml");
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        // The error is wrapped in EngineError::Template
+        match err {
+            EngineError::Template(te) => {
+                assert!(
+                    te.message.contains("undefined") || te.message.contains("value"),
+                    "Expected error about undefined value, got: {}",
+                    te.message
+                );
+            }
+            other => panic!("Expected Template error, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_render_string_unknown_filter() {
+        let engine = Engine::new(true);
+        let ctx = create_test_context();
+
+        let template = "name: {{ values.image.repository | unknownfilter }}";
+        let result = engine.render_string(template, &ctx, "test.yaml");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_render_result_with_report_structure() {
+        use crate::error::{RenderReport, RenderResultWithReport};
+        use std::collections::HashMap;
+
+        // Test successful result
+        let result = RenderResultWithReport {
+            manifests: {
+                let mut m = HashMap::new();
+                m.insert("deployment.yaml".to_string(), "apiVersion: v1".to_string());
+                m
+            },
+            notes: Some("Install notes".to_string()),
+            report: RenderReport::new(),
+        };
+
+        assert!(result.is_success());
+        assert_eq!(result.manifests.len(), 1);
+        assert!(result.notes.is_some());
+    }
+
+    #[test]
+    fn test_render_result_partial_success() {
+        use crate::error::{RenderReport, RenderResultWithReport, TemplateError};
+        use std::collections::HashMap;
+
+        let mut report = RenderReport::new();
+        report.add_success("good.yaml".to_string());
+        report.add_error(
+            "bad.yaml".to_string(),
+            TemplateError::simple("undefined variable"),
+        );
+
+        let result = RenderResultWithReport {
+            manifests: {
+                let mut m = HashMap::new();
+                m.insert("good.yaml".to_string(), "content".to_string());
+                m
+            },
+            notes: None,
+            report,
+        };
+
+        // Not a success because there was an error
+        assert!(!result.is_success());
+        // But we still have partial results
+        assert_eq!(result.manifests.len(), 1);
+        assert!(result.manifests.contains_key("good.yaml"));
+    }
 }

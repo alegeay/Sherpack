@@ -582,3 +582,184 @@ impl RenderResultWithReport {
 
 /// Result type for engine operations
 pub type Result<T> = std::result::Result<T, EngineError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_render_report_new() {
+        let report = RenderReport::new();
+        assert!(!report.has_errors());
+        assert_eq!(report.total_errors, 0);
+        assert_eq!(report.templates_with_errors(), 0);
+        assert!(report.successful_templates.is_empty());
+    }
+
+    #[test]
+    fn test_render_report_add_error() {
+        let mut report = RenderReport::new();
+
+        let error = TemplateError::simple("test error");
+        report.add_error("template.yaml".to_string(), error);
+
+        assert!(report.has_errors());
+        assert_eq!(report.total_errors, 1);
+        assert_eq!(report.templates_with_errors(), 1);
+    }
+
+    #[test]
+    fn test_render_report_multiple_errors_same_template() {
+        let mut report = RenderReport::new();
+
+        report.add_error("template.yaml".to_string(), TemplateError::simple("error 1"));
+        report.add_error("template.yaml".to_string(), TemplateError::simple("error 2"));
+
+        assert_eq!(report.total_errors, 2);
+        assert_eq!(report.templates_with_errors(), 1);
+        assert_eq!(report.errors_by_template["template.yaml"].len(), 2);
+    }
+
+    #[test]
+    fn test_render_report_multiple_templates() {
+        let mut report = RenderReport::new();
+
+        report.add_error("a.yaml".to_string(), TemplateError::simple("error 1"));
+        report.add_error("b.yaml".to_string(), TemplateError::simple("error 2"));
+        report.add_error("c.yaml".to_string(), TemplateError::simple("error 3"));
+
+        assert_eq!(report.total_errors, 3);
+        assert_eq!(report.templates_with_errors(), 3);
+    }
+
+    #[test]
+    fn test_render_report_add_success() {
+        let mut report = RenderReport::new();
+
+        report.add_success("good.yaml".to_string());
+        report.add_success("also-good.yaml".to_string());
+
+        assert!(!report.has_errors());
+        assert_eq!(report.successful_templates.len(), 2);
+    }
+
+    #[test]
+    fn test_render_report_summary_singular() {
+        let mut report = RenderReport::new();
+        report.add_error("template.yaml".to_string(), TemplateError::simple("error"));
+
+        assert_eq!(report.summary(), "1 error in 1 template");
+    }
+
+    #[test]
+    fn test_render_report_summary_plural() {
+        let mut report = RenderReport::new();
+        report.add_error("a.yaml".to_string(), TemplateError::simple("error 1"));
+        report.add_error("a.yaml".to_string(), TemplateError::simple("error 2"));
+        report.add_error("b.yaml".to_string(), TemplateError::simple("error 3"));
+
+        assert_eq!(report.summary(), "3 errors in 2 templates");
+    }
+
+    #[test]
+    fn test_render_result_with_report_success() {
+        let result = RenderResultWithReport {
+            manifests: HashMap::new(),
+            notes: None,
+            report: RenderReport::new(),
+        };
+        assert!(result.is_success());
+    }
+
+    #[test]
+    fn test_render_result_with_report_failure() {
+        let mut report = RenderReport::new();
+        report.add_error("test.yaml".to_string(), TemplateError::simple("error"));
+
+        let result = RenderResultWithReport {
+            manifests: HashMap::new(),
+            notes: None,
+            report,
+        };
+        assert!(!result.is_success());
+    }
+
+    #[test]
+    fn test_template_error_simple() {
+        let error = TemplateError::simple("test message");
+        assert_eq!(error.message, "test message");
+        assert_eq!(error.kind, TemplateErrorKind::Other);
+        assert!(error.suggestion.is_none());
+    }
+
+    #[test]
+    fn test_template_error_with_suggestion() {
+        let error = TemplateError::simple("test").with_suggestion("try this");
+        assert_eq!(error.suggestion, Some("try this".to_string()));
+    }
+
+    #[test]
+    fn test_template_error_with_context() {
+        let error = TemplateError::simple("test").with_context("additional info");
+        assert_eq!(error.context, Some("additional info".to_string()));
+    }
+
+    #[test]
+    fn test_template_error_kind() {
+        let error = TemplateError {
+            message: "test".to_string(),
+            kind: TemplateErrorKind::UndefinedVariable,
+            src: NamedSource::new("test", String::new()),
+            span: None,
+            suggestion: None,
+            context: None,
+        };
+        assert_eq!(error.kind(), TemplateErrorKind::UndefinedVariable);
+    }
+
+    #[test]
+    fn test_template_error_kind_to_code_string() {
+        assert_eq!(
+            TemplateErrorKind::UndefinedVariable.to_code_string(),
+            "undefined_variable"
+        );
+        assert_eq!(
+            TemplateErrorKind::UnknownFilter.to_code_string(),
+            "unknown_filter"
+        );
+        assert_eq!(
+            TemplateErrorKind::SyntaxError.to_code_string(),
+            "syntax"
+        );
+    }
+
+    #[test]
+    fn test_extract_expression_from_display_with_marker() {
+        let display = r#"
+   8 >   typo: {{ value.app.name }}
+     i            ^^^^^^^^^ undefined value
+"#;
+        let expr = extract_expression_from_display(display);
+        assert_eq!(expr, Some("value.app.name".to_string()));
+    }
+
+    #[test]
+    fn test_extract_expression_with_filter() {
+        let display = r#"
+   8 >   data: {{ values.app.name | upper }}
+     i                              ^^^^^ unknown filter
+"#;
+        let expr = extract_expression_from_display(display);
+        assert_eq!(expr, Some("values.app.name".to_string()));
+    }
+
+    #[test]
+    fn test_extract_filter_from_display() {
+        let display = r#"
+   8 >   data: {{ values.name | toyml }}
+     i                          ^^^^^ unknown filter
+"#;
+        let filter = extract_filter_from_display(display);
+        assert_eq!(filter, Some("toyml".to_string()));
+    }
+}
