@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ release.name }}
+  namespace: {{ release.namespace }}
+spec:
+  replicas: {{ values.replicas }}
+  template:
+    spec:
+      containers:
+        - name: {{ release.name }}
+          image: {{ values.image.repository }}:{{ values.image.tag }}

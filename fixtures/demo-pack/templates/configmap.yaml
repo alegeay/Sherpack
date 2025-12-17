@@ -1,0 +1,25 @@
+{# ============================================
+   CONFIGMAP - Démonstration toyaml, tojson, indent
+   ============================================ #}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ release.name }}-config
+  namespace: {{ release.namespace }}
+data:
+  # Configuration en YAML
+  config.yaml: |
+{{ values.config | toyaml | indent(4) }}
+  # Configuration en JSON
+  config.json: |
+{{ values.config | tojson_pretty | indent(4) }}
+  # Variables individuelles
+  LOG_LEVEL: {{ values.env.LOG_LEVEL | quote }}
+  SERVER_PORT: {{ tostring(values.config.server.port) | quote }}
+  # Liste des hosts
+  hosts.json: {{ values.ingress.hosts | tojson | quote }}
+  # Génération d'un ID unique
+  instance-id: {{ uuidv4() | quote }}
+  # Timestamp de génération
+  generated-at: {{ now() | quote }}

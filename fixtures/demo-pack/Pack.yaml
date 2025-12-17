@@ -1,0 +1,10 @@
+apiVersion: sherpack/v1
+kind: application
+metadata:
+  name: demo-pack
+  version: 1.0.0
+  description: Démonstration complète des capacités de templating
+  appVersion: "2.0.0"
+
+engine:
+  strict: true

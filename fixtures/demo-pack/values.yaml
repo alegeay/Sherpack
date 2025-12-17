@@ -1,0 +1,82 @@
+# Configuration de l'application
+app:
+  name: mywebapp
+  enabled: true
+  replicas: 3
+
+# Image Docker
+image:
+  repository: nginx
+  tag: "1.25"
+  pullPolicy: IfNotPresent
+
+# Configuration des ressources
+resources:
+  limits:
+    cpu: "500m"
+    memory: "256Mi"
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+
+# Variables d'environnement
+env:
+  LOG_LEVEL: info
+  DEBUG: "false"
+  DATABASE_URL: "postgres://localhost:5432/mydb"
+
+# Secrets (seront encodés en base64)
+secrets:
+  apiKey: "super-secret-key-123"
+  password: "my-password"
+
+# Configuration
+config:
+  server:
+    port: 8080
+    host: "0.0.0.0"
+  database:
+    maxConnections: 10
+    timeout: 30
+
+# Labels personnalisés
+labels:
+  team: platform
+  environment: staging
+  costCenter: "CC-1234"
+
+# Annotations
+annotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9090"
+
+# Liste de ports
+ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+
+# Ingress
+ingress:
+  enabled: true
+  hosts:
+    - myapp.example.com
+    - api.example.com
+  tls:
+    enabled: true
+    secretName: myapp-tls
+
+# Feature flags
+features:
+  caching: true
+  rateLimit: false
+  oauth: true
+
+# Texte multi-ligne
+welcomeMessage: |
+  Bienvenue sur notre application!
+  Version: 2.0
+  Contact: support@example.com

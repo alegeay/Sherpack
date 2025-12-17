@@ -1,0 +1,18 @@
+[package]
+name = "sherpack-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core types and utilities for Sherpack - the Kubernetes package manager"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+semver = { workspace = true }
+thiserror = { workspace = true }
+walkdir = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

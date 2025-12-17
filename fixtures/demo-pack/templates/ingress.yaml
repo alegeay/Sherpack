@@ -1,0 +1,43 @@
+{# ============================================
+   INGRESS - Démonstration conditionnels, empty
+   ============================================ #}
+
+{#- Ne génère l'Ingress que si enabled -#}
+{% if values.ingress.enabled %}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ release.name }}
+  namespace: {{ release.namespace }}
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    {#- Annotations TLS conditionnelles -#}
+    {% if values.ingress.tls.enabled %}
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    {% endif %}
+spec:
+  {#- Configuration TLS -#}
+  {% if values.ingress.tls.enabled %}
+  tls:
+    - hosts:
+        {% for host in values.ingress.hosts %}
+        - {{ host }}
+        {% endfor %}
+      secretName: {{ values.ingress.tls.secretName }}
+  {% endif %}
+  rules:
+    {#- Règle pour chaque host -#}
+    {% for host in values.ingress.hosts %}
+    - host: {{ host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ release.name }}
+                port:
+                  number: 80
+    {% endfor %}
+{% endif %}

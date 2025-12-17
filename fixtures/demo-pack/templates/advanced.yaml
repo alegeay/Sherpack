@@ -1,0 +1,43 @@
+{# ============================================
+   ADVANCED - Fonctions et filtres avancés
+   ============================================ #}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ release.name }}-advanced
+  namespace: {{ release.namespace }}
+data:
+  # Utilisation de get avec valeur par défaut
+  optional-value: {{ get(values, "optionalField", "default-value") | quote }}
+  # Vérification de clé avec haskey
+  has-tls: {% if values.ingress | haskey("tls") %}"true"{% else %}"false"{% endif %}
+
+  has-missing: {% if values.ingress | haskey("missingKey") %}"true"{% else %}"false"{% endif %}
+
+  # Récupération des clés d'un objet
+  env-keys: {{ values.env | keys | tojson | quote }}
+  # Transformations de chaînes
+  app-name-snake: {{ values.app.name | snakecase | quote }}
+  app-name-kebab: {{ values.app.name | kebabcase | quote }}
+  app-name-upper: {{ values.app.name | upper | quote }}
+  app-name-lower: {{ values.app.name | lower | quote }}
+  # Manipulation de chaînes
+  short-hash: {{ values.config | tojson | sha256 | trunc(8) | quote }}
+  clean-path: {{ "/api/v1/users/" | trimprefix("/") | trimsuffix("/") | quote }}
+  # Quotes
+  double-quoted: {{ values.app.name | quote }}
+  single-quoted: {{ values.app.name | squote }}
+  # Ternary conditionnel (true_val, false_val, condition)
+  is-prod: {{ ternary("production", "development", release.namespace == "production") | quote }}
+  # Timestamp et UUID
+  generated-at: {{ now() | quote }}
+  instance-id: {{ uuidv4() | quote }}
+  # Merge de dictionnaires
+  {% set extraLabels = {"extra": "label"} -%}
+  merged-labels: {{ values.labels | merge(extraLabels) | tojson | quote }}
+  # Conversion de types
+  port-as-string: {{ tostring(values.config.server.port) | quote }}
+  replicas-doubled: {{ values.app.replicas * 2 }}
+  # Concaténation avec ~
+  formatted: {{ (release.name ~ "-v" ~ pack.version ~ "-" ~ release.namespace) | quote }}

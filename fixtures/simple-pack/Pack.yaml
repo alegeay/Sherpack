@@ -1,0 +1,6 @@
+apiVersion: sherpack/v1
+kind: application
+metadata:
+  name: simple-pack
+  version: 0.1.0
+  description: A simple test pack
