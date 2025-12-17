@@ -131,7 +131,10 @@ fn set_nested(value: &mut JsonValue, path: &[&str], new_value: JsonValue) -> Res
         *value = JsonValue::Object(serde_json::Map::new());
     }
 
-    let map = value.as_object_mut().unwrap();
+    // SAFETY: We just ensured it's an object above
+    let map = value
+        .as_object_mut()
+        .expect("value should be an object after initialization");
 
     if remaining.is_empty() {
         map.insert(key.to_string(), new_value);

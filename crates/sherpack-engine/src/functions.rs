@@ -169,7 +169,10 @@ pub fn printf(format: String, args: Vec<Value>) -> Result<String, Error> {
             break;
         }
 
-        let format_char = result.chars().nth(pos + 1).unwrap();
+        let format_char = match result.chars().nth(pos + 1) {
+            Some(c) => c,
+            None => break, // Malformed format string, stop processing
+        };
 
         if format_char == '%' {
             result = result.replacen("%%", "%", 1);

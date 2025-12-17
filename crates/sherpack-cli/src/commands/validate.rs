@@ -1,12 +1,12 @@
 //! Validate command - validate values against schema
 
 use console::style;
-use miette::{IntoDiagnostic, Result, WrapErr};
+use miette::{IntoDiagnostic, WrapErr};
 use sherpack_core::{LoadedPack, Schema, SchemaValidator, Values};
 use std::path::{Path, PathBuf};
 
 use crate::display::ValidationReport;
-use crate::exit_codes;
+use crate::error::{CliError, IntoCliResult, Result};
 
 pub fn run(
     pack_path: &Path,
@@ -21,7 +21,8 @@ pub fn run(
     // Load pack
     let pack = LoadedPack::load(pack_path)
         .into_diagnostic()
-        .wrap_err_with(|| format!("Failed to load pack from {}", pack_path.display()))?;
+        .wrap_err_with(|| format!("Failed to load pack from {}", pack_path.display()))
+        .into_cli_result()?;
 
     if !json_output {
         println!(
@@ -49,7 +50,8 @@ pub fn run(
             Some(
                 Schema::from_file(path)
                     .into_diagnostic()
-                    .wrap_err_with(|| format!("Failed to load schema from {}", path.display()))?,
+                    .wrap_err_with(|| format!("Failed to load schema from {}", path.display()))
+                    .into_cli_result()?,
             )
         }
         None => {
@@ -63,12 +65,14 @@ pub fn run(
         }
     };
 
-    let schema = schema.unwrap();
+    // SAFETY: We already checked above that schema is Some and returned early if None
+    let schema = schema.expect("schema should be Some after early return");
 
     // Create validator
     let validator = SchemaValidator::new(schema)
         .into_diagnostic()
-        .wrap_err("Failed to compile schema")?;
+        .wrap_err("Failed to compile schema")
+        .into_cli_result()?;
 
     if !json_output {
         println!("  {} Schema compiled successfully", style("✓").green());
@@ -101,7 +105,8 @@ pub fn run(
     if values_source.exists() {
         let file_values = Values::from_file(&values_source)
             .into_diagnostic()
-            .wrap_err_with(|| format!("Failed to load values from {}", values_source.display()))?;
+            .wrap_err_with(|| format!("Failed to load values from {}", values_source.display()))
+            .into_cli_result()?;
         values.merge(&file_values);
 
         if verbose && !json_output {
@@ -117,7 +122,8 @@ pub fn run(
     for vf in values_files {
         let file_values = Values::from_file(vf)
             .into_diagnostic()
-            .wrap_err_with(|| format!("Failed to load values from {}", vf.display()))?;
+            .wrap_err_with(|| format!("Failed to load values from {}", vf.display()))
+            .into_cli_result()?;
         values.merge(&file_values);
 
         if verbose && !json_output {
@@ -129,7 +135,8 @@ pub fn run(
     if !set_values.is_empty() {
         let set_vals = sherpack_core::values::parse_set_values(set_values)
             .into_diagnostic()
-            .wrap_err("Failed to parse --set values")?;
+            .wrap_err("Failed to parse --set values")
+            .into_cli_result()?;
         values.merge(&set_vals);
 
         if verbose && !json_output {
@@ -164,39 +171,52 @@ pub fn run(
                 })
             }).collect::<Vec<_>>(),
         });
-        println!("{}", serde_json::to_string_pretty(&output).unwrap());
+        // JSON serialization of our own struct should not fail
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&output)
+                .expect("JSON serialization should not fail for known types")
+        );
 
         if !result.is_valid {
-            std::process::exit(exit_codes::VALIDATION_ERROR);
+            return Err(CliError::validation(format!(
+                "{} validation error(s)",
+                result.errors.len()
+            )));
         }
+    } else if result.is_valid {
+        println!(
+            "  {} Values are valid against schema",
+            style("✓").green()
+        );
+        println!();
+        println!("{} Validation passed!", style("✓").green().bold());
     } else {
-        if result.is_valid {
-            println!(
-                "  {} Values are valid against schema",
-                style("✓").green()
+        // Display errors
+        let mut report = ValidationReport::new();
+
+        for error in &result.errors {
+            report.add_error(
+                schema_path
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "schema".to_string())
+                    .as_str(),
+                &error.path,
+                &error.message,
+                None,
             );
-            println!();
-            println!("{} Validation passed!", style("✓").green().bold());
-        } else {
-            // Display errors
-            let mut report = ValidationReport::new();
+        }
 
-            for error in &result.errors {
-                report.add_error(
-                    schema_path.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| "schema".to_string()).as_str(),
-                    &error.path,
-                    &error.message,
-                    None,
-                );
-            }
+        report.display();
+        println!();
+        report.print_summary();
 
-            report.display();
-            println!();
-            report.print_summary();
-
-            if strict || report.has_errors() {
-                std::process::exit(exit_codes::VALIDATION_ERROR);
-            }
+        if strict || report.has_errors() {
+            return Err(CliError::validation(format!(
+                "{} validation error(s)",
+                result.errors.len()
+            )));
         }
     }
 

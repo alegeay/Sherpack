@@ -1,12 +1,12 @@
 //! Lint command - validate a pack
 
 use console::style;
-use miette::{IntoDiagnostic, Result};
 use sherpack_core::{LoadedPack, ReleaseInfo, SchemaValidator, TemplateContext, Values};
 use sherpack_engine::Engine;
 use std::path::Path;
 
 use crate::display::display_render_report;
+use crate::error::{CliError, Result};
 
 pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
     println!(
@@ -59,8 +59,7 @@ pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
     // Check templates directory
     let templates_dir = path.join("templates");
     if templates_dir.exists() {
-        let entries: Vec<_> = std::fs::read_dir(&templates_dir)
-            .into_diagnostic()?
+        let entries: Vec<_> = std::fs::read_dir(&templates_dir)?
             .filter_map(|e| e.ok())
             .collect();
 
@@ -95,7 +94,10 @@ pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
                         println!(
                             "  {} {} is valid",
                             style("✓").green(),
-                            schema_path.file_name().unwrap().to_string_lossy()
+                            schema_path
+                                .file_name()
+                                .map(|n| n.to_string_lossy())
+                                .unwrap_or_else(|| "schema".into())
                         );
                         match SchemaValidator::new(schema) {
                             Ok(validator) => {
@@ -211,7 +213,7 @@ pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
             errors,
             warnings
         );
-        std::process::exit(1);
+        return Err(CliError::lint_failed(errors, warnings));
     } else if warnings > 0 {
         println!(
             "{} Linting passed with {} warning(s)",

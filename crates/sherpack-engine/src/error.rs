@@ -1,7 +1,7 @@
 //! Engine error types with beautiful formatting
 
+use indexmap::IndexMap;
 use miette::{Diagnostic, NamedSource, SourceSpan};
-use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::suggestions::{
@@ -367,8 +367,7 @@ fn generate_suggestion(
                 }
 
                 // Check for property access on values
-                if var_name.starts_with("values.") {
-                    let path = var_name.strip_prefix("values.").unwrap();
+                if let Some(path) = var_name.strip_prefix("values.") {
                     let parts: Vec<&str> = path.split('.').collect();
 
                     if let Some(vals) = values {
@@ -498,8 +497,8 @@ fn generate_suggestion(
 /// A collection of errors from rendering multiple templates
 #[derive(Debug, Default)]
 pub struct RenderReport {
-    /// Errors grouped by template file
-    pub errors_by_template: HashMap<String, Vec<TemplateError>>,
+    /// Errors grouped by template file (IndexMap preserves insertion order)
+    pub errors_by_template: IndexMap<String, Vec<TemplateError>>,
 
     /// Successfully rendered templates
     pub successful_templates: Vec<String>,
@@ -563,8 +562,8 @@ impl RenderReport {
 /// Result type that includes both successful renders and collected errors
 #[derive(Debug)]
 pub struct RenderResultWithReport {
-    /// Rendered manifests (may be partial if errors occurred)
-    pub manifests: HashMap<String, String>,
+    /// Rendered manifests (may be partial if errors occurred, IndexMap preserves order)
+    pub manifests: IndexMap<String, String>,
 
     /// Post-install notes
     pub notes: Option<String>,
@@ -664,7 +663,7 @@ mod tests {
     #[test]
     fn test_render_result_with_report_success() {
         let result = RenderResultWithReport {
-            manifests: HashMap::new(),
+            manifests: IndexMap::new(),
             notes: None,
             report: RenderReport::new(),
         };
@@ -677,7 +676,7 @@ mod tests {
         report.add_error("test.yaml".to_string(), TemplateError::simple("error"));
 
         let result = RenderResultWithReport {
-            manifests: HashMap::new(),
+            manifests: IndexMap::new(),
             notes: None,
             report,
         };

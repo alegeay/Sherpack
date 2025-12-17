@@ -1,5 +1,6 @@
 //! Template engine based on MiniJinja
 
+use indexmap::IndexMap;
 use minijinja::Environment;
 use sherpack_core::{LoadedPack, TemplateContext};
 use std::collections::HashMap;
@@ -11,8 +12,8 @@ use crate::functions;
 /// Result of rendering a pack
 #[derive(Debug)]
 pub struct RenderResult {
-    /// Rendered manifests by filename
-    pub manifests: HashMap<String, String>,
+    /// Rendered manifests by filename (IndexMap preserves insertion order)
+    pub manifests: IndexMap<String, String>,
 
     /// Post-install notes (if NOTES.txt exists)
     pub notes: Option<String>,
@@ -148,106 +149,36 @@ impl Engine {
     }
 
     /// Render all templates in a pack
+    ///
+    /// This is a convenience wrapper around `render_pack_collect_errors` that
+    /// returns the first error encountered, suitable for most use cases.
     pub fn render_pack(
         &self,
         pack: &LoadedPack,
         context: &TemplateContext,
     ) -> Result<RenderResult> {
-        let template_files = pack.template_files().map_err(|e| {
-            EngineError::Template(TemplateError::simple(format!(
-                "Failed to list templates: {}",
-                e
-            )))
-        })?;
+        let result = self.render_pack_collect_errors(pack, context);
 
-        let mut manifests = HashMap::new();
-        let mut notes = None;
+        // If there were any errors, return the first one
+        if result.report.has_errors() {
+            // Get the first error from the report
+            let first_error = result
+                .report
+                .errors_by_template
+                .into_values()
+                .next()
+                .and_then(|errors| errors.into_iter().next());
 
-        // First, load all helper templates (those starting with _)
-        let mut env = self.create_environment();
-        let templates_dir = &pack.templates_dir;
-
-        // Load all templates into the environment
-        for file_path in &template_files {
-            let rel_path = file_path
-                .strip_prefix(templates_dir)
-                .unwrap_or(file_path);
-            let template_name = rel_path.to_string_lossy().to_string();
-            let content = std::fs::read_to_string(file_path)?;
-
-            env.add_template_owned(template_name, content)
-                .map_err(|e| {
-                    let content = std::fs::read_to_string(file_path).unwrap_or_default();
-                    EngineError::Template(TemplateError::from_minijinja(
-                        e,
-                        &file_path.to_string_lossy(),
-                        &content,
-                    ))
-                })?;
+            return Err(match first_error {
+                Some(err) => EngineError::Template(err),
+                None => EngineError::Template(TemplateError::simple("Unknown template error")),
+            });
         }
 
-        // Build context value - use direct references for structs (context! macro serializes)
-        let ctx = minijinja::context! {
-            values => &context.values,
-            release => &context.release,
-            pack => &context.pack,
-            capabilities => &context.capabilities,
-            template => &context.template,
-        };
-
-        // Now render each non-helper template
-        for file_path in &template_files {
-            let rel_path = file_path
-                .strip_prefix(templates_dir)
-                .unwrap_or(file_path);
-            let template_name = rel_path.to_string_lossy().to_string();
-
-            // Skip helper templates (starting with _)
-            let file_stem = rel_path
-                .file_name()
-                .map(|s| s.to_string_lossy())
-                .unwrap_or_default();
-
-            if file_stem.starts_with('_') {
-                continue;
-            }
-
-            let tmpl = env.get_template(&template_name).map_err(|e| {
-                let content = std::fs::read_to_string(file_path).unwrap_or_default();
-                EngineError::Template(TemplateError::from_minijinja(
-                    e,
-                    &template_name,
-                    &content,
-                ))
-            })?;
-
-            let rendered = tmpl.render(&ctx).map_err(|e| {
-                let content = std::fs::read_to_string(file_path).unwrap_or_default();
-                EngineError::Template(TemplateError::from_minijinja(
-                    e,
-                    &template_name,
-                    &content,
-                ))
-            })?;
-
-            // Check if it's NOTES.txt
-            if template_name.to_lowercase().contains("notes") {
-                notes = Some(rendered);
-            } else {
-                // Skip empty rendered templates
-                let trimmed = rendered.trim();
-                if !trimmed.is_empty() && trimmed != "---" {
-                    // Generate output filename (remove .j2 extension if present)
-                    let output_name = template_name
-                        .trim_end_matches(".j2")
-                        .trim_end_matches(".jinja2");
-
-                    manifests.insert(output_name.to_string(), rendered);
-                }
-            }
-        }
-
-        Ok(RenderResult { manifests, notes })
+        Ok(RenderResult {
+            manifests: result.manifests,
+            notes: result.notes,
+        })
     }
 
     /// Render all templates in a pack, collecting all errors instead of stopping at the first
@@ -260,7 +191,7 @@ impl Engine {
         context: &TemplateContext,
     ) -> RenderResultWithReport {
         let mut report = RenderReport::new();
-        let mut manifests = HashMap::new();
+        let mut manifests = IndexMap::new();
         let mut notes = None;
 
         let template_files = match pack.template_files() {
@@ -509,12 +440,11 @@ replicas: 3
     #[test]
     fn test_render_result_with_report_structure() {
         use crate::error::{RenderReport, RenderResultWithReport};
-        use std::collections::HashMap;
 
         // Test successful result
         let result = RenderResultWithReport {
             manifests: {
-                let mut m = HashMap::new();
+                let mut m = IndexMap::new();
                 m.insert("deployment.yaml".to_string(), "apiVersion: v1".to_string());
                 m
             },
@@ -530,7 +460,6 @@ replicas: 3
     #[test]
     fn test_render_result_partial_success() {
         use crate::error::{RenderReport, RenderResultWithReport, TemplateError};
-        use std::collections::HashMap;
 
         let mut report = RenderReport::new();
         report.add_success("good.yaml".to_string());
@@ -541,7 +470,7 @@ replicas: 3
 
         let result = RenderResultWithReport {
             manifests: {
-                let mut m = HashMap::new();
+                let mut m = IndexMap::new();
                 m.insert("good.yaml".to_string(), "content".to_string());
                 m
             },

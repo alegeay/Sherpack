@@ -1,12 +1,15 @@
 //! Sherpack CLI - The Kubernetes package manager with Jinja2 templates
 
 use clap::{Parser, Subcommand};
-use miette::Result;
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 mod commands;
 mod display;
+mod error;
 mod exit_codes;
+
+use error::CliError;
 
 #[derive(Parser)]
 #[command(name = "sherpack")]
@@ -134,7 +137,7 @@ enum Commands {
     },
 }
 
-fn main() -> Result<()> {
+fn main() -> ExitCode {
     // Setup miette for nice error display
     miette::set_panic_hook();
 
@@ -146,6 +149,21 @@ fn main() -> Result<()> {
         unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
     }
 
+    let result = run_command(cli);
+
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            // Don't print LintFailed errors - lint command already printed details
+            if !matches!(err, CliError::LintFailed { .. }) {
+                eprintln!("{:?}", miette::Report::from(err.clone()));
+            }
+            ExitCode::from(err.exit_code() as u8)
+        }
+    }
+}
+
+fn run_command(cli: Cli) -> error::Result<()> {
     match cli.command {
         Commands::Template {
             name,
@@ -168,9 +186,12 @@ fn main() -> Result<()> {
             show_values,
             skip_schema,
             cli.debug,
-        ),
+        )
+        .map_err(CliError::from),
 
-        Commands::Create { name, output } => commands::create::run(&name, &output),
+        Commands::Create { name, output } => {
+            commands::create::run(&name, &output).map_err(CliError::from)
+        }
 
         Commands::Lint {
             path,
@@ -178,7 +199,7 @@ fn main() -> Result<()> {
             skip_schema,
         } => commands::lint::run(&path, strict, skip_schema),
 
-        Commands::Show { path, all } => commands::show::run(&path, all),
+        Commands::Show { path, all } => commands::show::run(&path, all).map_err(CliError::from),
 
         Commands::Validate {
             path,
