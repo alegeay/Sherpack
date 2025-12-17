@@ -2,11 +2,13 @@
 
 use console::style;
 use miette::{IntoDiagnostic, Result};
-use sherpack_core::{LoadedPack, ReleaseInfo, TemplateContext, Values};
+use sherpack_core::{LoadedPack, ReleaseInfo, SchemaValidator, TemplateContext, Values};
 use sherpack_engine::Engine;
 use std::path::Path;
 
-pub fn run(path: &Path, strict: bool) -> Result<()> {
+use crate::display::display_render_report;
+
+pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
     println!(
         "{} Linting pack at {}",
         style("→").blue(),
@@ -83,16 +85,77 @@ pub fn run(path: &Path, strict: bool) -> Result<()> {
         errors += 1;
     }
 
-    // Try to render templates with empty values
+    // Check and validate schema if present
+    let mut schema_validator = None;
     if let Some(pack) = &pack {
-        println!();
-        println!("{} Testing template rendering...", style("→").blue());
+        if !skip_schema {
+            if let Some(schema_path) = &pack.schema_path {
+                match pack.load_schema() {
+                    Ok(Some(schema)) => {
+                        println!(
+                            "  {} {} is valid",
+                            style("✓").green(),
+                            schema_path.file_name().unwrap().to_string_lossy()
+                        );
+                        match SchemaValidator::new(schema) {
+                            Ok(validator) => {
+                                schema_validator = Some(validator);
+                            }
+                            Err(e) => {
+                                println!("  {} Schema compilation failed: {}", style("✗").red(), e);
+                                errors += 1;
+                            }
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        println!("  {} Failed to load schema: {}", style("✗").red(), e);
+                        errors += 1;
+                    }
+                }
+            } else {
+                println!(
+                    "  {} No schema file found (optional)",
+                    style("⚠").yellow()
+                );
+                warnings += 1;
+            }
+        }
+    }
 
-        let values = if values_path.exists() {
-            Values::from_file(&values_path).unwrap_or_else(|_| Values::new())
+    // Try to render templates with values
+    if let Some(pack) = &pack {
+        // Load values (with schema defaults if available)
+        let mut values = if let Some(ref validator) = schema_validator {
+            validator.defaults_as_values()
         } else {
             Values::new()
         };
+
+        if values_path.exists() {
+            let file_values = Values::from_file(&values_path).unwrap_or_else(|_| Values::new());
+            values.merge(&file_values);
+        }
+
+        // Validate values against schema if present
+        if let Some(ref validator) = schema_validator {
+            println!();
+            println!("{} Validating values against schema...", style("→").blue());
+
+            let result = validator.validate(values.inner());
+            if result.is_valid {
+                println!("  {} Values match schema", style("✓").green());
+            } else {
+                println!("  {} Values do not match schema:", style("✗").red());
+                for err in &result.errors {
+                    println!("    - {}: {}", err.path, err.message);
+                }
+                errors += result.errors.len();
+            }
+        }
+
+        println!();
+        println!("{} Testing template rendering...", style("→").blue());
 
         let release = ReleaseInfo::for_install("RELEASE-NAME", "NAMESPACE");
         let context = TemplateContext::new(values, release, &pack.pack.metadata);
@@ -101,46 +164,41 @@ pub fn run(path: &Path, strict: bool) -> Result<()> {
             .strict(strict || pack.pack.engine.strict)
             .build();
 
-        match engine.render_pack(pack, &context) {
-            Ok(result) => {
-                println!(
-                    "  {} Rendered {} template(s) successfully",
-                    style("✓").green(),
-                    result.manifests.len()
-                );
+        // Use the error-collecting render method
+        let result = engine.render_pack_collect_errors(pack, &context);
 
-                // Validate YAML output
-                for (name, content) in &result.manifests {
-                    match serde_yaml::from_str::<serde_yaml::Value>(content) {
-                        Ok(_) => {
-                            println!(
-                                "    {} {} produces valid YAML",
-                                style("✓").green(),
-                                name
-                            );
-                        }
-                        Err(e) => {
-                            println!(
-                                "    {} {} produces invalid YAML: {}",
-                                style("✗").red(),
-                                name,
-                                e
-                            );
-                            errors += 1;
-                        }
+        if result.is_success() {
+            println!(
+                "  {} Rendered {} template(s) successfully",
+                style("✓").green(),
+                result.manifests.len()
+            );
+
+            // Validate YAML output
+            for (name, content) in &result.manifests {
+                match serde_yaml::from_str::<serde_yaml::Value>(content) {
+                    Ok(_) => {
+                        println!(
+                            "    {} {} produces valid YAML",
+                            style("✓").green(),
+                            name
+                        );
+                    }
+                    Err(e) => {
+                        println!(
+                            "    {} {} produces invalid YAML: {}",
+                            style("✗").red(),
+                            name,
+                            e
+                        );
+                        errors += 1;
                     }
                 }
             }
-            Err(e) => {
-                // Use miette to display the error nicely
-                let report = match e {
-                    sherpack_engine::EngineError::Template(te) => miette::Report::new(te),
-                    other => miette::miette!("{}", other),
-                };
-                println!("  {} Template rendering failed:", style("✗").red());
-                println!("{:?}", report);
-                errors += 1;
-            }
+        } else {
+            // Display comprehensive error report
+            display_render_report(&result.report);
+            errors += result.report.total_errors;
         }
     }
 

@@ -5,6 +5,8 @@ use miette::Result;
 use std::path::PathBuf;
 
 mod commands;
+mod display;
+mod exit_codes;
 
 #[derive(Parser)]
 #[command(name = "sherpack")]
@@ -54,6 +56,10 @@ enum Commands {
         /// Show rendered values
         #[arg(long)]
         show_values: bool,
+
+        /// Skip schema validation before rendering
+        #[arg(long)]
+        skip_schema: bool,
     },
 
     /// Create a new pack
@@ -75,6 +81,10 @@ enum Commands {
         /// Strict mode
         #[arg(long)]
         strict: bool,
+
+        /// Skip schema validation even if schema exists
+        #[arg(long)]
+        skip_schema: bool,
     },
 
     /// Show pack information
@@ -86,6 +96,41 @@ enum Commands {
         /// Show all information
         #[arg(long)]
         all: bool,
+    },
+
+    /// Validate values against schema
+    Validate {
+        /// Pack path
+        #[arg(default_value = ".")]
+        path: PathBuf,
+
+        /// External schema file to use (overrides pack schema)
+        #[arg(short = 's', long)]
+        schema: Option<PathBuf>,
+
+        /// Values file to validate (default: pack's values.yaml)
+        #[arg(short = 'f', long = "values")]
+        values: Option<PathBuf>,
+
+        /// Additional values files to merge before validation
+        #[arg(long = "values-file")]
+        values_files: Vec<PathBuf>,
+
+        /// Set values on command line (key=value)
+        #[arg(long = "set")]
+        set: Vec<String>,
+
+        /// Show verbose output with all validated properties
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Output validation results as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Strict mode - treat warnings as errors
+        #[arg(long)]
+        strict: bool,
     },
 }
 
@@ -111,6 +156,7 @@ fn main() -> Result<()> {
             output_dir,
             show_only,
             show_values,
+            skip_schema,
         } => commands::template::run(
             &name,
             &pack,
@@ -120,13 +166,38 @@ fn main() -> Result<()> {
             output_dir.as_deref(),
             show_only.as_deref(),
             show_values,
+            skip_schema,
             cli.debug,
         ),
 
         Commands::Create { name, output } => commands::create::run(&name, &output),
 
-        Commands::Lint { path, strict } => commands::lint::run(&path, strict),
+        Commands::Lint {
+            path,
+            strict,
+            skip_schema,
+        } => commands::lint::run(&path, strict, skip_schema),
 
         Commands::Show { path, all } => commands::show::run(&path, all),
+
+        Commands::Validate {
+            path,
+            schema,
+            values,
+            values_files,
+            set,
+            verbose,
+            json,
+            strict,
+        } => commands::validate::run(
+            &path,
+            schema.as_deref(),
+            values.as_deref(),
+            &values_files,
+            &set,
+            verbose,
+            json,
+            strict,
+        ),
     }
 }

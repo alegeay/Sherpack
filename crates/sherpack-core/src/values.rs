@@ -84,6 +84,17 @@ impl Values {
             _ => false,
         }
     }
+
+    /// Merge with schema defaults applied first
+    ///
+    /// The merge order is: schema defaults (lowest priority) -> base values (higher priority)
+    /// This ensures that schema defaults are only used when values are not explicitly set.
+    pub fn with_schema_defaults(schema_defaults: Values, base: Values) -> Self {
+        // Start with schema defaults, then merge base on top
+        let mut result = schema_defaults;
+        result.merge(&base);
+        result
+    }
 }
 
 /// Deep merge two JSON values

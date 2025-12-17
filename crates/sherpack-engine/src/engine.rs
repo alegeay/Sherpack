@@ -4,7 +4,7 @@ use minijinja::Environment;
 use sherpack_core::{LoadedPack, TemplateContext};
 use std::collections::HashMap;
 
-use crate::error::{EngineError, Result, TemplateError};
+use crate::error::{EngineError, RenderReport, RenderResultWithReport, Result, TemplateError};
 use crate::filters;
 use crate::functions;
 
@@ -248,6 +248,146 @@ impl Engine {
         }
 
         Ok(RenderResult { manifests, notes })
+    }
+
+    /// Render all templates in a pack, collecting all errors instead of stopping at the first
+    ///
+    /// Unlike `render_pack`, this method continues after errors and returns
+    /// a comprehensive report of all issues found.
+    pub fn render_pack_collect_errors(
+        &self,
+        pack: &LoadedPack,
+        context: &TemplateContext,
+    ) -> RenderResultWithReport {
+        let mut report = RenderReport::new();
+        let mut manifests = HashMap::new();
+        let mut notes = None;
+
+        let template_files = match pack.template_files() {
+            Ok(files) => files,
+            Err(e) => {
+                report.add_error(
+                    "<pack>".to_string(),
+                    TemplateError::simple(format!("Failed to list templates: {}", e)),
+                );
+                return RenderResultWithReport {
+                    manifests,
+                    notes,
+                    report,
+                };
+            }
+        };
+
+        // Create environment with all templates loaded
+        let mut env = self.create_environment();
+        let templates_dir = &pack.templates_dir;
+
+        // Track template sources for error reporting
+        let mut template_sources: HashMap<String, String> = HashMap::new();
+
+        // Load all templates - continue even if some fail to parse
+        for file_path in &template_files {
+            let rel_path = file_path.strip_prefix(templates_dir).unwrap_or(file_path);
+            let template_name = rel_path.to_string_lossy().to_string();
+
+            let content = match std::fs::read_to_string(file_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    report.add_error(
+                        template_name.clone(),
+                        TemplateError::simple(format!("Failed to read template: {}", e)),
+                    );
+                    continue;
+                }
+            };
+
+            template_sources.insert(template_name.clone(), content.clone());
+
+            if let Err(e) = env.add_template_owned(template_name.clone(), content.clone()) {
+                report.add_error(
+                    template_name.clone(),
+                    TemplateError::from_minijinja_enhanced(
+                        e,
+                        &template_name,
+                        &content,
+                        Some(&context.values),
+                    ),
+                );
+                // Continue loading other templates
+            }
+        }
+
+        // Build render context
+        let ctx = minijinja::context! {
+            values => &context.values,
+            release => &context.release,
+            pack => &context.pack,
+            capabilities => &context.capabilities,
+            template => &context.template,
+        };
+
+        // Render each non-helper template, collecting errors
+        for file_path in &template_files {
+            let rel_path = file_path.strip_prefix(templates_dir).unwrap_or(file_path);
+            let template_name = rel_path.to_string_lossy().to_string();
+
+            // Skip helper templates
+            let file_stem = rel_path
+                .file_name()
+                .map(|s| s.to_string_lossy())
+                .unwrap_or_default();
+
+            if file_stem.starts_with('_') {
+                continue;
+            }
+
+            // Try to get template (may have failed during loading)
+            let tmpl = match env.get_template(&template_name) {
+                Ok(t) => t,
+                Err(_) => {
+                    // Error already recorded during loading
+                    continue;
+                }
+            };
+
+            // Try to render
+            match tmpl.render(&ctx) {
+                Ok(rendered) => {
+                    // Process successful render
+                    if template_name.to_lowercase().contains("notes") {
+                        notes = Some(rendered);
+                    } else {
+                        let trimmed = rendered.trim();
+                        if !trimmed.is_empty() && trimmed != "---" {
+                            let output_name = template_name
+                                .trim_end_matches(".j2")
+                                .trim_end_matches(".jinja2");
+                            manifests.insert(output_name.to_string(), rendered);
+                        }
+                    }
+                    report.add_success(template_name);
+                }
+                Err(e) => {
+                    let content = template_sources.get(&template_name).cloned().unwrap_or_default();
+
+                    report.add_error(
+                        template_name.clone(),
+                        TemplateError::from_minijinja_enhanced(
+                            e,
+                            &template_name,
+                            &content,
+                            Some(&context.values),
+                        ),
+                    );
+                }
+            }
+        }
+
+        RenderResultWithReport {
+            manifests,
+            notes,
+            report,
+        }
     }
 }
 

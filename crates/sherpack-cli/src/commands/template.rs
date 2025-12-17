@@ -2,10 +2,12 @@
 
 use console::style;
 use miette::{IntoDiagnostic, Result, WrapErr};
-use sherpack_core::{LoadedPack, ReleaseInfo, TemplateContext, Values};
+use sherpack_core::{LoadedPack, ReleaseInfo, SchemaValidator, TemplateContext, Values};
 use sherpack_engine::Engine;
 use std::fs;
 use std::path::Path;
+
+use crate::display::display_render_report;
 
 pub fn run(
     name: &str,
@@ -16,6 +18,7 @@ pub fn run(
     output_dir: Option<&Path>,
     show_only: Option<&str>,
     show_values: bool,
+    skip_schema: bool,
     debug: bool,
 ) -> Result<()> {
     // Load pack
@@ -32,8 +35,63 @@ pub fn run(
         );
     }
 
+    // Load schema if present (for defaults and validation)
+    let schema_validator = if !skip_schema {
+        if let Some(schema_path) = &pack.schema_path {
+            match pack.load_schema() {
+                Ok(Some(schema)) => {
+                    match SchemaValidator::new(schema) {
+                        Ok(validator) => {
+                            if debug {
+                                eprintln!(
+                                    "{} Loaded schema from {}",
+                                    style("DEBUG").dim(),
+                                    schema_path.display()
+                                );
+                            }
+                            Some(validator)
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "{} Schema compilation warning: {}",
+                                style("⚠").yellow(),
+                                e
+                            );
+                            None
+                        }
+                    }
+                }
+                Ok(None) => None,
+                Err(e) => {
+                    eprintln!(
+                        "{} Failed to load schema: {}",
+                        style("⚠").yellow(),
+                        e
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     // Load and merge values
-    let mut values = Values::new();
+    // Order: schema defaults -> values.yaml -> -f files -> --set flags
+    let mut values = if let Some(ref validator) = schema_validator {
+        validator.defaults_as_values()
+    } else {
+        Values::new()
+    };
+
+    if debug && schema_validator.is_some() {
+        eprintln!(
+            "{} Applied schema defaults",
+            style("DEBUG").dim()
+        );
+    }
 
     // 1. Load default values from pack
     if pack.values_path.exists() {
@@ -83,6 +141,28 @@ pub fn run(
         }
     }
 
+    // 4. Validate values against schema if present
+    if let Some(ref validator) = schema_validator {
+        let result = validator.validate(values.inner());
+        if !result.is_valid {
+            eprintln!(
+                "{} Values validation failed:",
+                style("✗").red()
+            );
+            for err in &result.errors {
+                eprintln!("  - {}: {}", err.path, err.message);
+            }
+            return Err(miette::miette!(
+                "Values do not match schema. Use --skip-schema to bypass validation."
+            ));
+        } else if debug {
+            eprintln!(
+                "{} Values validated against schema",
+                style("DEBUG").dim()
+            );
+        }
+    }
+
     // Show merged values if requested
     if show_values {
         println!("{}", style("# Computed Values").cyan().bold());
@@ -104,13 +184,22 @@ pub fn run(
         .strict(pack.pack.engine.strict)
         .build();
 
-    // Render templates
-    let result = engine
-        .render_pack(&pack, &context)
-        .map_err(|e| match e {
-            sherpack_engine::EngineError::Template(te) => miette::Report::new(te),
-            other => miette::miette!("{}", other),
-        })?;
+    // Render templates with error collection
+    let render_result = engine.render_pack_collect_errors(&pack, &context);
+
+    // Check for errors
+    if !render_result.is_success() {
+        display_render_report(&render_result.report);
+        return Err(miette::miette!(
+            "Template rendering failed with {} error(s)",
+            render_result.report.total_errors
+        ));
+    }
+
+    let result = sherpack_engine::RenderResult {
+        manifests: render_result.manifests,
+        notes: render_result.notes,
+    };
 
     // Output results
     if let Some(output_path) = output_dir {

@@ -154,6 +154,9 @@ pub struct LoadedPack {
 
     /// Values file path
     pub values_path: PathBuf,
+
+    /// Schema file path (if present)
+    pub schema_path: Option<PathBuf>,
 }
 
 impl LoadedPack {
@@ -190,13 +193,41 @@ impl LoadedPack {
 
         let templates_dir = root.join("templates");
         let values_path = root.join("values.yaml");
+        let schema_path = Self::find_schema_file(&root);
 
         Ok(Self {
             pack,
             root,
             templates_dir,
             values_path,
+            schema_path,
         })
+    }
+
+    /// Find schema file, checking multiple standard locations
+    fn find_schema_file(root: &Path) -> Option<PathBuf> {
+        let candidates = [
+            "values.schema.yaml", // Sherpack default
+            "values.schema.json", // JSON Schema (Helm compatible)
+            "schema.yaml",
+            "schema.json",
+        ];
+
+        for candidate in candidates {
+            let path = root.join(candidate);
+            if path.exists() {
+                return Some(path);
+            }
+        }
+        None
+    }
+
+    /// Load the schema if present
+    pub fn load_schema(&self) -> Result<Option<crate::schema::Schema>> {
+        match &self.schema_path {
+            Some(path) => Ok(Some(crate::schema::Schema::from_file(path)?)),
+            None => Ok(None),
+        }
     }
 
     /// Get list of template files
