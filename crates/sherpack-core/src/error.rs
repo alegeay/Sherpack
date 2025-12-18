@@ -49,6 +49,12 @@ pub enum CoreError {
 
     #[error("Schema file not found: {path}")]
     SchemaNotFound { path: String },
+
+    #[error("Invalid manifest: {message}")]
+    InvalidManifest { message: String },
+
+    #[error("Archive error: {message}")]
+    Archive { message: String },
 }
 
 impl CoreError {

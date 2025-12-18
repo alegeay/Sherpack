@@ -1,4 +1,7 @@
 //! Template engine based on MiniJinja
+//!
+//! This module provides the core rendering engine for Sherpack templates,
+//! built on top of MiniJinja with Helm-compatible filters and functions.
 
 use indexmap::IndexMap;
 use minijinja::Environment;
@@ -8,6 +11,12 @@ use std::collections::HashMap;
 use crate::error::{EngineError, RenderReport, RenderResultWithReport, Result, TemplateError};
 use crate::filters;
 use crate::functions;
+
+/// Prefix character for helper templates (skipped during rendering)
+const HELPER_TEMPLATE_PREFIX: char = '_';
+
+/// Pattern to identify NOTES templates
+const NOTES_TEMPLATE_PATTERN: &str = "notes";
 
 /// Result of rendering a pack
 #[derive(Debug)]
@@ -219,21 +228,21 @@ impl Engine {
         // Load all templates - continue even if some fail to parse
         for file_path in &template_files {
             let rel_path = file_path.strip_prefix(templates_dir).unwrap_or(file_path);
-            let template_name = rel_path.to_string_lossy().to_string();
+            let template_name = rel_path.to_string_lossy().into_owned();
 
             let content = match std::fs::read_to_string(file_path) {
                 Ok(c) => c,
                 Err(e) => {
                     report.add_error(
-                        template_name.clone(),
+                        template_name,
                         TemplateError::simple(format!("Failed to read template: {}", e)),
                     );
                     continue;
                 }
             };
 
-            template_sources.insert(template_name.clone(), content.clone());
-
+            // Store content first, then add to environment
+            // This avoids cloning content twice
             if let Err(e) = env.add_template_owned(template_name.clone(), content.clone()) {
                 report.add_error(
                     template_name.clone(),
@@ -244,8 +253,9 @@ impl Engine {
                         Some(&context.values),
                     ),
                 );
-                // Continue loading other templates
             }
+            // Store after attempting to add (content is still valid)
+            template_sources.insert(template_name, content);
         }
 
         // Build render context
@@ -260,15 +270,15 @@ impl Engine {
         // Render each non-helper template, collecting errors
         for file_path in &template_files {
             let rel_path = file_path.strip_prefix(templates_dir).unwrap_or(file_path);
-            let template_name = rel_path.to_string_lossy().to_string();
+            let template_name = rel_path.to_string_lossy().into_owned();
 
-            // Skip helper templates
+            // Skip helper templates (prefixed with '_')
             let file_stem = rel_path
                 .file_name()
                 .map(|s| s.to_string_lossy())
                 .unwrap_or_default();
 
-            if file_stem.starts_with('_') {
+            if file_stem.starts_with(HELPER_TEMPLATE_PREFIX) {
                 continue;
             }
 
@@ -285,7 +295,7 @@ impl Engine {
             match tmpl.render(&ctx) {
                 Ok(rendered) => {
                     // Process successful render
-                    if template_name.to_lowercase().contains("notes") {
+                    if template_name.to_lowercase().contains(NOTES_TEMPLATE_PATTERN) {
                         notes = Some(rendered);
                     } else {
                         let trimmed = rendered.trim();
@@ -299,14 +309,19 @@ impl Engine {
                     report.add_success(template_name);
                 }
                 Err(e) => {
-                    let content = template_sources.get(&template_name).cloned().unwrap_or_default();
+                    // Get template source for error context
+                    // Use empty string only if template was never loaded (shouldn't happen)
+                    let content = template_sources
+                        .get(&template_name)
+                        .map(String::as_str)
+                        .unwrap_or("");
 
                     report.add_error(
                         template_name.clone(),
                         TemplateError::from_minijinja_enhanced(
                             e,
                             &template_name,
-                            &content,
+                            content,
                             Some(&context.values),
                         ),
                     );

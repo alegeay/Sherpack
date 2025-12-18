@@ -92,38 +92,53 @@ pub fn squote(value: Value) -> String {
 ///
 /// Usage: {{ content | nindent(4) }}
 pub fn nindent(value: String, spaces: usize) -> String {
-    let indent = " ".repeat(spaces);
-    let indented = value
-        .lines()
-        .map(|line| {
-            if line.is_empty() {
-                String::new()
-            } else {
-                format!("{}{}", indent, line)
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let line_count = value.lines().count();
+    // Pre-allocate: newline + (spaces + avg_line_length) * lines
+    let mut result = String::with_capacity(1 + value.len() + spaces * line_count + line_count);
+    result.push('\n');
 
-    format!("\n{}", indented)
+    let indent = " ".repeat(spaces);
+    let mut first = true;
+
+    for line in value.lines() {
+        if !first {
+            result.push('\n');
+        }
+        first = false;
+
+        if !line.is_empty() {
+            result.push_str(&indent);
+            result.push_str(line);
+        }
+    }
+
+    result
 }
 
 /// Indent text without newline prefix
 ///
 /// Usage: {{ content | indent(4) }}
 pub fn indent(value: String, spaces: usize) -> String {
+    let line_count = value.lines().count();
+    // Pre-allocate: (spaces + avg_line_length) * lines
+    let mut result = String::with_capacity(value.len() + spaces * line_count + line_count);
+
     let indent_str = " ".repeat(spaces);
-    value
-        .lines()
-        .map(|line| {
-            if line.is_empty() {
-                String::new()
-            } else {
-                format!("{}{}", indent_str, line)
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    let mut first = true;
+
+    for line in value.lines() {
+        if !first {
+            result.push('\n');
+        }
+        first = false;
+
+        if !line.is_empty() {
+            result.push_str(&indent_str);
+        }
+        result.push_str(line);
+    }
+
+    result
 }
 
 /// Require a value, fail if undefined or empty
@@ -279,7 +294,8 @@ pub fn trimsuffix(value: String, suffix: String) -> String {
 ///
 /// Usage: {{ name | snakecase }}
 pub fn snakecase(value: String) -> String {
-    let mut result = String::new();
+    // Pre-allocate with extra space for potential underscores
+    let mut result = String::with_capacity(value.len() + value.len() / 4);
     let mut prev_upper = false;
 
     for (i, c) in value.chars().enumerate() {

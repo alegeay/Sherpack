@@ -159,26 +159,37 @@ pub fn now() -> String {
 /// Printf-style formatting
 ///
 /// Usage: {{ printf("%s-%d", name, count) }}
+///
+/// Supports format specifiers: %s, %d, %f, %v, %%
 pub fn printf(format: String, args: Vec<Value>) -> Result<String, Error> {
-    let mut result = format;
+    // Pre-allocate with estimated size
+    let mut result = String::with_capacity(format.len() + args.len() * 10);
+    let mut chars = format.chars().peekable();
     let mut arg_idx = 0;
 
-    // Simple replacement - supports %s, %d, %v
-    while let Some(pos) = result.find('%') {
-        if pos + 1 >= result.len() {
-            break;
-        }
-
-        let format_char = match result.chars().nth(pos + 1) {
-            Some(c) => c,
-            None => break, // Malformed format string, stop processing
-        };
-
-        if format_char == '%' {
-            result = result.replacen("%%", "%", 1);
+    while let Some(c) = chars.next() {
+        if c != '%' {
+            result.push(c);
             continue;
         }
 
+        // Handle format specifier
+        let format_char = match chars.next() {
+            Some(fc) => fc,
+            None => {
+                // Trailing % at end of string
+                result.push('%');
+                break;
+            }
+        };
+
+        // Handle escaped %%
+        if format_char == '%' {
+            result.push('%');
+            continue;
+        }
+
+        // Need an argument for this specifier
         if arg_idx >= args.len() {
             return Err(Error::new(
                 ErrorKind::InvalidOperation,
@@ -186,26 +197,28 @@ pub fn printf(format: String, args: Vec<Value>) -> Result<String, Error> {
             ));
         }
 
-        let replacement = match format_char {
-            's' | 'v' => args[arg_idx].to_string(),
+        let arg = &args[arg_idx];
+        match format_char {
+            's' | 'v' => result.push_str(&arg.to_string()),
             'd' => {
-                if let Some(n) = args[arg_idx].as_i64() {
-                    n.to_string()
+                if let Some(n) = arg.as_i64() {
+                    result.push_str(&n.to_string());
                 } else {
-                    args[arg_idx].to_string()
+                    result.push_str(&arg.to_string());
                 }
             }
             'f' => {
-                if let Some(n) = args[arg_idx].as_i64() {
-                    (n as f64).to_string()
+                if let Some(n) = arg.as_i64() {
+                    result.push_str(&(n as f64).to_string());
                 } else {
-                    args[arg_idx].to_string()
+                    result.push_str(&arg.to_string());
                 }
             }
-            _ => args[arg_idx].to_string(),
-        };
-
-        result = result.replacen(&format!("%{}", format_char), &replacement, 1);
+            _ => {
+                // Unknown format specifier, treat as %v
+                result.push_str(&arg.to_string());
+            }
+        }
         arg_idx += 1;
     }
 

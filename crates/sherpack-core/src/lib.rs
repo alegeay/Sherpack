@@ -13,6 +13,8 @@ pub mod release;
 pub mod context;
 pub mod error;
 pub mod schema;
+pub mod manifest;
+pub mod archive;
 
 pub use pack::{Pack, PackMetadata, PackKind, Dependency, LoadedPack};
 pub use values::{Values, parse_set_values};
@@ -20,3 +22,8 @@ pub use release::{Release, ReleaseStatus, ReleaseInfo};
 pub use context::TemplateContext;
 pub use error::{CoreError, ValidationErrorInfo};
 pub use schema::{Schema, SchemaValidator, ValidationResult, SherpSchema, SherpProperty, SherpType};
+pub use manifest::{Manifest, FileEntry, VerificationResult, MismatchedFile};
+pub use archive::{
+    create_archive, extract_archive, list_archive, read_manifest_from_archive,
+    read_file_from_archive, verify_archive, default_archive_name, ArchiveEntry,
+};

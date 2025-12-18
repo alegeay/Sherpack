@@ -54,6 +54,11 @@ pub enum CliError {
     #[error("{message}")]
     #[diagnostic(code(sherpack::cli::error))]
     Other { message: String },
+
+    /// Internal error (runtime, unexpected failure)
+    #[error("Internal error: {message}")]
+    #[diagnostic(code(sherpack::cli::internal))]
+    Internal { message: String },
 }
 
 impl CliError {
@@ -66,6 +71,14 @@ impl CliError {
             CliError::LintFailed { .. } => exit_codes::ERROR,
             CliError::Io { .. } => exit_codes::IO_ERROR,
             CliError::Other { .. } => exit_codes::ERROR,
+            CliError::Internal { .. } => exit_codes::ERROR,
+        }
+    }
+
+    /// Create an internal error
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self::Internal {
+            message: message.into(),
         }
     }
 
@@ -104,6 +117,21 @@ impl CliError {
     /// Create a lint failure error
     pub fn lint_failed(errors: usize, warnings: usize) -> Self {
         Self::LintFailed { errors, warnings }
+    }
+
+    /// Create an input error (user provided invalid input)
+    pub fn input(message: impl Into<String>) -> Self {
+        Self::Validation {
+            message: message.into(),
+            help: None,
+        }
+    }
+
+    /// Create an IO error from std::io::Error
+    pub fn io(err: std::io::Error) -> Self {
+        Self::Io {
+            message: err.to_string(),
+        }
     }
 }
 

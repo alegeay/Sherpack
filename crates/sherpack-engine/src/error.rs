@@ -33,7 +33,10 @@ pub enum EngineError {
 }
 
 /// Error kind for categorizing template errors
-#[derive(Debug, Clone, Copy, PartialEq)]
+///
+/// Note: This enum is non-exhaustive - new variants may be added in future versions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TemplateErrorKind {
     UndefinedVariable,
     UnknownFilter,
