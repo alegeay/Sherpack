@@ -1,5 +1,6 @@
 //! Integration tests for CLI commands
 
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Helper to run sherpack command
@@ -10,9 +11,22 @@ fn sherpack(args: &[&str]) -> std::process::Output {
         .expect("Failed to execute sherpack")
 }
 
-/// Get the fixtures path
-fn fixtures_path() -> &'static str {
-    concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures")
+/// Get the fixtures directory path
+fn fixtures_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("fixtures")
+}
+
+/// Get a fixture pack path as a string (for CLI args)
+fn fixture_pack(name: &str) -> String {
+    fixtures_dir().join(name).display().to_string()
+}
+
+/// Get the fixtures path (legacy, for compatibility)
+fn fixtures_path() -> String {
+    fixtures_dir().display().to_string()
 }
 
 mod validate_command {
@@ -20,7 +34,7 @@ mod validate_command {
 
     #[test]
     fn test_validate_valid_pack() {
-        let output = sherpack(&["validate", &format!("{}/demo-pack", fixtures_path())]);
+        let output = sherpack(&["validate", &fixture_pack("demo-pack")]);
 
         assert!(output.status.success(), "Expected success for valid pack");
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -31,7 +45,7 @@ mod validate_command {
     fn test_validate_with_invalid_values() {
         let output = sherpack(&[
             "validate",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "--set",
             "app.replicas=999",
         ]);
@@ -46,11 +60,7 @@ mod validate_command {
 
     #[test]
     fn test_validate_json_output() {
-        let output = sherpack(&[
-            "validate",
-            &format!("{}/demo-pack", fixtures_path()),
-            "--json",
-        ]);
+        let output = sherpack(&["validate", &fixture_pack("demo-pack"), "--json"]);
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         // Should be valid JSON
@@ -65,7 +75,7 @@ mod validate_command {
     fn test_validate_json_output_with_errors() {
         let output = sherpack(&[
             "validate",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "--set",
             "app.replicas=-1",
             "--json",
@@ -81,7 +91,7 @@ mod validate_command {
 
     #[test]
     fn test_validate_verbose() {
-        let output = sherpack(&["validate", &format!("{}/demo-pack", fixtures_path()), "-v"]);
+        let output = sherpack(&["validate", &fixture_pack("demo-pack"), "-v"]);
 
         assert!(output.status.success());
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -94,7 +104,7 @@ mod lint_command {
 
     #[test]
     fn test_lint_valid_pack() {
-        let output = sherpack(&["lint", &format!("{}/simple-pack", fixtures_path())]);
+        let output = sherpack(&["lint", &fixture_pack("simple-pack")]);
 
         // simple-pack doesn't have schema, so just check basic linting
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -103,7 +113,7 @@ mod lint_command {
 
     #[test]
     fn test_lint_with_schema() {
-        let output = sherpack(&["lint", &format!("{}/demo-pack", fixtures_path())]);
+        let output = sherpack(&["lint", &fixture_pack("demo-pack")]);
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(stdout.contains("Pack.yaml is valid"));
@@ -112,11 +122,7 @@ mod lint_command {
 
     #[test]
     fn test_lint_skip_schema() {
-        let output = sherpack(&[
-            "lint",
-            &format!("{}/demo-pack", fixtures_path()),
-            "--skip-schema",
-        ]);
+        let output = sherpack(&["lint", &fixture_pack("demo-pack"), "--skip-schema"]);
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         // Should not mention schema validation when skipped
@@ -129,11 +135,7 @@ mod template_command {
 
     #[test]
     fn test_template_basic() {
-        let output = sherpack(&[
-            "template",
-            "myrelease",
-            &format!("{}/simple-pack", fixtures_path()),
-        ]);
+        let output = sherpack(&["template", "myrelease", &fixture_pack("simple-pack")]);
 
         assert!(output.status.success());
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -145,7 +147,7 @@ mod template_command {
         let output = sherpack(&[
             "template",
             "myrelease",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "--set",
             "app.name=customapp",
         ]);
@@ -160,7 +162,7 @@ mod template_command {
         let output = sherpack(&[
             "template",
             "myrelease",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "-s",
             "deployment",
         ]);
@@ -178,7 +180,7 @@ mod template_command {
         let output = sherpack(&[
             "template",
             "myrelease",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "--set",
             "app.replicas=999",
             "--skip-schema",
@@ -197,7 +199,7 @@ mod template_command {
         let output = sherpack(&[
             "template",
             "myrelease",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "--set",
             "app.replicas=999",
         ]);
@@ -220,7 +222,7 @@ mod template_command {
         let output = sherpack(&[
             "template",
             "myrelease",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "--show-values",
             "-s",
             "deployment",
@@ -237,7 +239,7 @@ mod show_command {
 
     #[test]
     fn test_show_pack() {
-        let output = sherpack(&["show", &format!("{}/demo-pack", fixtures_path())]);
+        let output = sherpack(&["show", &fixture_pack("demo-pack")]);
 
         assert!(output.status.success());
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -246,7 +248,7 @@ mod show_command {
 
     #[test]
     fn test_show_all() {
-        let output = sherpack(&["show", &format!("{}/demo-pack", fixtures_path()), "--all"]);
+        let output = sherpack(&["show", &fixture_pack("demo-pack"), "--all"]);
 
         assert!(output.status.success());
     }
@@ -264,7 +266,7 @@ mod package_command {
 
         let output = sherpack(&[
             "package",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "-o",
             output_path.to_str().unwrap(),
         ]);
@@ -287,14 +289,22 @@ mod package_command {
 
         // Copy Pack.yaml
         fs::copy(
-            format!("{}/demo-pack/Pack.yaml", fixtures_path()),
+            fixtures_dir()
+                .join("demo-pack")
+                .join("Pack.yaml")
+                .display()
+                .to_string(),
             pack_dir.join("Pack.yaml"),
         )
         .unwrap();
 
         // Copy values.yaml
         fs::copy(
-            format!("{}/demo-pack/values.yaml", fixtures_path()),
+            fixtures_dir()
+                .join("demo-pack")
+                .join("values.yaml")
+                .display()
+                .to_string(),
             pack_dir.join("values.yaml"),
         )
         .unwrap();
@@ -327,7 +337,7 @@ mod package_command {
 
         let output = sherpack(&[
             "package",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "-o",
             output_path.to_str().unwrap(),
         ]);
@@ -353,7 +363,7 @@ mod inspect_command {
 
         let output = sherpack(&[
             "package",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "-o",
             archive_path.to_str().unwrap(),
         ]);
@@ -419,7 +429,7 @@ mod verify_command {
         // Create archive
         let output = sherpack(&[
             "package",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "-o",
             archive_path.to_str().unwrap(),
         ]);
@@ -444,7 +454,7 @@ mod verify_command {
         // Create archive (no signature)
         sherpack(&[
             "package",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "-o",
             archive_path.to_str().unwrap(),
         ]);
@@ -466,7 +476,7 @@ mod verify_command {
         // Create archive (no signature)
         sherpack(&[
             "package",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "-o",
             archive_path.to_str().unwrap(),
         ]);
@@ -579,7 +589,7 @@ mod sign_and_verify_command {
         // Create archive
         sherpack(&[
             "package",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "-o",
             archive_path.to_str().unwrap(),
         ]);
@@ -615,7 +625,7 @@ mod sign_and_verify_command {
         // Create archive
         sherpack(&[
             "package",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "-o",
             archive_path.to_str().unwrap(),
         ]);
@@ -660,7 +670,7 @@ mod sign_and_verify_command {
         // Create and sign with first keypair
         sherpack(&[
             "package",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "-o",
             archive_path.to_str().unwrap(),
         ]);
@@ -852,7 +862,7 @@ mod push_command {
         // Create a valid archive first
         let _ = sherpack(&[
             "package",
-            &format!("{}/demo-pack", fixtures_path()),
+            &fixture_pack("demo-pack"),
             "-o",
             archive_path.to_str().unwrap(),
         ]);
@@ -1031,11 +1041,7 @@ mod dependency_command {
 
     #[test]
     fn test_dependency_list_pack() {
-        let output = sherpack(&[
-            "dependency",
-            "list",
-            &format!("{}/demo-pack", fixtures_path()),
-        ]);
+        let output = sherpack(&["dependency", "list", &fixture_pack("demo-pack")]);
 
         // demo-pack has no dependencies, should succeed with no deps message
         assert!(output.status.success());
@@ -1049,11 +1055,7 @@ mod dependency_command {
 
     #[test]
     fn test_dependency_tree_pack() {
-        let output = sherpack(&[
-            "dependency",
-            "tree",
-            &format!("{}/demo-pack", fixtures_path()),
-        ]);
+        let output = sherpack(&["dependency", "tree", &fixture_pack("demo-pack")]);
 
         // Should succeed and show tree (empty for no deps)
         assert!(output.status.success());
@@ -1075,11 +1077,7 @@ mod dependency_command {
 
     #[test]
     fn test_dependency_update_no_deps() {
-        let output = sherpack(&[
-            "dependency",
-            "update",
-            &format!("{}/demo-pack", fixtures_path()),
-        ]);
+        let output = sherpack(&["dependency", "update", &fixture_pack("demo-pack")]);
 
         // demo-pack has no dependencies, should succeed
         assert!(output.status.success());
@@ -1087,11 +1085,7 @@ mod dependency_command {
 
     #[test]
     fn test_dependency_build_requires_lockfile() {
-        let output = sherpack(&[
-            "dependency",
-            "build",
-            &format!("{}/demo-pack", fixtures_path()),
-        ]);
+        let output = sherpack(&["dependency", "build", &fixture_pack("demo-pack")]);
 
         // demo-pack has no Pack.lock.yaml, so build fails with helpful message
         assert!(!output.status.success());
