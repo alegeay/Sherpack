@@ -120,6 +120,7 @@ impl ResourceCategory {
 /// CRD condition for waiting
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // Used for deserialization
 struct CrdCondition {
     #[serde(rename = "type")]
     condition_type: String,
@@ -133,6 +134,7 @@ struct CrdCondition {
 /// CRD status for checking readiness
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // Used for deserialization
 struct CrdStatus {
     #[serde(default)]
     conditions: Vec<CrdCondition>,
@@ -141,6 +143,7 @@ struct CrdStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // Used for deserialization
 struct CrdAcceptedNames {
     kind: String,
     plural: String,

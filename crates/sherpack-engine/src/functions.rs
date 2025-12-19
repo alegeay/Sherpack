@@ -43,7 +43,7 @@ pub fn fail(message: String) -> Result<Value, Error> {
 ///
 /// Usage: {{ dict("key1", value1, "key2", value2) }}
 pub fn dict(args: Vec<Value>) -> Result<Value, Error> {
-    if args.len() % 2 != 0 {
+    if !args.len().is_multiple_of(2) {
         return Err(Error::new(
             ErrorKind::InvalidOperation,
             "dict requires an even number of arguments (key-value pairs)",

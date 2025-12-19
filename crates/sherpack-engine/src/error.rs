@@ -1,5 +1,8 @@
 //! Engine error types with beautiful formatting
 
+// Allow unused_assignments for derive macros (miette/thiserror use fields via attributes)
+#![allow(unused_assignments)]
+
 use indexmap::IndexMap;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use thiserror::Error;

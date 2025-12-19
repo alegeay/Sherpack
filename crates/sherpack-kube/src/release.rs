@@ -172,11 +172,12 @@ impl StoredRelease {
 }
 
 /// Release state with timing information for pending operations
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "status", rename_all = "kebab-case")]
 #[non_exhaustive]
 pub enum ReleaseState {
     /// Successfully deployed
+    #[default]
     Deployed,
 
     /// Deployment failed
@@ -328,12 +329,6 @@ impl std::fmt::Display for ReleaseState {
             }
             other => write!(f, "{}", other.status_name()),
         }
-    }
-}
-
-impl Default for ReleaseState {
-    fn default() -> Self {
-        Self::Deployed
     }
 }
 

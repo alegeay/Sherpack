@@ -42,17 +42,12 @@ impl CrdSchema {
 }
 
 /// CRD scope - whether resources are namespaced or cluster-wide
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum CrdScope {
+    #[default]
     Namespaced,
     Cluster,
-}
-
-impl Default for CrdScope {
-    fn default() -> Self {
-        Self::Namespaced
-    }
 }
 
 impl std::fmt::Display for CrdScope {
@@ -326,20 +321,15 @@ impl std::fmt::Display for PropertyType {
 }
 
 /// Additional properties configuration for objects
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum AdditionalProperties {
     /// Additional properties are allowed (any type)
+    #[default]
     Allowed,
     /// Additional properties are not allowed
     Denied,
     /// Additional properties must match a schema
     Schema(Box<SchemaProperty>),
-}
-
-impl Default for AdditionalProperties {
-    fn default() -> Self {
-        Self::Allowed
-    }
 }
 
 /// Printer column for kubectl output

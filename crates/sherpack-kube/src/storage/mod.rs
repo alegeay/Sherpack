@@ -117,12 +117,13 @@ impl Default for CompressionMethod {
 }
 
 /// Strategy for handling releases larger than MAX_RESOURCE_SIZE
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum LargeReleaseStrategy {
     /// Fail if release is too large (Helm default behavior)
     Fail,
 
     /// Split across multiple Secrets/ConfigMaps
+    #[default]
     ChunkedSecrets,
 
     /// Store manifest separately in a ConfigMap
@@ -135,12 +136,6 @@ pub enum LargeReleaseStrategy {
         /// Bucket name
         bucket: String,
     },
-}
-
-impl Default for LargeReleaseStrategy {
-    fn default() -> Self {
-        Self::ChunkedSecrets
-    }
 }
 
 /// Compress data using the configured method

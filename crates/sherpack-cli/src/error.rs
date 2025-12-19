@@ -4,6 +4,7 @@
 //! maps errors to appropriate exit codes.
 
 #![allow(dead_code)] // Some variants/methods are for future use
+#![allow(unused_assignments)] // Fields are used by miette/thiserror derive macros
 
 use miette::Diagnostic;
 use thiserror::Error;
