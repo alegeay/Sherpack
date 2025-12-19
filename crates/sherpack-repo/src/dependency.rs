@@ -353,10 +353,10 @@ impl DependencyGraph {
 
     /// Add a requirer to existing dependency
     pub fn add_requirer(&mut self, name: &str, requirer: String) {
-        if let Some(dep) = self.dependencies.get_mut(name) {
-            if !dep.required_by.contains(&requirer) {
-                dep.required_by.push(requirer);
-            }
+        if let Some(dep) = self.dependencies.get_mut(name)
+            && !dep.required_by.contains(&requirer)
+        {
+            dep.required_by.push(requirer);
         }
     }
 

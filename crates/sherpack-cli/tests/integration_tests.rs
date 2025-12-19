@@ -7,6 +7,8 @@ use std::process::Command;
 fn sherpack(args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_sherpack"))
         .args(args)
+        // Ensure child process has sufficient stack for deep recursion (needed on Windows)
+        .env("RUST_MIN_STACK", "16777216")
         .output()
         .expect("Failed to execute sherpack")
 }

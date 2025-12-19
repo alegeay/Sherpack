@@ -46,27 +46,18 @@ impl OciRegistry {
             }
             Some(ResolvedCredentials::DockerAuth(config)) => {
                 // Try to get auth from docker config
-                if let Some(auth_header) = config.auth_for_url(&repo.url) {
-                    // Parse "Basic base64" format
-                    if let Some(encoded) = auth_header.strip_prefix("Basic ") {
-                        if let Ok(decoded) = base64::Engine::decode(
-                            &base64::engine::general_purpose::STANDARD,
-                            encoded,
-                        ) {
-                            if let Ok(creds) = String::from_utf8(decoded) {
-                                if let Some((user, pass)) = creds.split_once(':') {
-                                    return Ok(Self {
-                                        repo,
-                                        client: Self::create_client()?,
-                                        auth: RegistryAuth::Basic(
-                                            user.to_string(),
-                                            pass.to_string(),
-                                        ),
-                                    });
-                                }
-                            }
-                        }
-                    }
+                if let Some(auth_header) = config.auth_for_url(&repo.url)
+                    && let Some(encoded) = auth_header.strip_prefix("Basic ")
+                    && let Ok(decoded) =
+                        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encoded)
+                    && let Ok(creds) = String::from_utf8(decoded)
+                    && let Some((user, pass)) = creds.split_once(':')
+                {
+                    return Ok(Self {
+                        repo,
+                        client: Self::create_client()?,
+                        auth: RegistryAuth::Basic(user.to_string(), pass.to_string()),
+                    });
                 }
                 RegistryAuth::Anonymous
             }

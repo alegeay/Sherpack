@@ -355,10 +355,10 @@ impl SecureHttpClient {
 
             // Add auth ONLY if same origin as original URL
             if ScopedCredentials::same_origin(&original_url, &current_url) {
-                if let Some(creds) = self.credentials.for_url(&current_url) {
-                    if let Some(auth) = creds.auth_header(&current_url) {
-                        request = request.header("Authorization", auth);
-                    }
+                if let Some(creds) = self.credentials.for_url(&current_url)
+                    && let Some(auth) = creds.auth_header(&current_url)
+                {
+                    request = request.header("Authorization", auth);
                 }
             } else {
                 // Cross-origin redirect - DO NOT send credentials
@@ -467,12 +467,11 @@ impl SecureHttpClient {
             }
 
             // Add auth if same origin
-            if ScopedCredentials::same_origin(&original_url, &current_url) {
-                if let Some(creds) = self.credentials.for_url(&current_url) {
-                    if let Some(auth) = creds.auth_header(&current_url) {
-                        request = request.header("Authorization", auth);
-                    }
-                }
+            if ScopedCredentials::same_origin(&original_url, &current_url)
+                && let Some(creds) = self.credentials.for_url(&current_url)
+                && let Some(auth) = creds.auth_header(&current_url)
+            {
+                request = request.header("Authorization", auth);
             }
 
             let response = request.send().await?;
