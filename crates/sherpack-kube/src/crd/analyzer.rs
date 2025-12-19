@@ -87,7 +87,7 @@ impl CrdAnalysis {
 pub struct CrdChange {
     /// Type of change
     pub kind: ChangeKind,
-    /// JSON-like path to the changed element (e.g., "versions[v1].schema.spec.replicas")
+    /// JSON-like path to the changed element (e.g., `versions[v1].schema.spec.replicas`)
     pub path: String,
     /// Human-readable description
     pub message: String,

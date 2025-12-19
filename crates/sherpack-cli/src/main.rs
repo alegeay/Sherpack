@@ -214,7 +214,7 @@ enum Commands {
         /// Path to Helm chart
         chart: PathBuf,
 
-        /// Output directory (default: <chartname>-sherpack)
+        /// Output directory (default: `<chartname>-sherpack`)
         #[arg(short, long)]
         output: Option<PathBuf>,
 
