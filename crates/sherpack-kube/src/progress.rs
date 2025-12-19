@@ -23,6 +23,7 @@ pub struct ProgressReporter {
     /// Start time
     start_time: Instant,
     /// Whether colors are enabled
+    #[allow(dead_code)]
     colors_enabled: bool,
     /// Whether to show verbose output
     verbose: bool,

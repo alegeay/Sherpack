@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ release.name }}-{{ values.app.name }}
+  labels:
+    app: {{ values.app.name }}
+spec:
+  replicas: {{ values.app.replicas }}
+  selector:
+    matchLabels:
+      app: {{ values.app.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ values.app.name }}
+    spec:
+      containers:
+        - name: {{ values.app.name }}
+          image: {{ values.global.imageRegistry }}/{{ values.app.image.repository }}:{{ values.app.image.tag }}
+          imagePullPolicy: {{ values.global.pullPolicy }}
+          ports:
+            - containerPort: 8080
+          env:
+            {% if values.redis.enabled %}
+            - name: REDIS_HOST
+              value: {{ release.name }}-redis
+            {% endif %}
+            {% if values.postgresql.enabled %}
+            - name: DATABASE_HOST
+              value: {{ release.name }}-postgresql
+            {% endif %}

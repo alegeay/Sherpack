@@ -11,6 +11,7 @@ use sherpack_kube::{
 use crate::error::Result;
 
 /// Run the rollback command
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     name: &str,
     revision: u32,

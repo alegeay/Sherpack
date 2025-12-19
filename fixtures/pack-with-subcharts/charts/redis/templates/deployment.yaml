@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ release.name }}-redis
+  labels:
+    app: redis
+spec:
+  replicas: {{ values.replicas }}
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: {{ values.global.imageRegistry | default("docker.io") }}/{{ values.image.repository }}:{{ values.image.tag }}
+          ports:
+            - containerPort: 6379
+          {% if values.auth.enabled %}
+          env:
+            - name: REDIS_PASSWORD
+              value: "{{ values.auth.password }}"
+          {% endif %}

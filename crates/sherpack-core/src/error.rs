@@ -55,6 +55,12 @@ pub enum CoreError {
 
     #[error("Archive error: {message}")]
     Archive { message: String },
+
+    #[error("File access error for '{path}': {message}")]
+    FileAccess { path: String, message: String },
+
+    #[error("Glob pattern error: {message}")]
+    GlobPattern { message: String },
 }
 
 impl CoreError {

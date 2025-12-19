@@ -5,12 +5,13 @@
 
 use indexmap::IndexMap;
 use minijinja::Environment;
-use sherpack_core::{LoadedPack, TemplateContext};
+use sherpack_core::{LoadedPack, TemplateContext, SandboxedFileProvider};
 use std::collections::HashMap;
 
 use crate::error::{EngineError, RenderReport, RenderResultWithReport, Result, TemplateError};
 use crate::filters;
 use crate::functions;
+use crate::files_object::create_files_value_from_provider;
 
 /// Prefix character for helper templates (skipped during rendering)
 const HELPER_TEMPLATE_PREFIX: char = '_';
@@ -137,12 +138,58 @@ impl Engine {
         env.add_filter("semver_match", filters::semver_match);
         env.add_filter("int", filters::int);
         env.add_filter("float", filters::float);
+        env.add_filter("abs", filters::abs);
+
+        // Path filters
+        env.add_filter("basename", filters::basename);
+        env.add_filter("dirname", filters::dirname);
+        env.add_filter("extname", filters::extname);
+        env.add_filter("cleanpath", filters::cleanpath);
+
+        // Regex filters
+        env.add_filter("regex_match", filters::regex_match);
+        env.add_filter("regex_replace", filters::regex_replace);
+        env.add_filter("regex_find", filters::regex_find);
+        env.add_filter("regex_find_all", filters::regex_find_all);
+
+        // Dict filters
+        env.add_filter("values", filters::values);
+        env.add_filter("pick", filters::pick);
+        env.add_filter("omit", filters::omit);
+
+        // List filters
+        env.add_filter("append", filters::append);
+        env.add_filter("prepend", filters::prepend);
+        env.add_filter("concat", filters::concat);
+        env.add_filter("without", filters::without);
+        env.add_filter("compact", filters::compact);
+
+        // Math filters
+        env.add_filter("floor", filters::floor);
+        env.add_filter("ceil", filters::ceil);
+
+        // Crypto filters
+        env.add_filter("sha1", filters::sha1sum);
+        env.add_filter("sha512", filters::sha512sum);
+        env.add_filter("md5", filters::md5sum);
+
+        // String filters
+        env.add_filter("repeat", filters::repeat);
+        env.add_filter("camelcase", filters::camelcase);
+        env.add_filter("pascalcase", filters::pascalcase);
+        env.add_filter("substr", filters::substr);
+        env.add_filter("wrap", filters::wrap);
+        env.add_filter("hasprefix", filters::hasprefix);
+        env.add_filter("hassuffix", filters::hassuffix);
 
         // Register global functions
         env.add_function("fail", functions::fail);
         env.add_function("dict", functions::dict);
         env.add_function("list", functions::list);
         env.add_function("get", functions::get);
+        env.add_function("set", functions::set);
+        env.add_function("unset", functions::unset);
+        env.add_function("dig", functions::dig);
         env.add_function("coalesce", functions::coalesce);
         env.add_function("ternary", functions::ternary);
         env.add_function("uuidv4", functions::uuidv4);
@@ -171,12 +218,12 @@ impl Engine {
         let mut env = env;
         env.add_template_owned(template_name.to_string(), template.to_string())
             .map_err(|e| {
-                EngineError::Template(TemplateError::from_minijinja(e, template_name, template))
+                EngineError::Template(Box::new(TemplateError::from_minijinja(e, template_name, template)))
             })?;
 
         // Get template and render
         let tmpl = env.get_template(template_name).map_err(|e| {
-            EngineError::Template(TemplateError::from_minijinja(e, template_name, template))
+            EngineError::Template(Box::new(TemplateError::from_minijinja(e, template_name, template)))
         })?;
 
         // Build context
@@ -189,7 +236,7 @@ impl Engine {
         };
 
         tmpl.render(ctx).map_err(|e| {
-            EngineError::Template(TemplateError::from_minijinja(e, template_name, template))
+            EngineError::Template(Box::new(TemplateError::from_minijinja(e, template_name, template)))
         })
     }
 
@@ -215,8 +262,8 @@ impl Engine {
                 .and_then(|errors| errors.into_iter().next());
 
             return Err(match first_error {
-                Some(err) => EngineError::Template(err),
-                None => EngineError::Template(TemplateError::simple("Unknown template error")),
+                Some(err) => EngineError::Template(Box::new(err)),
+                None => EngineError::Template(Box::new(TemplateError::simple("Unknown template error"))),
             });
         }
 
@@ -301,6 +348,23 @@ impl Engine {
         env.add_global("pack", minijinja::Value::from_serialize(&context.pack));
         env.add_global("capabilities", minijinja::Value::from_serialize(&context.capabilities));
         env.add_global("template", minijinja::Value::from_serialize(&context.template));
+
+        // Add Files API - provides sandboxed access to pack files from templates
+        // Usage: {{ files.get("config/app.conf") }}, files.exists(), files.glob(), files.lines()
+        match SandboxedFileProvider::new(&pack.root) {
+            Ok(provider) => {
+                env.add_global("files", create_files_value_from_provider(provider));
+            }
+            Err(e) => {
+                report.add_warning(
+                    "files_api",
+                    format!(
+                        "Files API unavailable: {}. Templates using `files.*` will fail.",
+                        e
+                    ),
+                );
+            }
+        }
 
         // Build render context (still needed for direct template rendering)
         let ctx = minijinja::context! {

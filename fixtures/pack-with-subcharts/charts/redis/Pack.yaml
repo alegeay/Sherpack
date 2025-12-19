@@ -1,0 +1,6 @@
+apiVersion: sherpack/v1
+kind: application
+metadata:
+  name: redis
+  version: 7.0.0
+  description: Redis subchart

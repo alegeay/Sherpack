@@ -3,7 +3,7 @@
 //! Provides a single interface for all repository types (HTTP, OCI, File)
 
 use async_trait::async_trait;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::config::{Repository, RepositoryType};
 use crate::credentials::{CredentialStore, ResolvedCredentials};
@@ -46,7 +46,7 @@ pub trait RepositoryBackend: Send + Sync {
     async fn download(&self, name: &str, version: &str) -> Result<Vec<u8>>;
 
     /// Download and extract a pack to a directory
-    async fn download_to(&self, name: &str, version: &str, dest: &PathBuf) -> Result<()>;
+    async fn download_to(&self, name: &str, version: &str, dest: &Path) -> Result<()>;
 
     /// Check if a pack exists
     async fn exists(&mut self, name: &str, version: Option<&str>) -> Result<bool>;
@@ -156,7 +156,7 @@ impl RepositoryBackend for HttpBackend {
         self.0.download(entry).await
     }
 
-    async fn download_to(&self, name: &str, version: &str, dest: &PathBuf) -> Result<()> {
+    async fn download_to(&self, name: &str, version: &str, dest: &Path) -> Result<()> {
         let data = self.download(name, version).await?;
         extract_archive(&data, dest)?;
         Ok(())
@@ -305,7 +305,7 @@ impl RepositoryBackend for OciBackend {
         self.0.pull(name, version).await
     }
 
-    async fn download_to(&self, name: &str, version: &str, dest: &PathBuf) -> Result<()> {
+    async fn download_to(&self, name: &str, version: &str, dest: &Path) -> Result<()> {
         self.0.pull_to(name, version, dest).await
     }
 
@@ -463,7 +463,7 @@ impl RepositoryBackend for FileBackend {
         )))
     }
 
-    async fn download_to(&self, name: &str, _version: &str, dest: &PathBuf) -> Result<()> {
+    async fn download_to(&self, name: &str, _version: &str, dest: &Path) -> Result<()> {
         let src = self.root.join(name);
         if !src.exists() {
             return Err(RepoError::PackNotFound {
@@ -486,7 +486,7 @@ impl RepositoryBackend for FileBackend {
 }
 
 /// Extract a tar.gz archive
-fn extract_archive(data: &[u8], dest: &PathBuf) -> Result<()> {
+fn extract_archive(data: &[u8], dest: &Path) -> Result<()> {
     use flate2::read::GzDecoder;
     use tar::Archive;
 
@@ -500,7 +500,7 @@ fn extract_archive(data: &[u8], dest: &PathBuf) -> Result<()> {
 }
 
 /// Copy directory recursively
-fn copy_dir_recursive(src: &PathBuf, dest: &PathBuf) -> Result<()> {
+fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
     std::fs::create_dir_all(dest)?;
 
     for entry in std::fs::read_dir(src)? {

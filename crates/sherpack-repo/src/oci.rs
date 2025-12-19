@@ -6,7 +6,7 @@
 use oci_distribution::client::{Client, ClientConfig, ClientProtocol};
 use oci_distribution::secrets::RegistryAuth;
 use oci_distribution::Reference;
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::config::Repository;
 use crate::credentials::ResolvedCredentials;
@@ -142,7 +142,7 @@ impl OciRegistry {
     }
 
     /// Pull and extract a pack to a directory
-    pub async fn pull_to(&self, name: &str, tag: &str, dest: &PathBuf) -> Result<()> {
+    pub async fn pull_to(&self, name: &str, tag: &str, dest: &Path) -> Result<()> {
         let data = self.pull(name, tag).await?;
         extract_pack_archive(&data, dest)?;
         Ok(())
@@ -311,7 +311,7 @@ impl OciReference {
 }
 
 /// Extract a pack archive to a directory
-fn extract_pack_archive(data: &[u8], dest: &PathBuf) -> Result<()> {
+fn extract_pack_archive(data: &[u8], dest: &Path) -> Result<()> {
     use flate2::read::GzDecoder;
     use tar::Archive;
 

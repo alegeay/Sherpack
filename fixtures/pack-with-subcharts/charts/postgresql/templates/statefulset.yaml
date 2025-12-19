@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ release.name }}-postgresql
+  labels:
+    app: postgresql
+spec:
+  serviceName: {{ release.name }}-postgresql
+  replicas: {{ values.primary.replicas }}
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      containers:
+        - name: postgresql
+          image: {{ values.global.imageRegistry | default("docker.io") }}/{{ values.image.repository }}:{{ values.image.tag }}
+          ports:
+            - containerPort: 5432
+          {% if values.primary.persistence.enabled %}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          {% endif %}
+  {% if values.primary.persistence.enabled %}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ values.primary.persistence.size }}
+  {% endif %}

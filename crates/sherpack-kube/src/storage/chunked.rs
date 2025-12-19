@@ -106,6 +106,7 @@ pub fn split_into_chunks(data: &str) -> Vec<String> {
 }
 
 /// Check if encoded data needs chunking
+#[allow(dead_code)]
 pub fn needs_chunking(encoded: &str) -> bool {
     encoded.len() > MAX_RESOURCE_SIZE
 }

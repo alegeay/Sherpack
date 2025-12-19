@@ -63,5 +63,8 @@ pub use http::HttpRepository;
 pub use oci::{OciRegistry, OciReference};
 pub use cache::{IndexCache, CachedPack, CacheStats};
 pub use lock::{LockFile, LockedDependency, LockPolicy, VerifyResult};
-pub use dependency::{DependencyResolver, DependencyGraph, DependencySpec, ResolvedDependency};
+pub use dependency::{
+    DependencyResolver, DependencyGraph, DependencySpec, ResolvedDependency,
+    FilterResult, SkipReason, SkippedDependency, filter_dependencies,
+};
 pub use backend::{RepositoryBackend, create_backend, create_backend_by_name};

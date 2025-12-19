@@ -3,12 +3,13 @@
 use console::style;
 use miette::{IntoDiagnostic, Result, WrapErr};
 use sherpack_core::{LoadedPack, ReleaseInfo, SchemaValidator, TemplateContext, Values};
-use sherpack_engine::Engine;
+use sherpack_engine::{Engine, PackRenderer};
 use std::fs;
 use std::path::Path;
 
 use crate::display::display_render_report;
 
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     name: &str,
     pack_path: &Path,
@@ -179,13 +180,45 @@ pub fn run(
     let release = ReleaseInfo::for_install(name, namespace);
     let context = TemplateContext::new(values, release, &pack.pack.metadata);
 
-    // Create engine
+    // Create pack renderer (handles subcharts automatically)
     let engine = Engine::builder()
         .strict(pack.pack.engine.strict)
         .build();
+    let renderer = PackRenderer::new(engine);
 
-    // Render templates with error collection
-    let render_result = engine.render_pack_collect_errors(&pack, &context);
+    // Render templates with subchart support and error collection
+    let render_result = renderer.render_collect_errors(&pack, &context);
+
+    // Show subchart discovery info in debug mode
+    if debug {
+        let discovery = &render_result.discovery;
+        if !discovery.subcharts.is_empty() {
+            eprintln!(
+                "{} Found {} subchart(s):",
+                style("DEBUG").dim(),
+                discovery.subcharts.len()
+            );
+            for subchart in &discovery.subcharts {
+                let status = if subchart.enabled {
+                    style("enabled").green()
+                } else {
+                    style("disabled").dim()
+                };
+                eprintln!(
+                    "  - {} ({})",
+                    subchart.name,
+                    status
+                );
+            }
+        }
+        for warning in &discovery.warnings {
+            eprintln!(
+                "{} {}",
+                style("⚠").yellow(),
+                warning
+            );
+        }
+    }
 
     // Check for errors
     if !render_result.is_success() {

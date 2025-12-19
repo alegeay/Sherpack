@@ -3,6 +3,11 @@
 use console::style;
 use sherpack_core::{LoadedPack, ReleaseInfo, SchemaValidator, TemplateContext, Values};
 use sherpack_engine::Engine;
+use indexmap::IndexMap;
+use sherpack_kube::{
+    detect_crds_in_manifests, lint_crds, CrdLocation, DetectedCrd, LintSeverity,
+    TemplatedCrdFile,
+};
 use std::path::Path;
 
 use crate::display::display_render_report;
@@ -201,6 +206,13 @@ pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
             display_render_report(&result.report);
             errors += result.report.total_errors;
         }
+
+        // CRD Linting (Phase 3)
+        if result.is_success() {
+            let (crd_errors, crd_warnings) = lint_crds_in_pack(pack, &result.manifests);
+            errors += crd_errors;
+            warnings += crd_warnings;
+        }
     }
 
     // Summary
@@ -227,4 +239,125 @@ pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Lint CRDs in the pack
+///
+/// Returns (error_count, warning_count)
+fn lint_crds_in_pack(pack: &LoadedPack, manifests: &IndexMap<String, String>) -> (usize, usize) {
+    let mut errors = 0;
+    let mut warnings = 0;
+
+    // Collect CRDs from crds/ directory
+    let crds_dir_crds: Vec<DetectedCrd> = match pack.load_crds() {
+        Ok(crds) => crds
+            .into_iter()
+            .filter(|c| !c.is_templated)
+            .map(|c| {
+                let location = CrdLocation::crds_directory(&c.source_file, false);
+                DetectedCrd::new(&c.name, &c.content, location)
+            })
+            .collect(),
+        Err(_) => Vec::new(),
+    };
+
+    // Collect templated CRD files
+    let templated_files: Vec<TemplatedCrdFile> = match pack.load_crds() {
+        Ok(crds) => crds
+            .into_iter()
+            .filter(|c| c.is_templated)
+            .map(|c| TemplatedCrdFile::analyze(c.source_file.display().to_string(), &c.content))
+            .collect(),
+        Err(_) => Vec::new(),
+    };
+
+    // Detect CRDs in rendered templates
+    let templates_crds = detect_crds_in_manifests(manifests);
+
+    // Skip if no CRDs found
+    if crds_dir_crds.is_empty() && templated_files.is_empty() && templates_crds.is_empty() {
+        return (0, 0);
+    }
+
+    println!();
+    println!("{} Checking CRD configuration...", style("→").blue());
+
+    // Show CRDs found
+    let total_crds = crds_dir_crds.len() + templates_crds.len();
+    if total_crds > 0 {
+        println!(
+            "  {} Found {} CRD(s)",
+            style("✓").green(),
+            total_crds
+        );
+
+        for crd in &crds_dir_crds {
+            println!(
+                "    {} {} ({})",
+                style("•").dim(),
+                crd.name,
+                crd.location.description()
+            );
+        }
+
+        for crd in &templates_crds {
+            println!(
+                "    {} {} ({})",
+                style("•").dim(),
+                crd.name,
+                crd.location.description()
+            );
+        }
+    }
+
+    // Show templated CRD files
+    if !templated_files.is_empty() {
+        println!(
+            "  {} Found {} templated CRD file(s) in crds/",
+            style("ℹ").blue(),
+            templated_files.len()
+        );
+    }
+
+    // Run lint checks
+    let lint_warnings = lint_crds(&crds_dir_crds, &templates_crds, &templated_files);
+
+    if lint_warnings.is_empty() {
+        println!("  {} No CRD issues found", style("✓").green());
+        return (0, 0);
+    }
+
+    println!();
+    println!("{} CRD Recommendations:", style("→").blue());
+
+    for warning in &lint_warnings {
+        let icon = match warning.severity() {
+            LintSeverity::Error => style("✗").red(),
+            LintSeverity::Warning => style("⚠").yellow(),
+            LintSeverity::Info => style("ℹ").blue(),
+        };
+
+        // Count by severity
+        match warning.severity() {
+            LintSeverity::Error => errors += 1,
+            LintSeverity::Warning => warnings += 1,
+            LintSeverity::Info => {} // Info doesn't count as error or warning
+        }
+
+        println!();
+        println!("  {} {}", icon, warning.path);
+        if let Some(name) = &warning.crd_name {
+            println!("    CRD: {}", name);
+        }
+        println!("    {}", warning.message);
+        if let Some(suggestion) = &warning.suggestion {
+            println!(
+                "    {} {}",
+                style("Tip:").dim(),
+                suggestion
+            );
+        }
+    }
+
+    (errors, warnings)
 }

@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use crate::display::ValidationReport;
 use crate::error::{CliError, IntoCliResult, Result};
 
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     pack_path: &Path,
     external_schema: Option<&Path>,

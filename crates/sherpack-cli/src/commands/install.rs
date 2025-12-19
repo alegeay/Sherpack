@@ -12,6 +12,7 @@ use sherpack_kube::{
 use crate::error::Result;
 
 /// Run the install command
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     name: &str,
     pack_path: &Path,
@@ -24,6 +25,7 @@ pub async fn run(
     create_namespace: bool,
     dry_run: bool,
     show_diff: bool,
+    skip_crds: bool,
 ) -> Result<()> {
     // Load the pack
     let pack = LoadedPack::load(pack_path).into_diagnostic()?;
@@ -33,6 +35,24 @@ pub async fn run(
         style(&pack.pack.metadata.name).cyan(),
         style(&pack.pack.metadata.version).yellow()
     );
+
+    // Check for CRDs
+    if pack.has_crds() {
+        let crd_files = pack.crd_files().into_diagnostic()?;
+        if skip_crds {
+            println!(
+                "{} Skipping {} CRD file(s) (--skip-crds)",
+                style("⚠").yellow(),
+                crd_files.len()
+            );
+        } else {
+            println!(
+                "{} Found {} CRD file(s) in crds/ directory",
+                style("→").blue(),
+                crd_files.len()
+            );
+        }
+    }
 
     // Load and merge values
     let mut values = Values::from_file(&pack.values_path).into_diagnostic()?;

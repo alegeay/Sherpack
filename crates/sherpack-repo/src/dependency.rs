@@ -1,9 +1,10 @@
-//! Dependency resolution with diamond detection
+//! Dependency resolution with diamond detection and conditional filtering
 //!
 //! Key features:
-//! - Strict mode: Error on ANY conflict (safest default)
-//! - Diamond detection with clear error messages
-//! - No automatic resolution - humans must choose
+//! - **Static disable**: Skip dependencies with `enabled: false`
+//! - **Condition evaluation**: Skip dependencies based on values.yaml conditions
+//! - **Diamond detection**: Error on conflicting versions
+//! - **No automatic resolution**: Humans must resolve conflicts
 
 use semver::{Version, VersionReq};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -12,7 +13,130 @@ use crate::error::{RepoError, Result};
 use crate::index::PackEntry;
 use crate::lock::{LockFile, LockedDependency};
 
-/// Dependency from Pack.yaml
+// Re-export core types for convenience
+pub use sherpack_core::{Dependency, ResolvePolicy};
+
+/// Reason why a dependency was skipped during resolution
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SkipReason {
+    /// `enabled: false` in Pack.yaml
+    StaticDisabled,
+    /// `resolve: never` in Pack.yaml
+    PolicyNever,
+    /// Condition evaluated to false
+    ConditionFalse { condition: String },
+}
+
+impl std::fmt::Display for SkipReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::StaticDisabled => write!(f, "enabled: false"),
+            Self::PolicyNever => write!(f, "resolve: never"),
+            Self::ConditionFalse { condition } => write!(f, "condition '{}' is false", condition),
+        }
+    }
+}
+
+/// A dependency that was skipped during resolution
+#[derive(Debug, Clone)]
+pub struct SkippedDependency {
+    /// The original dependency
+    pub dependency: Dependency,
+    /// Why it was skipped
+    pub reason: SkipReason,
+}
+
+/// Result of filtering dependencies before resolution
+#[derive(Debug, Default)]
+pub struct FilterResult {
+    /// Dependencies that should be resolved
+    pub to_resolve: Vec<DependencySpec>,
+    /// Dependencies that were skipped
+    pub skipped: Vec<SkippedDependency>,
+}
+
+impl FilterResult {
+    /// Check if any dependencies were skipped
+    pub fn has_skipped(&self) -> bool {
+        !self.skipped.is_empty()
+    }
+
+    /// Get a summary of skipped dependencies for display
+    pub fn skipped_summary(&self) -> String {
+        if self.skipped.is_empty() {
+            return String::new();
+        }
+
+        self.skipped
+            .iter()
+            .map(|s| format!("  {} ({})", s.dependency.name, s.reason))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+}
+
+/// Filter dependencies based on enabled flag, resolve policy, and conditions
+///
+/// This should be called BEFORE resolution to skip dependencies that don't
+/// need to be downloaded (for air-gapped environments).
+///
+/// # Arguments
+/// * `deps` - Dependencies from Pack.yaml
+/// * `values` - Values for condition evaluation (from values.yaml)
+///
+/// # Returns
+/// A `FilterResult` containing dependencies to resolve and those that were skipped
+pub fn filter_dependencies(
+    deps: &[Dependency],
+    values: &serde_json::Value,
+) -> FilterResult {
+    let mut result = FilterResult::default();
+
+    for dep in deps {
+        // Check static enabled flag
+        if !dep.enabled {
+            result.skipped.push(SkippedDependency {
+                dependency: dep.clone(),
+                reason: SkipReason::StaticDisabled,
+            });
+            continue;
+        }
+
+        // Check resolve policy
+        match dep.resolve {
+            ResolvePolicy::Never => {
+                result.skipped.push(SkippedDependency {
+                    dependency: dep.clone(),
+                    reason: SkipReason::PolicyNever,
+                });
+                continue;
+            }
+            ResolvePolicy::Always => {
+                // Always resolve, ignore condition
+                result.to_resolve.push(DependencySpec::from(dep));
+            }
+            ResolvePolicy::WhenEnabled => {
+                // Check condition if present
+                if dep.should_resolve(values) {
+                    result.to_resolve.push(DependencySpec::from(dep));
+                } else if let Some(condition) = &dep.condition {
+                    result.skipped.push(SkippedDependency {
+                        dependency: dep.clone(),
+                        reason: SkipReason::ConditionFalse {
+                            condition: condition.clone(),
+                        },
+                    });
+                }
+            }
+        }
+    }
+
+    result
+}
+
+/// Dependency specification for resolution (internal use)
+///
+/// This is a simplified view of `Dependency` used during resolution.
 #[derive(Debug, Clone)]
 pub struct DependencySpec {
     pub name: String,
@@ -21,6 +145,19 @@ pub struct DependencySpec {
     pub condition: Option<String>,
     pub tags: Vec<String>,
     pub alias: Option<String>,
+}
+
+impl From<&Dependency> for DependencySpec {
+    fn from(dep: &Dependency) -> Self {
+        Self {
+            name: dep.name.clone(),
+            version: dep.version.clone(),
+            repository: dep.repository.clone(),
+            condition: dep.condition.clone(),
+            tags: dep.tags.clone(),
+            alias: dep.alias.clone(),
+        }
+    }
 }
 
 impl DependencySpec {
@@ -774,5 +911,223 @@ mod tests {
         let tree = graph.render_tree();
         assert!(tree.contains("app@1.0.0"));
         assert!(tree.contains("redis@17.0.0"));
+    }
+
+    // =========================================================================
+    // Filtering tests
+    // =========================================================================
+
+    fn make_dep(name: &str, enabled: bool, resolve: ResolvePolicy, condition: Option<&str>) -> Dependency {
+        Dependency {
+            name: name.to_string(),
+            version: "1.0.0".to_string(),
+            repository: "https://example.com".to_string(),
+            enabled,
+            condition: condition.map(String::from),
+            resolve,
+            tags: vec![],
+            alias: None,
+        }
+    }
+
+    #[test]
+    fn test_filter_all_enabled() {
+        let deps = vec![
+            make_dep("nginx", true, ResolvePolicy::WhenEnabled, None),
+            make_dep("redis", true, ResolvePolicy::WhenEnabled, None),
+        ];
+        let values = serde_json::json!({});
+
+        let result = filter_dependencies(&deps, &values);
+
+        assert_eq!(result.to_resolve.len(), 2);
+        assert!(result.skipped.is_empty());
+    }
+
+    #[test]
+    fn test_filter_static_disabled() {
+        let deps = vec![
+            make_dep("nginx", true, ResolvePolicy::WhenEnabled, None),
+            make_dep("redis", false, ResolvePolicy::WhenEnabled, None),
+        ];
+        let values = serde_json::json!({});
+
+        let result = filter_dependencies(&deps, &values);
+
+        assert_eq!(result.to_resolve.len(), 1);
+        assert_eq!(result.to_resolve[0].name, "nginx");
+
+        assert_eq!(result.skipped.len(), 1);
+        assert_eq!(result.skipped[0].dependency.name, "redis");
+        assert_eq!(result.skipped[0].reason, SkipReason::StaticDisabled);
+    }
+
+    #[test]
+    fn test_filter_policy_never() {
+        let deps = vec![
+            make_dep("nginx", true, ResolvePolicy::WhenEnabled, None),
+            make_dep("redis", true, ResolvePolicy::Never, None),
+        ];
+        let values = serde_json::json!({});
+
+        let result = filter_dependencies(&deps, &values);
+
+        assert_eq!(result.to_resolve.len(), 1);
+        assert_eq!(result.to_resolve[0].name, "nginx");
+
+        assert_eq!(result.skipped.len(), 1);
+        assert_eq!(result.skipped[0].dependency.name, "redis");
+        assert_eq!(result.skipped[0].reason, SkipReason::PolicyNever);
+    }
+
+    #[test]
+    fn test_filter_policy_always_ignores_condition() {
+        let deps = vec![
+            make_dep("redis", true, ResolvePolicy::Always, Some("redis.enabled")),
+        ];
+        // redis.enabled is false, but resolve: always ignores condition
+        let values = serde_json::json!({
+            "redis": { "enabled": false }
+        });
+
+        let result = filter_dependencies(&deps, &values);
+
+        assert_eq!(result.to_resolve.len(), 1);
+        assert!(result.skipped.is_empty());
+    }
+
+    #[test]
+    fn test_filter_condition_true() {
+        let deps = vec![
+            make_dep("redis", true, ResolvePolicy::WhenEnabled, Some("redis.enabled")),
+        ];
+        let values = serde_json::json!({
+            "redis": { "enabled": true }
+        });
+
+        let result = filter_dependencies(&deps, &values);
+
+        assert_eq!(result.to_resolve.len(), 1);
+        assert!(result.skipped.is_empty());
+    }
+
+    #[test]
+    fn test_filter_condition_false() {
+        let deps = vec![
+            make_dep("redis", true, ResolvePolicy::WhenEnabled, Some("redis.enabled")),
+        ];
+        let values = serde_json::json!({
+            "redis": { "enabled": false }
+        });
+
+        let result = filter_dependencies(&deps, &values);
+
+        assert!(result.to_resolve.is_empty());
+        assert_eq!(result.skipped.len(), 1);
+        assert_eq!(result.skipped[0].dependency.name, "redis");
+        assert!(matches!(
+            &result.skipped[0].reason,
+            SkipReason::ConditionFalse { condition } if condition == "redis.enabled"
+        ));
+    }
+
+    #[test]
+    fn test_filter_condition_missing_is_falsy() {
+        let deps = vec![
+            make_dep("redis", true, ResolvePolicy::WhenEnabled, Some("redis.enabled")),
+        ];
+        // redis.enabled not set at all → path doesn't exist → falsy → skip
+        let values = serde_json::json!({});
+
+        let result = filter_dependencies(&deps, &values);
+
+        // Missing condition path = falsy = skip the dependency
+        assert!(result.to_resolve.is_empty());
+        assert_eq!(result.skipped.len(), 1);
+        assert!(matches!(
+            &result.skipped[0].reason,
+            SkipReason::ConditionFalse { condition } if condition == "redis.enabled"
+        ));
+    }
+
+    #[test]
+    fn test_filter_complex_scenario() {
+        let deps = vec![
+            make_dep("nginx", true, ResolvePolicy::WhenEnabled, None),           // enabled, no condition
+            make_dep("redis", true, ResolvePolicy::WhenEnabled, Some("redis.enabled")), // condition true
+            make_dep("postgres", true, ResolvePolicy::WhenEnabled, Some("db.enabled")), // condition false
+            make_dep("mongodb", false, ResolvePolicy::WhenEnabled, None),         // static disabled
+            make_dep("vault", true, ResolvePolicy::Never, None),                  // never resolve
+            make_dep("consul", true, ResolvePolicy::Always, Some("consul.enabled")), // always (ignore condition)
+        ];
+        let values = serde_json::json!({
+            "redis": { "enabled": true },
+            "db": { "enabled": false },
+            "consul": { "enabled": false }  // ignored due to resolve: always
+        });
+
+        let result = filter_dependencies(&deps, &values);
+
+        // Should resolve: nginx, redis, consul
+        assert_eq!(result.to_resolve.len(), 3);
+        let resolved_names: Vec<_> = result.to_resolve.iter().map(|d| d.name.as_str()).collect();
+        assert!(resolved_names.contains(&"nginx"));
+        assert!(resolved_names.contains(&"redis"));
+        assert!(resolved_names.contains(&"consul"));
+
+        // Should skip: postgres (condition false), mongodb (static disabled), vault (never)
+        assert_eq!(result.skipped.len(), 3);
+    }
+
+    #[test]
+    fn test_skip_reason_display() {
+        assert_eq!(SkipReason::StaticDisabled.to_string(), "enabled: false");
+        assert_eq!(SkipReason::PolicyNever.to_string(), "resolve: never");
+        assert_eq!(
+            SkipReason::ConditionFalse { condition: "redis.enabled".to_string() }.to_string(),
+            "condition 'redis.enabled' is false"
+        );
+    }
+
+    #[test]
+    fn test_filter_result_summary() {
+        let deps = vec![
+            make_dep("redis", false, ResolvePolicy::WhenEnabled, None),
+            make_dep("postgres", true, ResolvePolicy::Never, None),
+        ];
+        let values = serde_json::json!({});
+
+        let result = filter_dependencies(&deps, &values);
+
+        assert!(result.has_skipped());
+        let summary = result.skipped_summary();
+        assert!(summary.contains("redis"));
+        assert!(summary.contains("enabled: false"));
+        assert!(summary.contains("postgres"));
+        assert!(summary.contains("resolve: never"));
+    }
+
+    #[test]
+    fn test_dependency_spec_from_dependency() {
+        let dep = Dependency {
+            name: "redis".to_string(),
+            version: "^17.0.0".to_string(),
+            repository: "https://example.com".to_string(),
+            enabled: true,
+            condition: Some("redis.enabled".to_string()),
+            resolve: ResolvePolicy::WhenEnabled,
+            tags: vec!["cache".to_string()],
+            alias: Some("my-redis".to_string()),
+        };
+
+        let spec = DependencySpec::from(&dep);
+
+        assert_eq!(spec.name, "redis");
+        assert_eq!(spec.version, "^17.0.0");
+        assert_eq!(spec.repository, "https://example.com");
+        assert_eq!(spec.condition, Some("redis.enabled".to_string()));
+        assert_eq!(spec.tags, vec!["cache".to_string()]);
+        assert_eq!(spec.alias, Some("my-redis".to_string()));
+        assert_eq!(spec.effective_name(), "my-redis");
     }
 }

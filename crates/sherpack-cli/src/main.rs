@@ -276,6 +276,10 @@ enum Commands {
         /// Show diff before applying
         #[arg(long)]
         diff: bool,
+
+        /// Skip CRD installation (assume CRDs are managed externally)
+        #[arg(long)]
+        skip_crds: bool,
     },
 
     /// Upgrade an existing release
@@ -345,6 +349,18 @@ enum Commands {
         /// Max history revisions to keep
         #[arg(long)]
         max_history: Option<u32>,
+
+        /// Skip CRD updates (assume CRDs are managed externally)
+        #[arg(long)]
+        skip_crd_update: bool,
+
+        /// Force CRD updates even for breaking changes
+        #[arg(long)]
+        force_crd_update: bool,
+
+        /// Show CRD diff before applying
+        #[arg(long)]
+        show_crd_diff: bool,
     },
 
     /// Uninstall a release
@@ -375,6 +391,14 @@ enum Commands {
         /// Simulate without deleting
         #[arg(long)]
         dry_run: bool,
+
+        /// Delete CRDs (WARNING: deletes all CustomResources of those types)
+        #[arg(long)]
+        delete_crds: bool,
+
+        /// Confirm CRD deletion (required with --delete-crds)
+        #[arg(long)]
+        confirm_crd_deletion: bool,
     },
 
     /// Rollback to a previous revision
@@ -769,6 +793,7 @@ fn run_command(cli: Cli) -> error::Result<()> {
             create_namespace,
             dry_run,
             diff,
+            skip_crds,
         } => {
             let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
             rt.block_on(commands::install::run(
@@ -783,6 +808,7 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 create_namespace,
                 dry_run,
                 diff,
+                skip_crds,
             ))}
 
         Commands::Upgrade {
@@ -803,6 +829,9 @@ fn run_command(cli: Cli) -> error::Result<()> {
             diff,
             immutable_strategy,
             max_history,
+            skip_crd_update,
+            force_crd_update,
+            show_crd_diff,
         } => {
             let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
             rt.block_on(commands::upgrade::run(
@@ -823,6 +852,9 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 diff,
                 immutable_strategy.as_deref(),
                 max_history,
+                skip_crd_update,
+                force_crd_update,
+                show_crd_diff,
             ))}
 
         Commands::Uninstall {
@@ -833,6 +865,8 @@ fn run_command(cli: Cli) -> error::Result<()> {
             keep_history,
             no_hooks,
             dry_run,
+            delete_crds,
+            confirm_crd_deletion,
         } => {
             let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
             rt.block_on(commands::uninstall::run(
@@ -843,6 +877,8 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 keep_history,
                 no_hooks,
                 dry_run,
+                delete_crds,
+                confirm_crd_deletion,
             ))}
 
         Commands::Rollback {

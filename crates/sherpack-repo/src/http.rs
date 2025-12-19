@@ -2,7 +2,7 @@
 //!
 //! Supports traditional Helm-style HTTP repositories with index.yaml
 
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::config::Repository;
 use crate::credentials::{CachedResponse, ResolvedCredentials, ScopedCredentials, SecureHttpClient};
@@ -163,7 +163,7 @@ impl HttpRepository {
     }
 
     /// Download and extract a pack to a directory
-    pub async fn download_to(&self, entry: &PackEntry, dest: &PathBuf) -> Result<()> {
+    pub async fn download_to(&self, entry: &PackEntry, dest: &Path) -> Result<()> {
         let data = self.download(entry).await?;
 
         // Extract the archive
@@ -216,7 +216,7 @@ fn digest_matches(expected: &str, actual: &str) -> bool {
 }
 
 /// Extract a pack archive (tar.gz) to a directory
-fn extract_pack_archive(data: &[u8], dest: &PathBuf) -> Result<()> {
+fn extract_pack_archive(data: &[u8], dest: &Path) -> Result<()> {
     use flate2::read::GzDecoder;
     use tar::Archive;
 

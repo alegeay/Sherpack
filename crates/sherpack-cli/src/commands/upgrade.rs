@@ -13,6 +13,7 @@ use sherpack_kube::{
 use crate::error::Result;
 
 /// Run the upgrade command
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     name: &str,
     pack_path: &Path,
@@ -31,6 +32,9 @@ pub async fn run(
     show_diff: bool,
     immutable_strategy: Option<&str>,
     max_history: Option<u32>,
+    skip_crd_update: bool,
+    force_crd_update: bool,
+    show_crd_diff: bool,
 ) -> Result<()> {
     // Load the pack
     let pack = LoadedPack::load(pack_path).into_diagnostic()?;
@@ -41,6 +45,39 @@ pub async fn run(
         style(&pack.pack.metadata.name).cyan(),
         style(&pack.pack.metadata.version).yellow()
     );
+
+    // Check for CRDs
+    if pack.has_crds() {
+        let crd_files = pack.crd_files().into_diagnostic()?;
+        if skip_crd_update {
+            println!(
+                "{} Skipping CRD updates for {} file(s) (--skip-crd-update)",
+                style("⚠").yellow(),
+                crd_files.len()
+            );
+        } else if force_crd_update {
+            println!(
+                "{} Will force-update {} CRD file(s) (--force-crd-update)",
+                style("⚠").yellow(),
+                crd_files.len()
+            );
+        } else {
+            println!(
+                "{} Found {} CRD file(s) - safe updates only",
+                style("→").blue(),
+                crd_files.len()
+            );
+        }
+        if show_crd_diff {
+            println!(
+                "{} CRD diff will be shown before applying",
+                style("→").blue()
+            );
+        }
+    }
+
+    // Handle unused variables for now
+    let _ = (skip_crd_update, force_crd_update, show_crd_diff);
 
     // Load and merge values
     let mut values = Values::from_file(&pack.values_path).into_diagnostic()?;

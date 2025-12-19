@@ -17,6 +17,7 @@ use kube::{
     Client,
 };
 
+use crate::crd::ResourceCategory;
 use crate::error::{KubeError, Result};
 
 /// Field manager name for Server-Side Apply
@@ -436,12 +437,21 @@ impl ResourceManager {
     }
 
     /// Sort resources for creation (dependencies first)
+    ///
+    /// Uses ResourceCategory for proper ordering:
+    /// CRDs → Namespaces → RBAC → Config → Network → Workloads → Custom Resources
     fn sort_for_apply<'a>(&self, resources: &'a [ParsedResource]) -> Vec<&'a ParsedResource> {
         let mut sorted: Vec<&ParsedResource> = resources.iter().collect();
         sorted.sort_by(|a, b| {
-            let order_a = creation_order(&a.gvk.kind);
-            let order_b = creation_order(&b.gvk.kind);
-            order_a.cmp(&order_b)
+            let cat_a = ResourceCategory::from_resource(
+                &a.gvk.kind,
+                a.obj.types.as_ref().map(|t| t.api_version.as_str()).unwrap_or("v1"),
+            );
+            let cat_b = ResourceCategory::from_resource(
+                &b.gvk.kind,
+                b.obj.types.as_ref().map(|t| t.api_version.as_str()).unwrap_or("v1"),
+            );
+            cat_a.cmp(&cat_b)
         });
         sorted
     }
@@ -450,11 +460,30 @@ impl ResourceManager {
     fn sort_for_delete<'a>(&self, resources: &'a [ParsedResource]) -> Vec<&'a ParsedResource> {
         let mut sorted: Vec<&ParsedResource> = resources.iter().collect();
         sorted.sort_by(|a, b| {
-            let order_a = creation_order(&a.gvk.kind);
-            let order_b = creation_order(&b.gvk.kind);
-            order_b.cmp(&order_a) // Reverse order
+            let cat_a = ResourceCategory::from_resource(
+                &a.gvk.kind,
+                a.obj.types.as_ref().map(|t| t.api_version.as_str()).unwrap_or("v1"),
+            );
+            let cat_b = ResourceCategory::from_resource(
+                &b.gvk.kind,
+                b.obj.types.as_ref().map(|t| t.api_version.as_str()).unwrap_or("v1"),
+            );
+            cat_b.cmp(&cat_a) // Reverse order
         });
         sorted
+    }
+
+    /// Check if a resource is a CRD
+    pub fn is_crd(kind: &str) -> bool {
+        kind == "CustomResourceDefinition"
+    }
+
+    /// Filter resources into CRDs and non-CRDs
+    fn partition_crds<'a>(
+        &self,
+        resources: &'a [ParsedResource],
+    ) -> (Vec<&'a ParsedResource>, Vec<&'a ParsedResource>) {
+        resources.iter().partition(|r| Self::is_crd(&r.gvk.kind))
     }
 
     /// Create an Api client for a parsed resource
@@ -473,59 +502,6 @@ impl ResourceManager {
     }
 }
 
-/// Get creation order for a resource kind
-/// Lower numbers are created first, deleted last
-fn creation_order(kind: &str) -> u32 {
-    match kind {
-        // Cluster-level resources first
-        "Namespace" => 0,
-        "ResourceQuota" => 1,
-        "LimitRange" => 2,
-        "PodSecurityPolicy" => 3,
-
-        // CRDs before CRs
-        "CustomResourceDefinition" => 5,
-
-        // RBAC
-        "ClusterRole" => 10,
-        "ClusterRoleBinding" => 11,
-        "Role" => 12,
-        "RoleBinding" => 13,
-        "ServiceAccount" => 14,
-
-        // Config/Secrets before workloads
-        "ConfigMap" => 20,
-        "Secret" => 21,
-        "PersistentVolumeClaim" => 22,
-        "PersistentVolume" => 23,
-
-        // Network resources
-        "NetworkPolicy" => 30,
-        "Service" => 31,
-        "Endpoints" => 32,
-        "Ingress" => 33,
-        "IngressClass" => 34,
-
-        // Workloads
-        "Deployment" => 40,
-        "StatefulSet" => 41,
-        "DaemonSet" => 42,
-        "ReplicaSet" => 43,
-        "Pod" => 44,
-
-        // Jobs
-        "Job" => 50,
-        "CronJob" => 51,
-
-        // HPAs and VPAs after workloads
-        "HorizontalPodAutoscaler" => 60,
-        "VerticalPodAutoscaler" => 61,
-        "PodDisruptionBudget" => 62,
-
-        // Everything else
-        _ => 100,
-    }
-}
 
 /// Convert TypeMeta to GroupVersionKind
 ///
@@ -550,53 +526,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_creation_order() {
-        assert!(creation_order("Namespace") < creation_order("ConfigMap"));
-        assert!(creation_order("ConfigMap") < creation_order("Deployment"));
-        assert!(creation_order("Deployment") < creation_order("HorizontalPodAutoscaler"));
+    fn test_resource_category_ordering() {
+        // CRDs should come before everything
+        assert!(ResourceCategory::Crd < ResourceCategory::Namespace);
+        assert!(ResourceCategory::Namespace < ResourceCategory::ClusterRbac);
+        assert!(ResourceCategory::ClusterRbac < ResourceCategory::Config);
+        assert!(ResourceCategory::Config < ResourceCategory::Workload);
+        assert!(ResourceCategory::Workload < ResourceCategory::CustomResource);
     }
 
     #[test]
-    fn test_creation_order_comprehensive() {
-        // Verify the full ordering chain
-        let order = vec![
-            "Namespace",           // 0
-            "CustomResourceDefinition", // 5
-            "ClusterRole",         // 10
-            "ClusterRoleBinding",  // 11
-            "Role",                // 12
-            "RoleBinding",         // 13
-            "ServiceAccount",      // 14
-            "ConfigMap",           // 20
-            "Secret",              // 21
-            "PersistentVolumeClaim", // 22
-            "Service",             // 31
-            "Ingress",             // 33
-            "Deployment",          // 40
-            "StatefulSet",         // 41
-            "DaemonSet",           // 42
-            "Job",                 // 50
-            "CronJob",             // 51
-            "HorizontalPodAutoscaler", // 60
-        ];
-
-        for i in 0..order.len() - 1 {
-            assert!(
-                creation_order(order[i]) <= creation_order(order[i + 1]),
-                "{} ({}) should come before {} ({})",
-                order[i],
-                creation_order(order[i]),
-                order[i + 1],
-                creation_order(order[i + 1])
-            );
-        }
-    }
-
-    #[test]
-    fn test_creation_order_unknown() {
-        // Unknown kinds should return 100 (last)
-        assert_eq!(creation_order("UnknownKind"), 100);
-        assert_eq!(creation_order("MyCustomResource"), 100);
+    fn test_resource_manager_is_crd() {
+        assert!(ResourceManager::is_crd("CustomResourceDefinition"));
+        assert!(!ResourceManager::is_crd("Deployment"));
+        assert!(!ResourceManager::is_crd("ConfigMap"));
     }
 
     #[test]

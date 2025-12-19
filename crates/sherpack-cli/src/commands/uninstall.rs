@@ -10,6 +10,7 @@ use sherpack_kube::{
 use crate::error::Result;
 
 /// Run the uninstall command
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     name: &str,
     namespace: &str,
@@ -18,13 +19,33 @@ pub async fn run(
     keep_history: bool,
     no_hooks: bool,
     dry_run: bool,
+    delete_crds: bool,
+    confirm_crd_deletion: bool,
 ) -> Result<()> {
+    // Validate CRD deletion flags
+    if delete_crds && !confirm_crd_deletion {
+        eprintln!(
+            "{} Cannot delete CRDs without confirmation",
+            style("✗").red().bold()
+        );
+        eprintln!("  CRD deletion will also delete ALL CustomResources of those types!");
+        eprintln!("  Use --confirm-crd-deletion to proceed.");
+        return Err(miette::miette!("CRD deletion requires --confirm-crd-deletion flag").into());
+    }
+
     println!(
         "{} Uninstalling release {} from namespace {}",
         style("→").blue().bold(),
         style(name).cyan(),
         style(namespace).yellow()
     );
+
+    if delete_crds && confirm_crd_deletion {
+        println!(
+            "{} CRDs will be deleted (--delete-crds --confirm-crd-deletion)",
+            style("⚠").yellow()
+        );
+    }
 
     // Create storage driver
     let storage_path = dirs::data_dir()

@@ -22,6 +22,7 @@ pub mod client;
 pub mod annotations;
 pub mod waves;
 pub mod progress;
+pub mod crd;
 
 pub use error::{KubeError, Result};
 pub use release::{StoredRelease, ReleaseState, ValueSource, ValuesProvenance};
@@ -35,3 +36,27 @@ pub use client::KubeClient;
 pub use annotations::{ResourceRef, DeletePolicy, FailurePolicy};
 pub use waves::{ExecutionPlan, Wave, Resource, WaveExecutionConfig};
 pub use progress::{ProgressReporter, ResourceStatus, ResourceState};
+// CRD handling - Phase 2 Safe Updates
+pub use crd::{
+    // Apply operations
+    ResourceCategory, CrdManager, CrdApplyResult, CrdUpgradeResult,
+    // Schema types
+    CrdSchema, CrdScope, CrdParser,
+    // Analysis types
+    CrdAnalyzer, CrdAnalysis, CrdChange, ChangeKind, ChangeSeverity,
+    // Strategy types
+    UpgradeStrategy, UpgradeDecision, SafeStrategy, ForceStrategy, SkipStrategy,
+    strategy_from_options,
+};
+
+// CRD handling - Phase 3 Templated CRDs
+pub use crd::{
+    // Policy types
+    CrdPolicy, CrdLocation, CrdOwnership, DetectedCrd,
+    CRD_POLICY_ANNOTATION, HELM_RESOURCE_POLICY,
+    // Detection types
+    CrdLintCode, CrdLintWarning, LintSeverity, TemplatedCrdFile, JinjaConstruct,
+    contains_jinja_syntax, detect_crds_in_manifests, is_crd_manifest, lint_crds,
+    // Protection types
+    CrdProtection, CrdDeletionImpact, DeletionImpactSummary, DeletionConfirmation,
+};

@@ -14,7 +14,7 @@ use crate::suggestions::{
 #[derive(Error, Debug)]
 pub enum EngineError {
     #[error("Template error")]
-    Template(#[from] TemplateError),
+    Template(Box<TemplateError>),
 
     #[error("Filter error: {message}")]
     Filter { message: String },
@@ -29,7 +29,13 @@ pub enum EngineError {
     Json(#[from] serde_json::Error),
 
     #[error("Multiple template errors occurred")]
-    MultipleErrors(RenderReport),
+    MultipleErrors(Box<RenderReport>),
+}
+
+impl From<TemplateError> for EngineError {
+    fn from(e: TemplateError) -> Self {
+        EngineError::Template(Box::new(e))
+    }
 }
 
 /// Error kind for categorizing template errors
@@ -493,6 +499,46 @@ fn generate_suggestion(
     }
 }
 
+/// Severity level for render issues
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IssueSeverity {
+    /// Warning - doesn't prevent rendering but may cause issues
+    Warning,
+    /// Error - prevents successful rendering
+    Error,
+}
+
+/// A render issue (warning or infrastructure problem)
+#[derive(Debug, Clone)]
+pub struct RenderIssue {
+    /// Issue category (e.g., "files_api", "subchart")
+    pub category: String,
+    /// Human-readable message
+    pub message: String,
+    /// Severity level
+    pub severity: IssueSeverity,
+}
+
+impl RenderIssue {
+    /// Create a new warning
+    pub fn warning(category: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            category: category.into(),
+            message: message.into(),
+            severity: IssueSeverity::Warning,
+        }
+    }
+
+    /// Create a new error
+    pub fn error(category: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            category: category.into(),
+            message: message.into(),
+            severity: IssueSeverity::Error,
+        }
+    }
+}
+
 /// A collection of errors from rendering multiple templates
 #[derive(Debug, Default)]
 pub struct RenderReport {
@@ -504,6 +550,9 @@ pub struct RenderReport {
 
     /// Total error count
     pub total_errors: usize,
+
+    /// Infrastructure issues (warnings/errors not tied to specific templates)
+    pub issues: Vec<RenderIssue>,
 }
 
 impl RenderReport {
@@ -526,9 +575,38 @@ impl RenderReport {
         self.successful_templates.push(template_name);
     }
 
+    /// Add an infrastructure issue (warning or error not tied to a template)
+    pub fn add_issue(&mut self, issue: RenderIssue) {
+        self.issues.push(issue);
+    }
+
+    /// Add a warning
+    pub fn add_warning(&mut self, category: impl Into<String>, message: impl Into<String>) {
+        self.issues.push(RenderIssue::warning(category, message));
+    }
+
     /// Check if there are any errors
     pub fn has_errors(&self) -> bool {
         self.total_errors > 0
+    }
+
+    /// Check if there are any warnings
+    pub fn has_warnings(&self) -> bool {
+        self.issues
+            .iter()
+            .any(|i| i.severity == IssueSeverity::Warning)
+    }
+
+    /// Check if there are any issues (warnings or errors)
+    pub fn has_issues(&self) -> bool {
+        !self.issues.is_empty()
+    }
+
+    /// Get warnings only
+    pub fn warnings(&self) -> impl Iterator<Item = &RenderIssue> {
+        self.issues
+            .iter()
+            .filter(|i| i.severity == IssueSeverity::Warning)
     }
 
     /// Get count of templates with errors
@@ -548,13 +626,26 @@ impl RenderReport {
         } else {
             "errors"
         };
-        format!(
+
+        let base = format!(
             "{} {} in {} {}",
             self.total_errors,
             error_word,
             self.templates_with_errors(),
             template_word
-        )
+        );
+
+        let warning_count = self.warnings().count();
+        if warning_count > 0 {
+            let warning_word = if warning_count == 1 {
+                "warning"
+            } else {
+                "warnings"
+            };
+            format!("{}, {} {}", base, warning_count, warning_word)
+        } else {
+            base
+        }
     }
 }
 
@@ -759,5 +850,57 @@ mod tests {
 "#;
         let filter = extract_filter_from_display(display);
         assert_eq!(filter, Some("toyml".to_string()));
+    }
+
+    #[test]
+    fn test_render_issue_warning() {
+        let issue = RenderIssue::warning("files_api", "Files API unavailable");
+        assert_eq!(issue.category, "files_api");
+        assert_eq!(issue.message, "Files API unavailable");
+        assert_eq!(issue.severity, IssueSeverity::Warning);
+    }
+
+    #[test]
+    fn test_render_issue_error() {
+        let issue = RenderIssue::error("subchart", "Failed to load subchart");
+        assert_eq!(issue.category, "subchart");
+        assert_eq!(issue.severity, IssueSeverity::Error);
+    }
+
+    #[test]
+    fn test_render_report_add_warning() {
+        let mut report = RenderReport::new();
+        report.add_warning("test_category", "test warning message");
+
+        assert!(report.has_warnings());
+        assert!(report.has_issues());
+        assert!(!report.has_errors()); // Template errors, not issues
+
+        let warnings: Vec<_> = report.warnings().collect();
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(warnings[0].category, "test_category");
+        assert_eq!(warnings[0].message, "test warning message");
+    }
+
+    #[test]
+    fn test_render_report_summary_with_warnings() {
+        let mut report = RenderReport::new();
+        report.add_error("a.yaml".to_string(), TemplateError::simple("error"));
+        report.add_warning("files_api", "Files unavailable");
+
+        let summary = report.summary();
+        assert!(summary.contains("1 error"));
+        assert!(summary.contains("1 warning"));
+    }
+
+    #[test]
+    fn test_render_report_multiple_warnings() {
+        let mut report = RenderReport::new();
+        report.add_warning("files_api", "warning 1");
+        report.add_warning("subchart", "warning 2");
+        report.add_issue(RenderIssue::error("critical", "an error"));
+
+        assert_eq!(report.warnings().count(), 2);
+        assert_eq!(report.issues.len(), 3);
     }
 }

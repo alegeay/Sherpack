@@ -16,7 +16,7 @@ struct GoTemplateParser;
 #[derive(Debug, Error)]
 pub enum ParseError {
     #[error("Parse error: {0}")]
-    Pest(#[from] pest::error::Error<Rule>),
+    Pest(Box<pest::error::Error<Rule>>),
 
     #[error("Invalid number: {0}")]
     InvalidNumber(String),
@@ -26,6 +26,12 @@ pub enum ParseError {
 
     #[error("Unexpected rule: {0:?}")]
     UnexpectedRule(Rule),
+}
+
+impl From<pest::error::Error<Rule>> for ParseError {
+    fn from(e: pest::error::Error<Rule>) -> Self {
+        ParseError::Pest(Box::new(e))
+    }
 }
 
 pub type Result<T> = std::result::Result<T, ParseError>;

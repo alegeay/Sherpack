@@ -18,7 +18,6 @@
 
 use crate::ast::*;
 use phf::phf_map;
-use std::collections::HashSet;
 
 // =============================================================================
 // FILTER MAPPINGS - Direct 1:1 conversions
@@ -241,9 +240,9 @@ impl TransformWarning {
 #[derive(Debug, Clone)]
 enum BlockType {
     If,
-    Range { var_name: String, index_var: Option<String> },
-    With { context_var: String },
-    Define { name: String },
+    Range,
+    With,
+    Define,
 }
 
 /// Transformer for converting Go template AST to idiomatic Jinja2
@@ -251,15 +250,12 @@ pub struct Transformer {
     /// Track nested blocks for proper end tag generation
     block_stack: Vec<BlockType>,
     /// Warnings generated during transformation
+    #[allow(dead_code)]
     warnings: Vec<TransformWarning>,
     /// Chart name prefix to strip from include/template calls
     chart_prefix: Option<String>,
     /// Current context variable (for range/with blocks)
     context_var: Option<String>,
-    /// Track seen unsupported features to avoid duplicate warnings
-    seen_unsupported: HashSet<String>,
-    /// Root context saved for $ access
-    root_context_saved: bool,
 }
 
 impl Default for Transformer {
@@ -275,8 +271,6 @@ impl Transformer {
             warnings: Vec::new(),
             chart_prefix: None,
             context_var: None,
-            seen_unsupported: HashSet::new(),
-            root_context_saved: false,
         }
     }
 
@@ -291,14 +285,8 @@ impl Transformer {
         &self.warnings
     }
 
+    #[allow(dead_code)]
     fn add_warning(&mut self, warning: TransformWarning) {
-        // Avoid duplicate unsupported warnings
-        if warning.severity == WarningSeverity::Unsupported {
-            if self.seen_unsupported.contains(&warning.pattern) {
-                return;
-            }
-            self.seen_unsupported.insert(warning.pattern.clone());
-        }
         self.warnings.push(warning);
     }
 
@@ -348,19 +336,19 @@ impl Transformer {
                 let block = self.block_stack.pop();
                 let end_tag = match &block {
                     Some(BlockType::If) => "endif",
-                    Some(BlockType::Range { .. }) => "endfor",
-                    Some(BlockType::With { .. }) => "endif",
-                    Some(BlockType::Define { .. }) => "endmacro",
+                    Some(BlockType::Range) => "endfor",
+                    Some(BlockType::With) => "endif",
+                    Some(BlockType::Define) => "endmacro",
                     None => "endif",
                 };
 
                 // Restore context after with block
-                if let Some(BlockType::With { .. }) = &block {
+                if let Some(BlockType::With) = &block {
                     self.context_var = None;
                 }
 
                 // endmacro doesn't support trim on closing
-                if matches!(block, Some(BlockType::Define { .. })) {
+                if matches!(block, Some(BlockType::Define)) {
                     format!("{{%{} {} %}}", trim_left, end_tag)
                 } else if trim_right == "-" {
                     format!("{{%{} {} -%}}", trim_left, end_tag)
@@ -380,10 +368,7 @@ impl Transformer {
                     v.index_var.as_ref().map(|i| i.trim_start_matches('$').to_string())
                 });
 
-                self.block_stack.push(BlockType::Range {
-                    var_name: var_name.clone(),
-                    index_var: index_var.clone(),
-                });
+                self.block_stack.push(BlockType::Range);
 
                 let collection = self.transform_pipeline(pipeline);
 
@@ -404,9 +389,7 @@ impl Transformer {
                 let ctx_value = self.transform_pipeline(pipeline);
                 let ctx_var = "_with_ctx".to_string();
 
-                self.block_stack.push(BlockType::With {
-                    context_var: ctx_var.clone(),
-                });
+                self.block_stack.push(BlockType::With);
                 self.context_var = Some(ctx_var.clone());
 
                 // with becomes: if value, set context, use context
@@ -419,9 +402,7 @@ impl Transformer {
             // Define: {{- define "name" }} → {%- macro name() %}
             ActionBody::Define(name) => {
                 let macro_name = self.strip_chart_prefix(name);
-                self.block_stack.push(BlockType::Define {
-                    name: macro_name.clone(),
-                });
+                self.block_stack.push(BlockType::Define);
                 format!("{{%{} macro {}() %}}", trim_left, macro_name)
             }
 
@@ -434,9 +415,7 @@ impl Transformer {
             // Block: {{- block "name" . }} → {%- block name %}
             ActionBody::Block { name, .. } => {
                 let block_name = self.strip_chart_prefix(name);
-                self.block_stack.push(BlockType::Define {
-                    name: block_name.clone(),
-                });
+                self.block_stack.push(BlockType::Define);
                 format!("{{%{} block {} %}}", trim_left, block_name)
             }
 

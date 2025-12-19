@@ -3,10 +3,10 @@
 use std::path::Path;
 
 use crate::error::{CliError, Result};
-use sherpack_core::LoadedPack;
+use sherpack_core::{LoadedPack, ResolvePolicy, Values};
 use sherpack_repo::{
-    DependencyResolver, DependencySpec, LockFile, RepositoryConfig, CredentialStore,
-    create_backend,
+    DependencyResolver, LockFile, RepositoryConfig, CredentialStore,
+    create_backend, filter_dependencies,
 };
 
 /// List dependencies
@@ -18,6 +18,11 @@ pub async fn list(pack_path: &Path) -> Result<()> {
         return Ok(());
     }
 
+    // Load values for condition evaluation
+    let values = Values::from_file(&pack.values_path)
+        .map(|v| v.into_inner())
+        .unwrap_or_else(|_| serde_json::json!({}));
+
     println!("Dependencies for {}:", pack.pack.metadata.name);
     println!();
 
@@ -28,15 +33,40 @@ pub async fn list(pack_path: &Path) -> Result<()> {
             .map(|a| format!(" (alias: {})", a))
             .unwrap_or_default();
 
+        // Status indicators
+        let status = if !dep.enabled {
+            " [disabled]"
+        } else if dep.resolve == ResolvePolicy::Never {
+            " [resolve: never]"
+        } else if dep.condition.is_some() && !dep.should_resolve(&values) {
+            " [condition: false]"
+        } else {
+            ""
+        };
+
         println!(
-            "  {} @ {}{}",
-            dep.name, dep.version, alias_info
+            "  {} @ {}{}{}",
+            dep.name, dep.version, alias_info, status
         );
         println!("    repository: {}", dep.repository);
 
         if let Some(condition) = &dep.condition {
             println!("    condition: {}", condition);
         }
+        if dep.resolve != ResolvePolicy::WhenEnabled {
+            println!("    resolve: {:?}", dep.resolve);
+        }
+        if !dep.enabled {
+            println!("    enabled: false");
+        }
+    }
+
+    // Show filter summary
+    let filter_result = filter_dependencies(&pack.pack.dependencies, &values);
+    if filter_result.has_skipped() {
+        println!();
+        println!("Skipped dependencies ({}):", filter_result.skipped.len());
+        println!("{}", filter_result.skipped_summary());
     }
 
     // Check if lock file exists
@@ -71,23 +101,37 @@ pub async fn update(pack_path: &Path) -> Result<()> {
 
     println!("Resolving dependencies for {}...", pack.pack.metadata.name);
 
+    // Filter dependencies based on enabled/resolve/condition
+    let values = Values::from_file(&pack.values_path)
+        .map(|v| v.into_inner())
+        .unwrap_or_else(|_| serde_json::json!({}));
+    let filter_result = filter_dependencies(&pack.pack.dependencies, &values);
+
+    // Show skipped dependencies
+    if filter_result.has_skipped() {
+        println!();
+        println!("Skipping {} dependencies:", filter_result.skipped.len());
+        println!("{}", filter_result.skipped_summary());
+    }
+
+    if filter_result.to_resolve.is_empty() {
+        println!();
+        println!("No dependencies to resolve (all skipped)");
+
+        // Still create an empty lock file
+        let pack_yaml_content =
+            std::fs::read_to_string(pack_path.join("Pack.yaml")).map_err(CliError::io)?;
+        let lock = LockFile::new(&pack_yaml_content);
+        let lock_path = pack_path.join("Pack.lock.yaml");
+        lock.save(&lock_path)
+            .map_err(|e| CliError::internal(e.to_string()))?;
+        println!("Wrote empty Pack.lock.yaml");
+
+        return Ok(());
+    }
+
     let config = RepositoryConfig::load().map_err(|e| CliError::internal(e.to_string()))?;
     let cred_store = CredentialStore::load().unwrap_or_default();
-
-    // Convert dependencies
-    let deps: Vec<DependencySpec> = pack
-        .pack
-        .dependencies
-        .iter()
-        .map(|d| DependencySpec {
-            name: d.name.clone(),
-            version: d.version.clone(),
-            repository: d.repository.clone(),
-            condition: d.condition.clone(),
-            tags: d.tags.clone(),
-            alias: d.alias.clone(),
-        })
-        .collect();
 
     // Create resolver with fetch function
     let resolver = DependencyResolver::new(|repo_url, name, version| {
@@ -109,9 +153,9 @@ pub async fn update(pack_path: &Path) -> Result<()> {
         })
     });
 
-    // Resolve
+    // Resolve only the filtered dependencies
     let graph = resolver
-        .resolve(&deps)
+        .resolve(&filter_result.to_resolve)
         .map_err(|e| CliError::internal(e.to_string()))?;
 
     println!();

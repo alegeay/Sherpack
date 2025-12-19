@@ -1,7 +1,7 @@
 //! Template functions (global functions available in templates)
 
 use minijinja::{Error, ErrorKind, State, Value};
-use minijinja::value::Object;
+use minijinja::value::{Object, Rest};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
@@ -79,6 +79,119 @@ pub fn get(obj: Value, key: String, default: Option<Value>) -> Value {
         Ok(v) if !v.is_undefined() => v,
         _ => default.unwrap_or(Value::UNDEFINED),
     }
+}
+
+/// Set a key in a dict (returns new dict, original unchanged)
+///
+/// Usage: {{ set(mydict, "newkey", "newvalue") }}
+pub fn set(dict: Value, key: String, val: Value) -> Result<Value, Error> {
+    use minijinja::value::ValueKind;
+
+    match dict.kind() {
+        ValueKind::Map => {
+            let mut result = indexmap::IndexMap::new();
+
+            // Copy existing entries
+            if let Ok(iter) = dict.try_iter() {
+                for k in iter {
+                    if let Some(k_str) = k.as_str() {
+                        if let Ok(v) = dict.get_item(&k) {
+                            result.insert(k_str.to_string(), v);
+                        }
+                    }
+                }
+            }
+
+            // Set the new value
+            result.insert(key, val);
+            Ok(Value::from_iter(result))
+        }
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("set requires a dict, got {:?}", dict.kind()),
+        )),
+    }
+}
+
+/// Remove a key from a dict (returns new dict, original unchanged)
+///
+/// Usage: {{ unset(mydict, "keytoremove") }}
+pub fn unset(dict: Value, key: String) -> Result<Value, Error> {
+    use minijinja::value::ValueKind;
+
+    match dict.kind() {
+        ValueKind::Map => {
+            let mut result = indexmap::IndexMap::new();
+
+            if let Ok(iter) = dict.try_iter() {
+                for k in iter {
+                    if let Some(k_str) = k.as_str() {
+                        if k_str != key {
+                            if let Ok(v) = dict.get_item(&k) {
+                                result.insert(k_str.to_string(), v);
+                            }
+                        }
+                    }
+                }
+            }
+
+            Ok(Value::from_iter(result))
+        }
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("unset requires a dict, got {:?}", dict.kind()),
+        )),
+    }
+}
+
+/// Deep get with path and default value
+///
+/// Usage: {{ dig(mydict, "a", "b", "c", "default") }}
+/// Equivalent to mydict.a.b.c with fallback to default if any key is missing
+pub fn dig(dict: Value, keys_and_default: Rest<Value>) -> Result<Value, Error> {
+    let args: &[Value] = &keys_and_default;
+
+    if args.is_empty() {
+        return Err(Error::new(
+            ErrorKind::InvalidOperation,
+            "dig requires at least one key and a default value",
+        ));
+    }
+
+    // Last argument is the default value, rest are keys
+    let (keys, default_slice) = args.split_at(args.len() - 1);
+    let default = default_slice.first().cloned().unwrap_or(Value::UNDEFINED);
+
+    if keys.is_empty() {
+        // Only default was provided, return the dict itself
+        return Ok(dict);
+    }
+
+    // Traverse the path
+    let mut current = dict;
+    for key in keys {
+        match key.as_str() {
+            Some(k) => {
+                match current.get_attr(k) {
+                    Ok(v) if !v.is_undefined() => current = v,
+                    _ => return Ok(default),
+                }
+            }
+            None => {
+                // Handle integer keys for lists
+                if let Some(idx) = key.as_i64() {
+                    match current.get_item(&Value::from(idx)) {
+                        Ok(v) if !v.is_undefined() => current = v,
+                        _ => return Ok(default),
+                    }
+                } else {
+                    return Ok(default);
+                }
+            }
+        }
+    }
+
+    Ok(current)
 }
 
 /// Return first non-empty value
@@ -648,5 +761,47 @@ mod tests {
         let template = r#"{% set secret = lookup("v1", "Secret", "ns", "s") %}{{ get(secret, "data", {}) | tojson }}"#;
         let result = env.render_str(template, ()).unwrap();
         assert_eq!(result, "{}");
+    }
+
+    #[test]
+    fn test_set_function() {
+        use minijinja::Environment;
+
+        let mut env = Environment::new();
+        env.add_function("set", super::set);
+
+        let template = r#"{% set d = {"a": 1} %}{{ set(d, "b", 2) }}"#;
+        let result = env.render_str(template, ()).unwrap();
+        assert!(result.contains("a") && result.contains("b"));
+    }
+
+    #[test]
+    fn test_unset_function() {
+        use minijinja::Environment;
+
+        let mut env = Environment::new();
+        env.add_function("unset", super::unset);
+
+        let template = r#"{% set d = {"a": 1, "b": 2} %}{{ unset(d, "a") }}"#;
+        let result = env.render_str(template, ()).unwrap();
+        assert!(!result.contains("a") && result.contains("b"));
+    }
+
+    #[test]
+    fn test_dig_function() {
+        use minijinja::Environment;
+
+        let mut env = Environment::new();
+        env.add_function("dig", super::dig);
+
+        // Test deep access that exists
+        let template = r#"{% set d = {"a": {"b": {"c": "found"}}} %}{{ dig(d, "a", "b", "c", "default") }}"#;
+        let result = env.render_str(template, ()).unwrap();
+        assert_eq!(result, "found");
+
+        // Test deep access that doesn't exist (returns default)
+        let template2 = r#"{% set d = {"a": {"b": {}}} %}{{ dig(d, "a", "b", "c", "default") }}"#;
+        let result2 = env.render_str(template2, ()).unwrap();
+        assert_eq!(result2, "default");
     }
 }

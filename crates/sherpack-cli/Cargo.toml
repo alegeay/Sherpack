@@ -27,6 +27,7 @@ tokio = { workspace = true }
 walkdir = { workspace = true }
 minisign = { workspace = true }
 chrono = { workspace = true }
+indexmap = { workspace = true }
 flate2 = { workspace = true }
 tar = { workspace = true }
 rpassword = "7"

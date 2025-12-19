@@ -1074,6 +1074,256 @@ mod dependency_command {
     }
 }
 
+mod files_api {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn create_pack_with_files() -> TempDir {
+        let dir = TempDir::new().unwrap();
+        let pack_path = dir.path();
+
+        // Create Pack.yaml
+        fs::write(
+            pack_path.join("Pack.yaml"),
+            r#"apiVersion: sherpack/v1
+kind: application
+metadata:
+  name: files-test
+  version: 1.0.0
+"#,
+        )
+        .unwrap();
+
+        // Create values.yaml
+        fs::write(
+            pack_path.join("values.yaml"),
+            r#"app:
+  name: myapp
+"#,
+        )
+        .unwrap();
+
+        // Create config directory with files
+        fs::create_dir(pack_path.join("config")).unwrap();
+        fs::write(
+            pack_path.join("config/nginx.conf"),
+            "server { listen 80; }",
+        )
+        .unwrap();
+        fs::write(
+            pack_path.join("config/app.yaml"),
+            "debug: true\nport: 8080",
+        )
+        .unwrap();
+
+        // Create templates directory
+        fs::create_dir(pack_path.join("templates")).unwrap();
+
+        dir
+    }
+
+    #[test]
+    fn test_files_get() {
+        let pack = create_pack_with_files();
+
+        // Create template that uses files.get()
+        fs::write(
+            pack.path().join("templates/configmap.yaml"),
+            r#"apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test
+data:
+  nginx.conf: |
+{{ files.get("config/nginx.conf") | indent(4) }}
+"#,
+        )
+        .unwrap();
+
+        let output = sherpack(&[
+            "template",
+            "test",
+            pack.path().to_str().unwrap(),
+        ]);
+
+        assert!(output.status.success(), "Template should succeed. Got: {}", String::from_utf8_lossy(&output.stderr));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("server { listen 80; }"), "Should contain nginx config. Got: {}", stdout);
+    }
+
+    #[test]
+    fn test_files_exists() {
+        let pack = create_pack_with_files();
+
+        // Create template that uses files.exists()
+        fs::write(
+            pack.path().join("templates/check.yaml"),
+            r#"# Files existence check
+has_nginx: "{{ files.exists("config/nginx.conf") }}"
+has_missing: "{{ files.exists("config/missing.conf") }}"
+"#,
+        )
+        .unwrap();
+
+        let output = sherpack(&[
+            "template",
+            "test",
+            pack.path().to_str().unwrap(),
+        ]);
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("has_nginx: \"true\""), "Should detect existing file. Got: {}", stdout);
+        assert!(stdout.contains("has_missing: \"false\""), "Should detect missing file. Got: {}", stdout);
+    }
+
+    #[test]
+    fn test_files_glob() {
+        let pack = create_pack_with_files();
+
+        // Create template that uses files.glob()
+        fs::write(
+            pack.path().join("templates/configs.yaml"),
+            r#"# Config files via glob
+{% for f in files.glob("config/*") %}
+- name: {{ f.name }}
+  size: {{ f.size }}
+{% endfor %}
+"#,
+        )
+        .unwrap();
+
+        let output = sherpack(&[
+            "template",
+            "test",
+            pack.path().to_str().unwrap(),
+        ]);
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("name: nginx.conf") || stdout.contains("name: app.yaml"),
+            "Should list config files. Got: {}", stdout);
+    }
+
+    #[test]
+    fn test_files_lines() {
+        let pack = create_pack_with_files();
+
+        // Create template that uses files.lines()
+        fs::write(
+            pack.path().join("templates/lines.yaml"),
+            r#"# Lines from app.yaml
+{% for line in files.lines("config/app.yaml") %}
+- "{{ line }}"
+{% endfor %}
+"#,
+        )
+        .unwrap();
+
+        let output = sherpack(&[
+            "template",
+            "test",
+            pack.path().to_str().unwrap(),
+        ]);
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("debug: true"), "Should contain first line. Got: {}", stdout);
+        assert!(stdout.contains("port: 8080"), "Should contain second line. Got: {}", stdout);
+    }
+
+    #[test]
+    fn test_files_conditional() {
+        let pack = create_pack_with_files();
+
+        // Create template with conditional file inclusion
+        fs::write(
+            pack.path().join("templates/conditional.yaml"),
+            r#"# Conditional file inclusion
+{% if files.exists("config/nginx.conf") %}
+nginx_config: present
+{% endif %}
+{% if files.exists("config/missing.conf") %}
+missing_config: present
+{% endif %}
+"#,
+        )
+        .unwrap();
+
+        let output = sherpack(&[
+            "template",
+            "test",
+            pack.path().to_str().unwrap(),
+        ]);
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("nginx_config: present"), "Should include existing file. Got: {}", stdout);
+        assert!(!stdout.contains("missing_config: present"), "Should not include missing file. Got: {}", stdout);
+    }
+
+    #[test]
+    fn test_files_get_with_b64encode() {
+        let pack = create_pack_with_files();
+
+        // Create template that uses files with b64encode
+        fs::write(
+            pack.path().join("templates/secret.yaml"),
+            r#"apiVersion: v1
+kind: Secret
+metadata:
+  name: test-secret
+data:
+  nginx.conf: {{ files.get("config/nginx.conf") | b64encode }}
+"#,
+        )
+        .unwrap();
+
+        let output = sherpack(&[
+            "template",
+            "test",
+            pack.path().to_str().unwrap(),
+        ]);
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // "server { listen 80; }" base64 encoded
+        assert!(stdout.contains("c2VydmVyIHsgbGlzdGVuIDgwOyB9"),
+            "Should contain base64 encoded content. Got: {}", stdout);
+    }
+
+    #[test]
+    fn test_files_sandbox_security() {
+        let pack = create_pack_with_files();
+
+        // Create template trying to escape sandbox
+        fs::write(
+            pack.path().join("templates/escape.yaml"),
+            r#"# Attempting sandbox escape
+content: {{ files.get("../../../etc/passwd") }}
+"#,
+        )
+        .unwrap();
+
+        let output = sherpack(&[
+            "template",
+            "test",
+            pack.path().to_str().unwrap(),
+        ]);
+
+        // Should fail with security error
+        assert!(!output.status.success(), "Sandbox escape should be blocked");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let combined = format!("{}{}", stdout, stderr);
+        assert!(
+            combined.contains("sandbox") || combined.contains("access") || combined.contains("path"),
+            "Should mention sandbox/access error. Got: {}", combined
+        );
+    }
+}
+
 mod error_messages {
     use super::*;
     use std::fs;
