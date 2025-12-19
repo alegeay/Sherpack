@@ -21,6 +21,7 @@ Sherpack is a modern alternative to Helm written in Rust, featuring familiar Jin
 | **Learning Curve** | Minimal (if you know Jinja2) | Steep |
 | **Schema Validation** | Built-in JSON Schema | External tools |
 | **Error Messages** | Contextual suggestions | Generic errors |
+| **CRD Handling** | Intent-based policies, safe updates | Never updates, broken dry-run |
 | **Helm Migration** | Automatic chart converter | N/A |
 
 ## Features
@@ -44,6 +45,7 @@ Sherpack is a modern alternative to Helm written in Rust, featuring familiar Jin
 ### Kubernetes Integration
 - **Full Lifecycle Management** - Install, upgrade, rollback, uninstall
 - **Server-Side Apply** - Modern Kubernetes apply with conflict detection
+- **CRD Handling** - Intent-based policies (managed/shared/external), safe update analysis with 24 change types
 - **Hook Support** - Pre/post install, upgrade, rollback, delete hooks
 - **Health Checks** - Wait for deployments, custom HTTP/command probes
 - **Release Storage** - Secrets, ConfigMap, or file-based storage
@@ -90,17 +92,17 @@ sherpack install myapp ./mypack -n production --wait
 
 ## Architecture
 
-Sherpack is built as a Cargo workspace with 6 crates (~32k lines of Rust):
+Sherpack is built as a Cargo workspace with 6 crates (~35k lines of Rust):
 
 | Crate | Purpose | Tests |
 |-------|---------|-------|
-| `sherpack-core` | Pack, Values, Archive, Manifest | 19 |
-| `sherpack-engine` | MiniJinja templating, filters, functions | 58 |
-| `sherpack-convert` | Helm Go templates → Jinja2 converter | 63 |
-| `sherpack-kube` | Kubernetes operations, storage, hooks | 151 |
-| `sherpack-repo` | Repository backends, dependencies, search | 43 |
-| `sherpack-cli` | CLI application | 75 |
-| **Total** | | **410** |
+| `sherpack-core` | Pack, Values, Archive, Manifest, Schema | 35 |
+| `sherpack-engine` | MiniJinja templating, filters, functions | 70 |
+| `sherpack-convert` | Helm Go templates → Jinja2 converter | 85 |
+| `sherpack-kube` | Kubernetes ops, storage, hooks, CRD handling | 200 |
+| `sherpack-repo` | Repository backends, dependencies, search | 55 |
+| `sherpack-cli` | CLI application | 155 |
+| **Total** | | **600** |
 
 ## Getting Started
 

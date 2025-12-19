@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
         'kubernetes/hooks',
         'kubernetes/health-checks',
         'kubernetes/storage-drivers',
+        'kubernetes/crd-handling',
       ],
     },
     {

@@ -6,7 +6,7 @@ sidebar_position: 101
 
 # Architecture
 
-Sherpack is built as a modular Rust workspace with 6 crates (~32k lines of code).
+Sherpack is built as a modular Rust workspace with 6 crates (~35k lines of code).
 
 ## Crate Overview
 
@@ -125,6 +125,9 @@ Kubernetes integration.
 | `HookExecutor` | Hook lifecycle management |
 | `HealthChecker` | Deployment/StatefulSet health |
 | `DiffEngine` | Three-way merge diff |
+| `CrdManager` | CRD lifecycle with safe updates |
+| `CrdAnalyzer` | 24 change type detection |
+| `CrdProtection` | Deletion impact analysis |
 
 ### Storage Backends
 
@@ -161,6 +164,24 @@ Resources are applied in order:
 6. Deployment, StatefulSet (40-44)
 7. Job, CronJob (50-51)
 8. HPA (60+)
+
+### CRD Handling
+
+Intent-based policies instead of location-based:
+
+| Policy | Install | Update | Delete |
+|--------|---------|--------|--------|
+| `Managed` | Yes | Safe only | Protected |
+| `Shared` | Yes | Safe only | Never |
+| `External` | No | No | No |
+
+24 change types analyzed for safety:
+
+| Severity | Changes |
+|----------|---------|
+| **Safe** | Add optional field, add version, add column |
+| **Warning** | Validation change, conversion change |
+| **Dangerous** | Remove version, change scope, change type |
 
 ## sherpack-repo
 
@@ -224,13 +245,13 @@ Repository and dependency management.
 
 | Crate | Tests | Type |
 |-------|-------|------|
-| sherpack-core | 19 | Unit |
-| sherpack-engine | 58 | Unit |
-| sherpack-convert | 63 | Unit + Parser |
-| sherpack-kube | 151 | Unit + Mock |
-| sherpack-repo | 43 | Unit |
-| sherpack-cli | 75 | Integration |
-| **Total** | **410** | |
+| sherpack-core | 35 | Unit |
+| sherpack-engine | 70 | Unit |
+| sherpack-convert | 85 | Unit + Parser |
+| sherpack-kube | 200 | Unit + Mock |
+| sherpack-repo | 55 | Unit |
+| sherpack-cli | 155 | Integration |
+| **Total** | **600** | |
 
 ### Test Patterns
 

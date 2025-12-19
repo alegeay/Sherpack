@@ -424,7 +424,7 @@ You've learned how to:
 
 ## Next Steps
 
-- Read the full [Tutorial](/docs/TUTORIAL.md) for advanced topics
-- Explore [Templating Reference](/docs/templating/filters) for all filters
+- Explore [Templating Reference](/docs/templating/filters) for all filters and functions
+- Learn about [CRD Handling](/docs/kubernetes/crd-handling) for advanced Kubernetes operations
 - Check [CLI Reference](/docs/cli-reference) for all commands
 - Learn about [Converting from Helm](/docs/cli-reference#convert)

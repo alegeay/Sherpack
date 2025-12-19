@@ -7,7 +7,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg?style=flat-square)](LICENSE)
 [![Build](https://img.shields.io/badge/build-passing-brightgreen.svg?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/tests-410%20passed-brightgreen.svg?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/tests-600%20passed-brightgreen.svg?style=flat-square)]()
 
 *A modern Helm alternative written in Rust, featuring familiar Jinja2 templating syntax*
 
@@ -33,6 +33,9 @@
 | **Schema Validation** | Built-in JSON Schema | External tools |
 | **Error Messages** | Contextual suggestions | Generic errors |
 | **Helm Migration** | Automatic chart converter | N/A |
+| **CRD Handling** | Smart updates with safety analysis | Never updates CRDs |
+| **CRD Templating** | Supported in crds/ and templates/ | Only in templates/ (dangerous) |
+| **Subchart Rendering** | Full support with global values | Full support |
 
 ---
 
@@ -61,6 +64,20 @@
 - **Health Checks** - Wait for deployments, custom HTTP/command probes
 - **Release Storage** - Secrets, ConfigMap, or file-based storage
 - **Diff Preview** - See changes before applying
+
+### CRD Handling (Better than Helm)
+- **Smart CRD Updates** - Safe updates with change analysis (24 change types)
+- **Intent-Based Policies** - Explicit control via annotations (`managed`, `shared`, `external`)
+- **Templated CRDs** - Support templating in both `crds/` and `templates/`
+- **Deletion Protection** - Impact analysis before CRD deletion
+- **Auto-Detection** - CRDs in templates/ are automatically protected
+- **Rich Diff Output** - See exactly what will change in CRD updates
+
+### Subchart Support
+- **Full Subchart Rendering** - Render subcharts with their own values
+- **Global Values** - Pass global values to all subcharts
+- **Conditional Subcharts** - Enable/disable via conditions and tags
+- **Files Object** - Access files in subcharts (`.Files.Get`, `.Files.Glob`)
 
 ### Helm Migration
 - **Automatic Conversion** - Convert Helm charts to Sherpack packs
@@ -431,6 +448,86 @@ spec:
 
 ---
 
+## CRD Handling
+
+Sherpack provides superior CRD handling compared to Helm:
+
+### CRD Policies
+
+Use annotations to declare how CRDs should be managed:
+
+```yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: myresources.example.com
+  annotations:
+    sherpack.io/crd-policy: managed  # or: shared, external
+```
+
+| Policy | Behavior | Use Case |
+|--------|----------|----------|
+| `managed` | Owned by release, protected on uninstall | Operator CRDs |
+| `shared` | Never deleted, even with `--delete-crds` | Shared infrastructure |
+| `external` | Don't touch (managed by GitOps) | External management |
+
+### Templated CRDs
+
+Unlike Helm, Sherpack allows templating in `crds/` directory:
+
+```yaml
+# crds/myresource-crd.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: {{ values.crdName }}.{{ values.group }}
+  labels:
+    {{- values.labels | toyaml | nindent 4 }}
+```
+
+### Safe Updates
+
+CRD changes are analyzed by severity:
+
+```bash
+$ sherpack upgrade myrelease ./mypack --show-crd-diff
+
+CRD Analysis: myresources.example.com
+══════════════════════════════════════════════════════════════════
+
+Versions:
+  ✓ + Added API version v1beta2
+
+Schema Changes:
+  ✓ + Added optional field: spec.newFeature
+  ⚠ ~ Tightened validation: spec.config.maxLength 256 → 128
+  ✗ - Removed field: spec.deprecated (DANGEROUS)
+
+Summary:
+  ✓ 2 safe change(s)
+  ⚠ 1 warning(s)
+  ✗ 1 dangerous (require --force-crd-update)
+```
+
+### Deletion Protection
+
+```bash
+$ sherpack uninstall my-operator --delete-crds
+
+⚠ CRD Deletion Impact Analysis
+
+  myresources.example.com:
+    Policy: managed
+    Existing resources: 47 across 12 namespaces
+      - production (23 resources)
+      - staging (15 resources)
+
+  This will PERMANENTLY DELETE all 47 resources.
+  Use --confirm-crd-deletion to proceed.
+```
+
+---
+
 ## Helm Chart Conversion
 
 Sherpack can automatically convert Helm charts to Sherpack packs:
@@ -536,13 +633,13 @@ sherpack/
 
 | Crate | Purpose | Tests |
 |-------|---------|-------|
-| `sherpack-core` | Pack, Values, Archive, Manifest | 19 |
-| `sherpack-engine` | MiniJinja templating, filters, functions | 58 |
-| `sherpack-convert` | Helm Go templates → Jinja2 converter | 63 |
-| `sherpack-kube` | Kubernetes operations, storage, hooks | 151 |
-| `sherpack-repo` | Repository backends, dependencies, search | 43 |
-| `sherpack-cli` | CLI application | 75 |
-| **Total** | ~32k lines of Rust | **410** |
+| `sherpack-core` | Pack, Values, Archive, Manifest, Files | 65 |
+| `sherpack-engine` | MiniJinja templating, filters, functions, subcharts | 118 |
+| `sherpack-convert` | Helm Go templates → Jinja2 converter | 62 |
+| `sherpack-kube` | Kubernetes, storage, hooks, CRD handling | 219 |
+| `sherpack-repo` | Repository backends, dependencies, search | 53 |
+| `sherpack-cli` | CLI application | 83 |
+| **Total** | ~35k lines of Rust | **600** |
 
 ---
 

@@ -11,11 +11,185 @@ Kubernetes integration for Sherpack - storage drivers, release management, and c
 - **Storage Drivers** - Persist release state in Secrets, ConfigMaps, or files
 - **Release Management** - Full lifecycle with state machine and auto-recovery
 - **Server-Side Apply** - Modern Kubernetes apply with conflict detection
+- **CRD Handling** - Intent-based policies, smart updates with safety analysis (24 change types)
 - **Hooks System** - Pre/post install/upgrade/rollback/delete with policies
 - **Health Checks** - Deployment readiness, HTTP probes, custom commands
 - **Diff Engine** - Three-way merge visualization
 - **Sync Waves** - Resource ordering with dependencies
 - **Progress Reporting** - Real-time feedback during operations
+
+## CRD Handling
+
+Sherpack provides sophisticated CRD (CustomResourceDefinition) handling that addresses Helm's major limitations.
+
+### Intent-Based Policies
+
+Unlike Helm's location-based approach (`crds/` vs `templates/`), Sherpack uses **intent-based policies**:
+
+```rust
+use sherpack_kube::crd::{CrdPolicy, DetectedCrd};
+
+// Three policies determine CRD behavior
+CrdPolicy::Managed   // Owned by release - installed, updated, protected on uninstall
+CrdPolicy::Shared    // Multiple releases use it - never deleted
+CrdPolicy::External  // Pre-existing CRD - don't touch at all
+```
+
+### Policy Annotations
+
+Set CRD policy via annotations:
+
+```yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: certificates.cert-manager.io
+  annotations:
+    # Explicit Sherpack policy
+    sherpack.io/crd-policy: shared
+
+    # Or use Helm-compatible annotation
+    helm.sh/resource-policy: keep   # Translates to "shared"
+```
+
+### Safe Update Analysis
+
+CRD updates are analyzed for safety with **24 change types**:
+
+```rust
+use sherpack_kube::crd::{CrdAnalyzer, ChangeSeverity};
+
+let analyzer = CrdAnalyzer::new();
+let changes = analyzer.analyze(&old_crd, &new_crd)?;
+
+for change in &changes {
+    match change.severity {
+        ChangeSeverity::Safe => {
+            // Auto-apply: new fields, new versions, new printer columns
+        }
+        ChangeSeverity::Warning => {
+            // Show warning: validation changes, conversion changes
+        }
+        ChangeSeverity::Dangerous => {
+            // Block by default: removing versions, scope changes, field type changes
+        }
+    }
+}
+```
+
+### Detected Change Types
+
+| Category | Safe Changes | Dangerous Changes |
+|----------|--------------|-------------------|
+| **Versions** | Add new version | Remove version, change storage version |
+| **Schema** | Add optional field | Remove required field, change field type |
+| **Validation** | Relax constraints | Tighten constraints |
+| **Scope** | - | Change Namespaced ↔ Cluster |
+| **Names** | - | Change plural/singular/kind |
+| **Printer** | Add column | Remove column |
+
+### Deletion Protection
+
+```rust
+use sherpack_kube::crd::{CrdProtection, CrdDeletionImpact, DeletionConfirmation};
+
+let protection = CrdProtection::new(kube_client);
+
+// Analyze impact before deletion
+let impact = protection.analyze_deletion_impact(
+    "certificates.cert-manager.io",
+    CrdPolicy::Managed,
+).await?;
+
+println!("CRD: {}", impact.crd_name);
+println!("Total CRs that would be deleted: {}", impact.total_resources);
+for (namespace, count) in impact.sorted_namespaces() {
+    println!("  {}: {} resources", namespace, count);
+}
+
+// Check if confirmation is needed
+let confirmation = DeletionConfirmation::from_impact(&summary);
+if confirmation.required {
+    println!("Required flags: {:?}", confirmation.required_flags);
+}
+```
+
+### CRD Location Tracking
+
+Track where CRDs come from for debugging:
+
+```rust
+use sherpack_kube::crd::CrdLocation;
+
+match crd.location {
+    CrdLocation::CrdsDirectory { path, templated } => {
+        if templated {
+            // Warning: crds/ should not contain Jinja syntax
+        }
+    }
+    CrdLocation::Templates { path } => {
+        // CRD in templates/ - will be deleted on uninstall
+    }
+    CrdLocation::Dependency { dependency_name, .. } => {
+        // CRD from a subchart
+    }
+}
+```
+
+### Lint Warnings
+
+```rust
+use sherpack_kube::crd::{lint_crds, CrdLintWarning, CrdLintCode};
+
+let warnings = lint_crds(&crds_dir_crds, &template_crds, &templated_files);
+
+for warning in &warnings {
+    match warning.code {
+        CrdLintCode::TemplatedInCrdsDir => {
+            // Error: Jinja syntax in crds/ won't be rendered
+        }
+        CrdLintCode::StaticInTemplates => {
+            // Warning: Static CRD in templates/ will be deleted on uninstall
+        }
+        CrdLintCode::MissingPolicy => {
+            // Info: Consider adding sherpack.io/crd-policy annotation
+        }
+        CrdLintCode::ExternalInPack => {
+            // Warning: External policy CRD shouldn't be in pack
+        }
+    }
+}
+```
+
+### CLI Flags
+
+```bash
+# Skip CRD installation
+sherpack install myrelease ./mypack --skip-crds
+
+# Force CRD updates (bypass safety checks)
+sherpack upgrade myrelease ./mypack --force-crd-update
+
+# Show CRD changes before applying
+sherpack upgrade myrelease ./mypack --show-crd-diff
+
+# Delete CRDs on uninstall (requires confirmation)
+sherpack uninstall myrelease --delete-crds --confirm-crd-deletion
+```
+
+### Comparison with Helm
+
+| Feature | Helm | Sherpack |
+|---------|------|----------|
+| Policy model | Location-based | Intent-based |
+| CRD updates | Never (blocked) | Safe by default, configurable |
+| Patch strategy | Strategic (broken) | Server-Side Apply |
+| Templating | No (in crds/) | Yes (with lint warnings) |
+| Dependency ordering | None | Automatic |
+| Wait for ready | No | Yes (configurable) |
+| Dry-run | Broken | Full support |
+| Deletion | Blocked | Configurable with confirmation |
+| Diff output | None | Rich diff with impact analysis |
 
 ## Quick Start
 
