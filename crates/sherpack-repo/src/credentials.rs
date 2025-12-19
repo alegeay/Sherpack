@@ -434,9 +434,12 @@ impl SecureHttpClient {
     /// Fetch bytes from URL
     pub async fn get_bytes(&self, url: &str) -> Result<Vec<u8>> {
         let response = self.get(url).await?;
-        let bytes = response.bytes().await.map_err(|e| RepoError::NetworkError {
-            message: e.to_string(),
-        })?;
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| RepoError::NetworkError {
+                message: e.to_string(),
+            })?;
         Ok(bytes.to_vec())
     }
 
@@ -450,11 +453,7 @@ impl SecureHttpClient {
     }
 
     /// Fetch with ETag caching
-    pub async fn get_cached(
-        &self,
-        url: &str,
-        etag: Option<&str>,
-    ) -> Result<CachedResponse> {
+    pub async fn get_cached(&self, url: &str, etag: Option<&str>) -> Result<CachedResponse> {
         let mut current_url = url.to_string();
         let mut redirects = 0;
         let original_url = url.to_string();
@@ -519,9 +518,12 @@ impl SecureHttpClient {
                 .and_then(|v| v.to_str().ok())
                 .map(String::from);
 
-            let bytes = response.bytes().await.map_err(|e| RepoError::NetworkError {
-                message: e.to_string(),
-            })?;
+            let bytes = response
+                .bytes()
+                .await
+                .map_err(|e| RepoError::NetworkError {
+                    message: e.to_string(),
+                })?;
 
             return Ok(CachedResponse::Fresh {
                 data: bytes.to_vec(),
@@ -579,17 +581,23 @@ mod tests {
         );
 
         // Matches prefix
-        assert!(scoped
-            .for_url("https://private.example.com/index.yaml")
-            .is_some());
-        assert!(scoped
-            .for_url("https://private.example.com/charts/nginx.tgz")
-            .is_some());
+        assert!(
+            scoped
+                .for_url("https://private.example.com/index.yaml")
+                .is_some()
+        );
+        assert!(
+            scoped
+                .for_url("https://private.example.com/charts/nginx.tgz")
+                .is_some()
+        );
 
         // Doesn't match different host
-        assert!(scoped
-            .for_url("https://public.example.com/index.yaml")
-            .is_none());
+        assert!(
+            scoped
+                .for_url("https://public.example.com/index.yaml")
+                .is_none()
+        );
     }
 
     #[test]

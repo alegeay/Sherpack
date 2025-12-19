@@ -1,7 +1,7 @@
 //! Pack definition and loading
 
-use serde::{Deserialize, Serialize};
 use semver::Version;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -461,7 +461,10 @@ impl LoadedPack {
                 // Include .yaml, .yml, .j2, .jinja2, .txt files
                 if let Some(ext) = path.extension() {
                     let ext = ext.to_string_lossy().to_lowercase();
-                    if matches!(ext.as_str(), "yaml" | "yml" | "j2" | "jinja2" | "txt" | "json") {
+                    if matches!(
+                        ext.as_str(),
+                        "yaml" | "yml" | "j2" | "jinja2" | "txt" | "json"
+                    ) {
                         files.push(path.to_path_buf());
                     }
                 }
@@ -530,7 +533,11 @@ impl LoadedPack {
             // Parse multi-document YAML
             for (idx, doc) in content.split("---").enumerate() {
                 let doc = doc.trim();
-                if doc.is_empty() || doc.lines().all(|l| l.trim().is_empty() || l.trim().starts_with('#')) {
+                if doc.is_empty()
+                    || doc
+                        .lines()
+                        .all(|l| l.trim().is_empty() || l.trim().starts_with('#'))
+                {
                     continue;
                 }
 
@@ -586,12 +593,20 @@ impl LoadedPack {
 
     /// Get only static (non-templated) CRDs
     pub fn static_crds(&self) -> Result<Vec<CrdManifest>> {
-        Ok(self.load_crds()?.into_iter().filter(|c| !c.is_templated).collect())
+        Ok(self
+            .load_crds()?
+            .into_iter()
+            .filter(|c| !c.is_templated)
+            .collect())
     }
 
     /// Get only templated CRDs (need rendering before use)
     pub fn templated_crds(&self) -> Result<Vec<CrdManifest>> {
-        Ok(self.load_crds()?.into_iter().filter(|c| c.is_templated).collect())
+        Ok(self
+            .load_crds()?
+            .into_iter()
+            .filter(|c| c.is_templated)
+            .collect())
     }
 
     /// Check if this pack has templated CRDs
@@ -697,7 +712,10 @@ tags:
         assert_eq!(dep.name, "postgresql");
         assert!(!dep.enabled);
         assert_eq!(dep.resolve, ResolvePolicy::Always);
-        assert_eq!(dep.condition.as_deref(), Some("database.postgresql.enabled"));
+        assert_eq!(
+            dep.condition.as_deref(),
+            Some("database.postgresql.enabled")
+        );
         assert_eq!(dep.alias.as_deref(), Some("db"));
         assert_eq!(dep.effective_name(), "db");
         assert_eq!(dep.tags, vec!["database", "backend"]);
@@ -706,11 +724,15 @@ tags:
     #[test]
     fn test_resolve_policy_serialization() {
         assert_eq!(
-            serde_yaml::to_string(&ResolvePolicy::Always).unwrap().trim(),
+            serde_yaml::to_string(&ResolvePolicy::Always)
+                .unwrap()
+                .trim(),
             "always"
         );
         assert_eq!(
-            serde_yaml::to_string(&ResolvePolicy::WhenEnabled).unwrap().trim(),
+            serde_yaml::to_string(&ResolvePolicy::WhenEnabled)
+                .unwrap()
+                .trim(),
             "when-enabled"
         );
         assert_eq!(
@@ -747,7 +769,10 @@ tags:
         });
 
         assert!(evaluate_condition("features.cache.redis.enabled", &values));
-        assert!(!evaluate_condition("features.cache.memcached.enabled", &values));
+        assert!(!evaluate_condition(
+            "features.cache.memcached.enabled",
+            &values
+        ));
     }
 
     #[test]
@@ -937,15 +962,21 @@ crds:
     #[test]
     fn test_crd_upgrade_strategy_serialization() {
         assert_eq!(
-            serde_yaml::to_string(&CrdUpgradeStrategy::Safe).unwrap().trim(),
+            serde_yaml::to_string(&CrdUpgradeStrategy::Safe)
+                .unwrap()
+                .trim(),
             "safe"
         );
         assert_eq!(
-            serde_yaml::to_string(&CrdUpgradeStrategy::Force).unwrap().trim(),
+            serde_yaml::to_string(&CrdUpgradeStrategy::Force)
+                .unwrap()
+                .trim(),
             "force"
         );
         assert_eq!(
-            serde_yaml::to_string(&CrdUpgradeStrategy::Skip).unwrap().trim(),
+            serde_yaml::to_string(&CrdUpgradeStrategy::Skip)
+                .unwrap()
+                .trim(),
             "skip"
         );
     }
@@ -956,7 +987,8 @@ crds:
             name: "myresources.example.com".to_string(),
             source_file: PathBuf::from("crds/myresource.yaml"),
             document_index: 0,
-            content: "apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition".to_string(),
+            content: "apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition"
+                .to_string(),
             is_templated: false,
         };
 

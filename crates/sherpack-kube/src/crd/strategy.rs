@@ -38,7 +38,9 @@ impl UpgradeDecision {
     /// Get blocking change messages if rejected
     pub fn blocking_messages(&self) -> Option<&[String]> {
         match self {
-            Self::Reject { blocking_changes, .. } => Some(blocking_changes),
+            Self::Reject {
+                blocking_changes, ..
+            } => Some(blocking_changes),
             _ => None,
         }
     }
@@ -249,10 +251,7 @@ impl UpgradeStrategy for CustomStrategy {
 ///
 /// This is the main entry point for selecting a strategy based on
 /// command-line flags.
-pub fn strategy_from_options(
-    skip_update: bool,
-    force_update: bool,
-) -> Box<dyn UpgradeStrategy> {
+pub fn strategy_from_options(skip_update: bool, force_update: bool) -> Box<dyn UpgradeStrategy> {
     if skip_update {
         Box::new(SkipStrategy)
     } else if force_update {
@@ -368,7 +367,10 @@ mod tests {
         let decision = strategy.decide(&analysis);
 
         assert!(decision.is_rejected());
-        if let UpgradeDecision::Reject { blocking_changes, .. } = decision {
+        if let UpgradeDecision::Reject {
+            blocking_changes, ..
+        } = decision
+        {
             assert_eq!(blocking_changes.len(), 1);
             assert!(blocking_changes[0].contains("Dangerous"));
         }

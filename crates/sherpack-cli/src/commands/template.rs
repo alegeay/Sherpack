@@ -40,35 +40,25 @@ pub fn run(
     let schema_validator = if !skip_schema {
         if let Some(schema_path) = &pack.schema_path {
             match pack.load_schema() {
-                Ok(Some(schema)) => {
-                    match SchemaValidator::new(schema) {
-                        Ok(validator) => {
-                            if debug {
-                                eprintln!(
-                                    "{} Loaded schema from {}",
-                                    style("DEBUG").dim(),
-                                    schema_path.display()
-                                );
-                            }
-                            Some(validator)
-                        }
-                        Err(e) => {
+                Ok(Some(schema)) => match SchemaValidator::new(schema) {
+                    Ok(validator) => {
+                        if debug {
                             eprintln!(
-                                "{} Schema compilation warning: {}",
-                                style("⚠").yellow(),
-                                e
+                                "{} Loaded schema from {}",
+                                style("DEBUG").dim(),
+                                schema_path.display()
                             );
-                            None
                         }
+                        Some(validator)
                     }
-                }
+                    Err(e) => {
+                        eprintln!("{} Schema compilation warning: {}", style("⚠").yellow(), e);
+                        None
+                    }
+                },
                 Ok(None) => None,
                 Err(e) => {
-                    eprintln!(
-                        "{} Failed to load schema: {}",
-                        style("⚠").yellow(),
-                        e
-                    );
+                    eprintln!("{} Failed to load schema: {}", style("⚠").yellow(), e);
                     None
                 }
             }
@@ -88,10 +78,7 @@ pub fn run(
     };
 
     if debug && schema_validator.is_some() {
-        eprintln!(
-            "{} Applied schema defaults",
-            style("DEBUG").dim()
-        );
+        eprintln!("{} Applied schema defaults", style("DEBUG").dim());
     }
 
     // 1. Load default values from pack
@@ -146,10 +133,7 @@ pub fn run(
     if let Some(ref validator) = schema_validator {
         let result = validator.validate(values.inner());
         if !result.is_valid {
-            eprintln!(
-                "{} Values validation failed:",
-                style("✗").red()
-            );
+            eprintln!("{} Values validation failed:", style("✗").red());
             for err in &result.errors {
                 eprintln!("  - {}: {}", err.path, err.message);
             }
@@ -157,10 +141,7 @@ pub fn run(
                 "Values do not match schema. Use --skip-schema to bypass validation."
             ));
         } else if debug {
-            eprintln!(
-                "{} Values validated against schema",
-                style("DEBUG").dim()
-            );
+            eprintln!("{} Values validated against schema", style("DEBUG").dim());
         }
     }
 
@@ -181,9 +162,7 @@ pub fn run(
     let context = TemplateContext::new(values, release, &pack.pack.metadata);
 
     // Create pack renderer (handles subcharts automatically)
-    let engine = Engine::builder()
-        .strict(pack.pack.engine.strict)
-        .build();
+    let engine = Engine::builder().strict(pack.pack.engine.strict).build();
     let renderer = PackRenderer::new(engine);
 
     // Render templates with subchart support and error collection
@@ -204,19 +183,11 @@ pub fn run(
                 } else {
                     style("disabled").dim()
                 };
-                eprintln!(
-                    "  - {} ({})",
-                    subchart.name,
-                    status
-                );
+                eprintln!("  - {} ({})", subchart.name, status);
             }
         }
         for warning in &discovery.warnings {
-            eprintln!(
-                "{} {}",
-                style("⚠").yellow(),
-                warning
-            );
+            eprintln!("{} {}", style("⚠").yellow(), warning);
         }
     }
 
@@ -239,13 +210,19 @@ pub fn run(
         // Write to directory
         fs::create_dir_all(output_path)
             .into_diagnostic()
-            .wrap_err_with(|| format!("Failed to create output directory: {}", output_path.display()))?;
+            .wrap_err_with(|| {
+                format!(
+                    "Failed to create output directory: {}",
+                    output_path.display()
+                )
+            })?;
 
         for (filename, content) in &result.manifests {
             if let Some(filter) = show_only
-                && !filename.contains(filter) {
-                    continue;
-                }
+                && !filename.contains(filter)
+            {
+                continue;
+            }
 
             let file_path = output_path.join(filename);
 
@@ -258,22 +235,14 @@ pub fn run(
                 .into_diagnostic()
                 .wrap_err_with(|| format!("Failed to write {}", file_path.display()))?;
 
-            println!(
-                "{} {}",
-                style("wrote").green(),
-                file_path.display()
-            );
+            println!("{} {}", style("wrote").green(), file_path.display());
         }
 
         // Write notes if present
         if let Some(notes) = &result.notes {
             let notes_path = output_path.join("NOTES.txt");
             fs::write(&notes_path, notes).into_diagnostic()?;
-            println!(
-                "{} {}",
-                style("wrote").green(),
-                notes_path.display()
-            );
+            println!("{} {}", style("wrote").green(), notes_path.display());
         }
     } else {
         // Output to stdout
@@ -281,9 +250,10 @@ pub fn run(
 
         for (filename, content) in &result.manifests {
             if let Some(filter) = show_only
-                && !filename.contains(filter) {
-                    continue;
-                }
+                && !filename.contains(filter)
+            {
+                continue;
+            }
 
             if !first {
                 println!();

@@ -292,7 +292,8 @@ impl Transformer {
 
     /// Transform a Go template AST to Jinja2 string
     pub fn transform(&mut self, template: &Template) -> String {
-        template.elements
+        template
+            .elements
             .iter()
             .map(|e| self.transform_element(e))
             .collect()
@@ -318,12 +319,20 @@ impl Transformer {
             // If: {{- if .X }} → {%- if x %}
             ActionBody::If(pipeline) => {
                 self.block_stack.push(BlockType::If);
-                format!("{{%{} if {} %}}", trim_left, self.transform_pipeline(pipeline))
+                format!(
+                    "{{%{} if {} %}}",
+                    trim_left,
+                    self.transform_pipeline(pipeline)
+                )
             }
 
             // Else if: {{- else if .X }} → {%- elif x %}
             ActionBody::ElseIf(pipeline) => {
-                format!("{{%{} elif {} %}}", trim_left, self.transform_pipeline(pipeline))
+                format!(
+                    "{{%{} elif {} %}}",
+                    trim_left,
+                    self.transform_pipeline(pipeline)
+                )
             }
 
             // Else: {{- else }} → {%- else %}
@@ -365,7 +374,9 @@ impl Transformer {
                     .unwrap_or_else(|| "item".to_string());
 
                 let index_var = vars.as_ref().and_then(|v| {
-                    v.index_var.as_ref().map(|i| i.trim_start_matches('$').to_string())
+                    v.index_var
+                        .as_ref()
+                        .map(|i| i.trim_start_matches('$').to_string())
                 });
 
                 self.block_stack.push(BlockType::Range);
@@ -498,9 +509,7 @@ impl Transformer {
                 name.trim_start_matches('$').to_string()
             }
 
-            Command::Function { name, args } => {
-                self.transform_function(name, args, as_filter)
-            }
+            Command::Function { name, args } => self.transform_function(name, args, as_filter),
 
             Command::Parenthesized(pipeline) => {
                 format!("({})", self.transform_pipeline(pipeline))
@@ -515,7 +524,11 @@ impl Transformer {
         // 1. Check for unsupported features first
         if let Some(alternative) = UNSUPPORTED_FEATURES.get(name) {
             // Return a placeholder with comment
-            return format!("__UNSUPPORTED_{}__ {{# {} #}}", name.to_uppercase(), alternative);
+            return format!(
+                "__UNSUPPORTED_{}__ {{# {} #}}",
+                name.to_uppercase(),
+                alternative
+            );
         }
 
         // 2. Native Jinja2 operators (most elegant conversion)
@@ -583,9 +596,7 @@ impl Transformer {
 
         // coalesce(a, b, c) → (a or b or c)
         if name == "coalesce" && !args.is_empty() {
-            let parts: Vec<String> = args.iter()
-                .map(|a| self.transform_argument(a))
-                .collect();
+            let parts: Vec<String> = args.iter().map(|a| self.transform_argument(a)).collect();
             return Some(format!("({})", parts.join(" or ")));
         }
 
@@ -613,9 +624,7 @@ impl Transformer {
 
         // list(a, b, c) → [a, b, c]
         if name == "list" {
-            let items: Vec<String> = args.iter()
-                .map(|a| self.transform_argument(a))
-                .collect();
+            let items: Vec<String> = args.iter().map(|a| self.transform_argument(a)).collect();
             return Some(format!("[{}]", items.join(", ")));
         }
 
@@ -660,15 +669,11 @@ impl Transformer {
 
         // max/min with multiple args
         if name == "max" && args.len() >= 2 {
-            let vals: Vec<String> = args.iter()
-                .map(|a| self.transform_argument(a))
-                .collect();
+            let vals: Vec<String> = args.iter().map(|a| self.transform_argument(a)).collect();
             return Some(format!("[{}] | max", vals.join(", ")));
         }
         if name == "min" && args.len() >= 2 {
-            let vals: Vec<String> = args.iter()
-                .map(|a| self.transform_argument(a))
-                .collect();
+            let vals: Vec<String> = args.iter().map(|a| self.transform_argument(a)).collect();
             return Some(format!("[{}] | min", vals.join(", ")));
         }
 
@@ -787,7 +792,12 @@ impl Transformer {
             if keys.is_empty() {
                 return Some(format!("{} | default({})", dict, default));
             }
-            return Some(format!("{}.{} | default({})", dict, keys.join("."), default));
+            return Some(format!(
+                "{}.{} | default({})",
+                dict,
+                keys.join("."),
+                default
+            ));
         }
 
         // empty(x) - check if value is empty
@@ -910,26 +920,19 @@ impl Transformer {
         }
 
         // Look up filter name mapping
-        let filter_name = FILTER_MAP
-            .get(name)
-            .copied()
-            .unwrap_or(name);
+        let filter_name = FILTER_MAP.get(name).copied().unwrap_or(name);
 
         if args.is_empty() {
             filter_name.to_string()
         } else {
-            let args_str: Vec<String> = args.iter()
-                .map(|a| self.transform_argument(a))
-                .collect();
+            let args_str: Vec<String> = args.iter().map(|a| self.transform_argument(a)).collect();
             format!("{}({})", filter_name, args_str.join(", "))
         }
     }
 
     /// Transform as a function call
     fn transform_as_function(&self, name: &str, args: &[Argument]) -> String {
-        let args_str: Vec<String> = args.iter()
-            .map(|a| self.transform_argument(a))
-            .collect();
+        let args_str: Vec<String> = args.iter().map(|a| self.transform_argument(a)).collect();
         format!("{}({})", name, args_str.join(", "))
     }
 
@@ -970,8 +973,9 @@ impl Transformer {
         let first = field.path[0].as_str();
         let rest: Vec<&str> = field.path[1..].iter().map(|s| s.as_str()).collect();
 
-        // Handle $ prefix - always access root context
-        let prefix = if is_root { "" } else { "" };
+        // Note: is_root is currently unused but kept for future root context handling
+        let _ = is_root;
+        let prefix = "";
 
         match first {
             "Values" => {
@@ -1012,10 +1016,16 @@ impl Transformer {
                         if rest.len() > 1 {
                             let sub = rest[1];
                             match sub {
-                                "Version" | "GitVersion" => format!("{}capabilities.kubeVersion.version", prefix),
+                                "Version" | "GitVersion" => {
+                                    format!("{}capabilities.kubeVersion.version", prefix)
+                                }
                                 "Major" => format!("{}capabilities.kubeVersion.major", prefix),
                                 "Minor" => format!("{}capabilities.kubeVersion.minor", prefix),
-                                _ => format!("{}capabilities.kubeVersion.{}", prefix, to_snake_case(sub)),
+                                _ => format!(
+                                    "{}capabilities.kubeVersion.{}",
+                                    prefix,
+                                    to_snake_case(sub)
+                                ),
                             }
                         } else {
                             format!("{}capabilities.kubeVersion", prefix)
@@ -1093,9 +1103,7 @@ impl Transformer {
         };
 
         // Convert dots to underscores for valid Jinja2 macro names
-        stripped
-            .trim_matches('"')
-            .replace(['.', '-'], "_")
+        stripped.trim_matches('"').replace(['.', '-'], "_")
     }
 }
 
@@ -1160,10 +1168,7 @@ mod tests {
 
     #[test]
     fn test_trim_whitespace() {
-        assert_eq!(
-            transform("{{- .Values.name -}}"),
-            "{{- values.name -}}"
-        );
+        assert_eq!(transform("{{- .Values.name -}}"), "{{- values.name -}}");
     }
 
     // =========================================================================
@@ -1381,10 +1386,7 @@ mod tests {
 
     #[test]
     fn test_list() {
-        assert_eq!(
-            transform("{{ list 1 2 3 }}"),
-            "{{ [1, 2, 3] }}"
-        );
+        assert_eq!(transform("{{ list 1 2 3 }}"), "{{ [1, 2, 3] }}");
     }
 
     #[test]
@@ -1401,18 +1403,12 @@ mod tests {
 
     #[test]
     fn test_until() {
-        assert_eq!(
-            transform("{{ until 5 }}"),
-            "{{ range(5) }}"
-        );
+        assert_eq!(transform("{{ until 5 }}"), "{{ range(5) }}");
     }
 
     #[test]
     fn test_until_step() {
-        assert_eq!(
-            transform("{{ untilStep 0 10 2 }}"),
-            "{{ range(0, 10, 2) }}"
-        );
+        assert_eq!(transform("{{ untilStep 0 10 2 }}"), "{{ range(0, 10, 2) }}");
     }
 
     // =========================================================================
@@ -1421,10 +1417,7 @@ mod tests {
 
     #[test]
     fn test_release_service() {
-        assert_eq!(
-            transform("{{ .Release.Service }}"),
-            "{{ \"Sherpack\" }}"
-        );
+        assert_eq!(transform("{{ .Release.Service }}"), "{{ \"Sherpack\" }}");
     }
 
     #[test]

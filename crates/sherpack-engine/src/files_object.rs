@@ -220,7 +220,9 @@ mod tests {
     fn test_files_get() {
         let (env, _) = create_test_env();
 
-        let result = env.render_str(r#"{{ files.get("config/app.yaml") }}"#, ()).unwrap();
+        let result = env
+            .render_str(r#"{{ files.get("config/app.yaml") }}"#, ())
+            .unwrap();
         assert_eq!(result, "key: value\nother: data");
     }
 
@@ -228,7 +230,9 @@ mod tests {
     fn test_files_exists_true() {
         let (env, _) = create_test_env();
 
-        let result = env.render_str(r#"{{ files.exists("config/app.yaml") }}"#, ()).unwrap();
+        let result = env
+            .render_str(r#"{{ files.exists("config/app.yaml") }}"#, ())
+            .unwrap();
         assert_eq!(result, "true");
     }
 
@@ -236,7 +240,9 @@ mod tests {
     fn test_files_exists_false() {
         let (env, _) = create_test_env();
 
-        let result = env.render_str(r#"{{ files.exists("nonexistent.txt") }}"#, ()).unwrap();
+        let result = env
+            .render_str(r#"{{ files.exists("nonexistent.txt") }}"#, ())
+            .unwrap();
         assert_eq!(result, "false");
     }
 
@@ -268,7 +274,8 @@ mod tests {
     fn test_files_lines() {
         let (env, _) = create_test_env();
 
-        let template = r#"{% for line in files.lines("scripts/init.sh") %}[{{ line }}]{% endfor %}"#;
+        let template =
+            r#"{% for line in files.lines("scripts/init.sh") %}[{{ line }}]{% endfor %}"#;
         let result = env.render_str(template, ()).unwrap();
 
         assert_eq!(result, "[#!/bin/bash][echo hello]");
@@ -278,11 +285,13 @@ mod tests {
     fn test_files_conditional() {
         let (env, _) = create_test_env();
 
-        let template = r#"{% if files.exists("config/app.yaml") %}found{% else %}not found{% endif %}"#;
+        let template =
+            r#"{% if files.exists("config/app.yaml") %}found{% else %}not found{% endif %}"#;
         let result = env.render_str(template, ()).unwrap();
         assert_eq!(result, "found");
 
-        let template2 = r#"{% if files.exists("missing.yaml") %}found{% else %}not found{% endif %}"#;
+        let template2 =
+            r#"{% if files.exists("missing.yaml") %}found{% else %}not found{% endif %}"#;
         let result2 = env.render_str(template2, ()).unwrap();
         assert_eq!(result2, "not found");
     }

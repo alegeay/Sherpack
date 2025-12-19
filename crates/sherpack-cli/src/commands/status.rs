@@ -4,8 +4,8 @@ use console::style;
 use miette::IntoDiagnostic;
 use sherpack_kube::{
     KubeClient,
-    storage::{FileDriver, StorageConfig},
     health::HealthCheckConfig,
+    storage::{FileDriver, StorageConfig},
 };
 
 use crate::error::Result;
@@ -25,8 +25,7 @@ pub async fn run(
         .join("sherpack")
         .join("releases");
 
-    let storage = FileDriver::new(storage_path, StorageConfig::default())
-        .into_diagnostic()?;
+    let storage = FileDriver::new(storage_path, StorageConfig::default()).into_diagnostic()?;
 
     // Create client
     let client = KubeClient::new(storage).await.into_diagnostic()?;
@@ -53,8 +52,14 @@ pub async fn run(
         _ => style(release.state.to_string()).dim(),
     };
     println!("  Status:     {}", status_style);
-    println!("  Created:    {}", release.created_at.format("%Y-%m-%d %H:%M:%S"));
-    println!("  Updated:    {}", release.updated_at.format("%Y-%m-%d %H:%M:%S"));
+    println!(
+        "  Created:    {}",
+        release.created_at.format("%Y-%m-%d %H:%M:%S")
+    );
+    println!(
+        "  Updated:    {}",
+        release.updated_at.format("%Y-%m-%d %H:%M:%S")
+    );
 
     // Pack info
     println!("\n{}", style("PACK").bold().underlined());
@@ -105,7 +110,10 @@ pub async fn run(
                 }
             }
             Err(e) => {
-                println!("  {}", style(format!("Unable to get resource status: {}", e)).dim());
+                println!(
+                    "  {}",
+                    style(format!("Unable to get resource status: {}", e)).dim()
+                );
             }
         }
     }

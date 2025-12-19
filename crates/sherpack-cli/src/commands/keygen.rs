@@ -39,15 +39,16 @@ pub fn run(output_dir: Option<&Path>, force: bool, no_password: bool) -> Result<
     let password: Option<String> = if no_password {
         None
     } else {
-        let password = rpassword::prompt_password("Enter password to protect secret key (leave empty for no password): ")
-            .into_diagnostic()?;
+        let password = rpassword::prompt_password(
+            "Enter password to protect secret key (leave empty for no password): ",
+        )
+        .into_diagnostic()?;
 
         if password.is_empty() {
             None
         } else {
             // Confirm password
-            let confirm = rpassword::prompt_password("Confirm password: ")
-                .into_diagnostic()?;
+            let confirm = rpassword::prompt_password("Confirm password: ").into_diagnostic()?;
 
             if password != confirm {
                 return Err(miette::miette!("Passwords do not match"));
@@ -59,15 +60,21 @@ pub fn run(output_dir: Option<&Path>, force: bool, no_password: bool) -> Result<
 
     // Generate key pair
     // Note: minisign prompts interactively if None is passed, so we use empty string for no password
-    let password_for_gen = if password.is_some() { password.clone() } else { Some(String::new()) };
+    let password_for_gen = if password.is_some() {
+        password.clone()
+    } else {
+        Some(String::new())
+    };
     let KeyPair { pk, sk } = KeyPair::generate_encrypted_keypair(password_for_gen)
         .map_err(|e| miette::miette!("Failed to generate key pair: {}", e))?;
 
     // Create key boxes with comments
-    let pk_box = pk.to_box()
+    let pk_box = pk
+        .to_box()
         .map_err(|e| miette::miette!("Failed to create public key box: {}", e))?;
 
-    let sk_box = sk.to_box(password.as_deref())
+    let sk_box = sk
+        .to_box(password.as_deref())
         .map_err(|e| miette::miette!("Failed to create secret key box: {}", e))?;
 
     // Write keys
@@ -85,15 +92,20 @@ pub fn run(output_dir: Option<&Path>, force: bool, no_password: bool) -> Result<
         std::fs::set_permissions(&secret_key_path, perms).into_diagnostic()?;
     }
 
-    println!("  {} {}", style("Secret key").green().bold(), secret_key_path.display());
-    println!("  {} {}", style("Public key").green().bold(), public_key_path.display());
+    println!(
+        "  {} {}",
+        style("Secret key").green().bold(),
+        secret_key_path.display()
+    );
+    println!(
+        "  {} {}",
+        style("Public key").green().bold(),
+        public_key_path.display()
+    );
     println!();
 
     if password.is_some() {
-        println!(
-            "{}",
-            style("Secret key is password-protected.").dim()
-        );
+        println!("{}", style("Secret key is password-protected.").dim());
     } else {
         println!(
             "{}",

@@ -9,11 +9,7 @@ use std::path::Path;
 use super::keygen::default_key_dir;
 use crate::util::truncate_hash;
 
-pub fn run(
-    archive_path: &Path,
-    key_path: Option<&Path>,
-    require_signature: bool,
-) -> Result<()> {
+pub fn run(archive_path: &Path, key_path: Option<&Path>, require_signature: bool) -> Result<()> {
     if !archive_path.exists() {
         return Err(miette::miette!(
             "Archive not found: {}",
@@ -31,8 +27,7 @@ pub fn run(
     // Step 1: Verify manifest checksums
     println!("{}:", style("Integrity check").bold());
 
-    let verification_result = sherpack_core::verify_archive(archive_path)
-        .into_diagnostic()?;
+    let verification_result = sherpack_core::verify_archive(archive_path).into_diagnostic()?;
 
     if verification_result.valid {
         println!(
@@ -56,11 +51,7 @@ pub fn run(
         }
 
         for missing in &verification_result.missing {
-            println!(
-                "    {} {}: missing from archive",
-                style("-").red(),
-                missing
-            );
+            println!("    {} {}: missing from archive", style("-").red(), missing);
         }
 
         return Err(miette::miette!("Archive integrity check failed"));
@@ -75,10 +66,7 @@ pub fn run(
 
     if !sig_exists {
         if require_signature {
-            println!(
-                "  {} No signature found",
-                style("[FAIL]").red().bold()
-            );
+            println!("  {} No signature found", style("[FAIL]").red().bold());
             return Err(miette::miette!(
                 "Signature required but not found: {}",
                 sig_path
@@ -119,7 +107,8 @@ pub fn run(
     let pk_content = std::fs::read_to_string(&key_path).into_diagnostic()?;
     let pk_box = PublicKeyBox::from_string(&pk_content)
         .map_err(|e| miette::miette!("Failed to parse public key: {}", e))?;
-    let pk = pk_box.into_public_key()
+    let pk = pk_box
+        .into_public_key()
         .map_err(|e| miette::miette!("Invalid public key: {}", e))?;
 
     // Read signature
@@ -136,18 +125,11 @@ pub fn run(
     let mut cursor = Cursor::new(&data);
     match minisign::verify(&pk, &sig_box, &mut cursor, true, false, false) {
         Ok(()) => {
-            println!(
-                "  {} Signature valid",
-                style("[OK]").green().bold()
-            );
+            println!("  {} Signature valid", style("[OK]").green().bold());
 
             // Show trusted comment if available
             if let Ok(trusted_comment) = sig_box.trusted_comment() {
-                println!(
-                    "  {}: {}",
-                    style("Signed by").dim(),
-                    trusted_comment
-                );
+                println!("  {}: {}", style("Signed by").dim(), trusted_comment);
             }
         }
         Err(e) => {
@@ -161,10 +143,7 @@ pub fn run(
     }
 
     println!();
-    println!(
-        "{}",
-        style("Archive verified successfully.").green().bold()
-    );
+    println!("{}", style("Archive verified successfully.").green().bold());
 
     Ok(())
 }

@@ -87,15 +87,19 @@ impl RepositoryIndex {
 
     /// Find versions matching a semver constraint
     pub fn find_matching(&self, name: &str, constraint: &str) -> Result<Vec<&PackEntry>> {
-        let entries = self.entries.get(name).ok_or_else(|| RepoError::PackNotFound {
-            name: name.to_string(),
-            repo: "unknown".to_string(),
-        })?;
+        let entries = self
+            .entries
+            .get(name)
+            .ok_or_else(|| RepoError::PackNotFound {
+                name: name.to_string(),
+                repo: "unknown".to_string(),
+            })?;
 
         // Parse version constraint
-        let req = semver::VersionReq::parse(constraint).map_err(|e| RepoError::ResolutionFailed {
-            message: format!("Invalid version constraint '{}': {}", constraint, e),
-        })?;
+        let req =
+            semver::VersionReq::parse(constraint).map_err(|e| RepoError::ResolutionFailed {
+                message: format!("Invalid version constraint '{}': {}", constraint, e),
+            })?;
 
         let matching: Vec<_> = entries
             .iter()
@@ -211,7 +215,7 @@ impl RepositoryIndex {
 }
 
 /// Pack entry in the index
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PackEntry {
     /// Pack name

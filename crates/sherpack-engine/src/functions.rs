@@ -1,9 +1,9 @@
 //! Template functions (global functions available in templates)
 
-use minijinja::{Error, ErrorKind, State, Value};
 use minijinja::value::{Object, Rest};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use minijinja::{Error, ErrorKind, State, Value};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Maximum recursion depth for tpl function (prevents infinite loops)
 const MAX_TPL_DEPTH: usize = 10;
@@ -94,10 +94,10 @@ pub fn set(dict: Value, key: String, val: Value) -> Result<Value, Error> {
             // Copy existing entries
             if let Ok(iter) = dict.try_iter() {
                 for k in iter {
-                    if let Some(k_str) = k.as_str() {
-                        if let Ok(v) = dict.get_item(&k) {
-                            result.insert(k_str.to_string(), v);
-                        }
+                    if let Some(k_str) = k.as_str()
+                        && let Ok(v) = dict.get_item(&k)
+                    {
+                        result.insert(k_str.to_string(), v);
                     }
                 }
             }
@@ -125,12 +125,11 @@ pub fn unset(dict: Value, key: String) -> Result<Value, Error> {
 
             if let Ok(iter) = dict.try_iter() {
                 for k in iter {
-                    if let Some(k_str) = k.as_str() {
-                        if k_str != key {
-                            if let Ok(v) = dict.get_item(&k) {
-                                result.insert(k_str.to_string(), v);
-                            }
-                        }
+                    if let Some(k_str) = k.as_str()
+                        && k_str != key
+                        && let Ok(v) = dict.get_item(&k)
+                    {
+                        result.insert(k_str.to_string(), v);
                     }
                 }
             }
@@ -171,12 +170,10 @@ pub fn dig(dict: Value, keys_and_default: Rest<Value>) -> Result<Value, Error> {
     let mut current = dict;
     for key in keys {
         match key.as_str() {
-            Some(k) => {
-                match current.get_attr(k) {
-                    Ok(v) if !v.is_undefined() => current = v,
-                    _ => return Ok(default),
-                }
-            }
+            Some(k) => match current.get_attr(k) {
+                Ok(v) if !v.is_undefined() => current = v,
+                _ => return Ok(default),
+            },
             None => {
                 // Handle integer keys for lists
                 if let Some(idx) = key.as_i64() {
@@ -265,8 +262,12 @@ pub fn toint(value: Value) -> Result<i64, Error> {
     if let Some(n) = value.as_i64() {
         Ok(n)
     } else if let Some(s) = value.as_str() {
-        s.parse::<i64>()
-            .map_err(|_| Error::new(ErrorKind::InvalidOperation, format!("cannot convert '{}' to int", s)))
+        s.parse::<i64>().map_err(|_| {
+            Error::new(
+                ErrorKind::InvalidOperation,
+                format!("cannot convert '{}' to int", s),
+            )
+        })
     } else {
         Err(Error::new(
             ErrorKind::InvalidOperation,
@@ -282,8 +283,12 @@ pub fn tofloat(value: Value) -> Result<f64, Error> {
     if let Some(n) = value.as_i64() {
         Ok(n as f64)
     } else if let Some(s) = value.as_str() {
-        s.parse::<f64>()
-            .map_err(|_| Error::new(ErrorKind::InvalidOperation, format!("cannot convert '{}' to float", s)))
+        s.parse::<f64>().map_err(|_| {
+            Error::new(
+                ErrorKind::InvalidOperation,
+                format!("cannot convert '{}' to float", s),
+            )
+        })
     } else {
         Err(Error::new(
             ErrorKind::InvalidOperation,
@@ -402,21 +407,18 @@ pub fn tpl(state: &State, template: String, context: Value) -> Result<String, Er
     let depth = increment_tpl_depth(state)?;
 
     // Render the template string using the current environment
-    let result = state
-        .env()
-        .render_str(&template, context)
-        .map_err(|e| {
-            // Enhance error message with tpl context
-            Error::new(
-                ErrorKind::InvalidOperation,
-                format!(
-                    "tpl error (depth {}): {}\n  Template: \"{}\"",
-                    depth,
-                    e,
-                    truncate_for_error(&template, 60)
-                ),
-            )
-        });
+    let result = state.env().render_str(&template, context).map_err(|e| {
+        // Enhance error message with tpl context
+        Error::new(
+            ErrorKind::InvalidOperation,
+            format!(
+                "tpl error (depth {}): {}\n  Template: \"{}\"",
+                depth,
+                e,
+                truncate_for_error(&template, 60)
+            ),
+        )
+    });
 
     // Decrement depth after rendering (for sibling tpl calls)
     decrement_tpl_depth(state);
@@ -507,12 +509,7 @@ fn truncate_for_error(s: &str, max_len: usize) -> String {
 ///    secretName: {{ release.name }}-secret
 ///    {%- endif %}
 ///    ```
-pub fn lookup(
-    api_version: String,
-    kind: String,
-    namespace: String,
-    name: String,
-) -> Value {
+pub fn lookup(api_version: String, kind: String, namespace: String, name: String) -> Value {
     // Log what was requested (useful for debugging/migration from Helm)
     // In template mode, this always returns empty - matching Helm behavior
     let _ = (api_version, kind, namespace, name); // Acknowledge params
@@ -549,34 +546,31 @@ pub fn tpl_ctx(state: &State, template: String) -> Result<String, Error> {
     for var in ["values", "release", "pack", "capabilities", "template"] {
         if let Some(v) = state.lookup(var)
             && !v.is_undefined()
-                && let Ok(json_val) = serde_json::to_value(&v) {
-                    ctx.insert(var.to_string(), json_val);
-                }
+            && let Ok(json_val) = serde_json::to_value(&v)
+        {
+            ctx.insert(var.to_string(), json_val);
+        }
     }
 
     let context = Value::from_serialize(serde_json::Value::Object(ctx));
 
-    let result = state
-        .env()
-        .render_str(&template, context)
-        .map_err(|e| {
-            Error::new(
-                ErrorKind::InvalidOperation,
-                format!(
-                    "tpl_ctx error (depth {}): {}\n  Template: \"{}\"",
-                    depth,
-                    e,
-                    truncate_for_error(&template, 60)
-                ),
-            )
-        });
+    let result = state.env().render_str(&template, context).map_err(|e| {
+        Error::new(
+            ErrorKind::InvalidOperation,
+            format!(
+                "tpl_ctx error (depth {}): {}\n  Template: \"{}\"",
+                depth,
+                e,
+                truncate_for_error(&template, 60)
+            ),
+        )
+    });
 
     // Decrement depth after rendering
     decrement_tpl_depth(state);
 
     result
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -657,7 +651,8 @@ mod tests {
         env.add_function("tpl", super::tpl);
 
         // Test with conditional
-        let template = r#"{{ tpl("{% if enabled %}yes{% else %}no{% endif %}", {"enabled": true}) }}"#;
+        let template =
+            r#"{{ tpl("{% if enabled %}yes{% else %}no{% endif %}", {"enabled": true}) }}"#;
         let result = env.render_str(template, ()).unwrap();
         assert_eq!(result, "yes");
     }
@@ -701,7 +696,10 @@ mod tests {
     #[test]
     fn test_truncate_for_error() {
         assert_eq!(truncate_for_error("short", 10), "short");
-        assert_eq!(truncate_for_error("this is a longer string", 10), "this is a ...");
+        assert_eq!(
+            truncate_for_error("this is a longer string", 10),
+            "this is a ..."
+        );
     }
 
     #[test]
@@ -749,8 +747,8 @@ mod tests {
 
     #[test]
     fn test_lookup_safe_pattern() {
-        use minijinja::Environment;
         use crate::filters::tojson;
+        use minijinja::Environment;
 
         let mut env = Environment::new();
         env.add_function("lookup", super::lookup);
@@ -795,7 +793,8 @@ mod tests {
         env.add_function("dig", super::dig);
 
         // Test deep access that exists
-        let template = r#"{% set d = {"a": {"b": {"c": "found"}}} %}{{ dig(d, "a", "b", "c", "default") }}"#;
+        let template =
+            r#"{% set d = {"a": {"b": {"c": "found"}}} %}{{ dig(d, "a", "b", "c", "default") }}"#;
         let result = env.render_str(template, ()).unwrap();
         assert_eq!(result, "found");
 

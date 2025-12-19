@@ -275,7 +275,11 @@ mod tests {
         config.add(repo).unwrap();
 
         assert!(config.get("test").is_some());
-        assert!(config.add(Repository::new("test", "https://other.com").unwrap()).is_err());
+        assert!(
+            config
+                .add(Repository::new("test", "https://other.com").unwrap())
+                .is_err()
+        );
 
         let removed = config.remove("test").unwrap();
         assert_eq!(removed.name, "test");

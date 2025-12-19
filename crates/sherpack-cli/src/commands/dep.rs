@@ -5,8 +5,8 @@ use std::path::Path;
 use crate::error::{CliError, Result};
 use sherpack_core::{LoadedPack, ResolvePolicy, Values};
 use sherpack_repo::{
-    DependencyResolver, LockFile, RepositoryConfig, CredentialStore,
-    create_backend, filter_dependencies,
+    CredentialStore, DependencyResolver, LockFile, RepositoryConfig, create_backend,
+    filter_dependencies,
 };
 
 /// List dependencies
@@ -44,10 +44,7 @@ pub async fn list(pack_path: &Path) -> Result<()> {
             ""
         };
 
-        println!(
-            "  {} @ {}{}{}",
-            dep.name, dep.version, alias_info, status
-        );
+        println!("  {} @ {}{}{}", dep.name, dep.version, alias_info, status);
         println!("    repository: {}", dep.repository);
 
         if let Some(condition) = &dep.condition {
@@ -78,9 +75,10 @@ pub async fn list(pack_path: &Path) -> Result<()> {
         let pack_yaml_content =
             std::fs::read_to_string(pack_path.join("Pack.yaml")).unwrap_or_default();
         if let Ok(lock) = LockFile::load(&lock_path)
-            && lock.is_outdated(&pack_yaml_content) {
-                println!("  WARNING: Lock file is outdated. Run 'sherpack dependency update'");
-            }
+            && lock.is_outdated(&pack_yaml_content)
+        {
+            println!("  WARNING: Lock file is outdated. Run 'sherpack dependency update'");
+        }
     } else {
         println!();
         println!("Lock file: not found");
@@ -168,10 +166,7 @@ pub async fn update(pack_path: &Path) -> Result<()> {
             .map(|a| format!(" (alias: {})", a))
             .unwrap_or_default();
 
-        println!(
-            "  {} @ {}{}",
-            dep.name, dep.version, alias_info
-        );
+        println!("  {} @ {}{}", dep.name, dep.version, alias_info);
     }
 
     // Show dependency tree
@@ -189,7 +184,10 @@ pub async fn update(pack_path: &Path) -> Result<()> {
         .map_err(|e| CliError::internal(e.to_string()))?;
 
     println!();
-    println!("Wrote Pack.lock.yaml with {} locked dependencies", graph.len());
+    println!(
+        "Wrote Pack.lock.yaml with {} locked dependencies",
+        graph.len()
+    );
 
     Ok(())
 }

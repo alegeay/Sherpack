@@ -61,10 +61,7 @@ pub enum ActionBody {
         pipeline: Option<Pipeline>,
     },
     /// Block: {{- block "name" . }}
-    Block {
-        name: String,
-        pipeline: Pipeline,
-    },
+    Block { name: String, pipeline: Pipeline },
     /// A pipeline expression (variable access, function call, etc.)
     Pipeline(Pipeline),
 }
@@ -113,10 +110,7 @@ pub enum Command {
     /// Variable: $x
     Variable(String),
     /// Function call: funcName arg1 arg2
-    Function {
-        name: String,
-        args: Vec<Argument>,
-    },
+    Function { name: String, args: Vec<Argument> },
     /// Literal value
     Literal(Literal),
     /// Parenthesized pipeline

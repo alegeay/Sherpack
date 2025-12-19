@@ -192,7 +192,11 @@ impl CrdLocation {
             Self::Dependency {
                 dependency_name,
                 inner_location,
-            } => format!("dependency:{}/{}", dependency_name, inner_location.description()),
+            } => format!(
+                "dependency:{}/{}",
+                dependency_name,
+                inner_location.description()
+            ),
         }
     }
 }
@@ -273,11 +277,7 @@ pub struct DetectedCrd {
 
 impl DetectedCrd {
     /// Create a new detected CRD
-    pub fn new(
-        name: impl Into<String>,
-        content: impl Into<String>,
-        location: CrdLocation,
-    ) -> Self {
+    pub fn new(name: impl Into<String>, content: impl Into<String>, location: CrdLocation) -> Self {
         let content = content.into();
         let (policy, has_keep_annotation) = Self::extract_policy(&content);
 
@@ -309,14 +309,14 @@ impl DetectedCrd {
 
         // Check for sherpack.io/crd-policy
         let policy = annotations
-            .get(&serde_yaml::Value::String(CRD_POLICY_ANNOTATION.to_string()))
+            .get(serde_yaml::Value::String(CRD_POLICY_ANNOTATION.to_string()))
             .and_then(|v| v.as_str())
             .and_then(CrdPolicy::from_annotation)
             .unwrap_or_default();
 
         // Check for helm.sh/resource-policy: keep
         let has_keep = annotations
-            .get(&serde_yaml::Value::String(HELM_RESOURCE_POLICY.to_string()))
+            .get(serde_yaml::Value::String(HELM_RESOURCE_POLICY.to_string()))
             .and_then(|v| v.as_str())
             .is_some_and(|v| v == "keep");
 
@@ -329,7 +329,9 @@ impl DetectedCrd {
         // - Policy doesn't allow delete (shared/external)
         // - Has helm.sh/resource-policy: keep annotation
         // - Policy is managed (protected by default, needs --delete-crds)
-        !self.policy.allows_delete() || self.has_keep_annotation || self.policy == CrdPolicy::Managed
+        !self.policy.allows_delete()
+            || self.has_keep_annotation
+            || self.policy == CrdPolicy::Managed
     }
 }
 

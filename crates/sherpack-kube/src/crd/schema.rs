@@ -110,9 +110,7 @@ impl CrdVersionSchema {
 
     /// Get the root spec schema if present
     pub fn spec_schema(&self) -> Option<&SchemaProperty> {
-        self.schema
-            .as_ref()
-            .and_then(|s| s.properties.get("spec"))
+        self.schema.as_ref().and_then(|s| s.properties.get("spec"))
     }
 
     /// Get the root status schema if present
@@ -286,7 +284,7 @@ pub enum PropertyType {
 
 impl PropertyType {
     /// Parse from string representation
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "string" => Self::String,
             "integer" => Self::Integer,

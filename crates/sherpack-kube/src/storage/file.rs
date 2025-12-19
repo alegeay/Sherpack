@@ -9,8 +9,7 @@ use async_trait::async_trait;
 use std::path::PathBuf;
 
 use super::{
-    compress, decompress, deserialize_release, serialize_release,
-    StorageConfig, StorageDriver,
+    StorageConfig, StorageDriver, compress, decompress, deserialize_release, serialize_release,
 };
 use crate::error::{KubeError, Result};
 use crate::release::StoredRelease;
@@ -84,10 +83,13 @@ impl StorageDriver for FileDriver {
 
     async fn get_latest(&self, namespace: &str, name: &str) -> Result<StoredRelease> {
         let history = self.history(namespace, name).await?;
-        history.into_iter().next().ok_or_else(|| KubeError::ReleaseNotFound {
-            name: name.to_string(),
-            namespace: namespace.to_string(),
-        })
+        history
+            .into_iter()
+            .next()
+            .ok_or_else(|| KubeError::ReleaseNotFound {
+                name: name.to_string(),
+                namespace: namespace.to_string(),
+            })
     }
 
     async fn list(
@@ -100,11 +102,7 @@ impl StorageDriver for FileDriver {
 
         let namespaces: Vec<PathBuf> = if let Some(ns) = namespace {
             let path = self.base_dir.join(ns);
-            if path.exists() {
-                vec![path]
-            } else {
-                vec![]
-            }
+            if path.exists() { vec![path] } else { vec![] }
         } else {
             std::fs::read_dir(&self.base_dir)?
                 .filter_map(|e| e.ok())
@@ -116,11 +114,7 @@ impl StorageDriver for FileDriver {
         for ns_path in namespaces {
             let names: Vec<PathBuf> = if let Some(n) = name {
                 let path = ns_path.join(n);
-                if path.exists() {
-                    vec![path]
-                } else {
-                    vec![]
-                }
+                if path.exists() { vec![path] } else { vec![] }
             } else {
                 std::fs::read_dir(&ns_path)?
                     .filter_map(|e| e.ok())

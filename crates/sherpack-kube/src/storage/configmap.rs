@@ -6,13 +6,13 @@
 use async_trait::async_trait;
 use k8s_openapi::api::core::v1::ConfigMap;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
-use kube::api::{Api, DeleteParams, ListParams, PostParams};
 use kube::Client;
+use kube::api::{Api, DeleteParams, ListParams, PostParams};
 use std::collections::BTreeMap;
 
 use super::{
-    decode_from_storage, encode_for_storage, storage_labels, CompressionMethod,
-    LargeReleaseStrategy, StorageConfig, StorageDriver, MAX_RESOURCE_SIZE,
+    CompressionMethod, LargeReleaseStrategy, MAX_RESOURCE_SIZE, StorageConfig, StorageDriver,
+    decode_from_storage, encode_for_storage, storage_labels,
 };
 use crate::error::{KubeError, Result};
 use crate::release::StoredRelease;
@@ -62,7 +62,10 @@ impl ConfigMapDriver {
         }
 
         let mut labels = storage_labels(release);
-        labels.insert("sherpack.io/storage-driver".to_string(), "configmap".to_string());
+        labels.insert(
+            "sherpack.io/storage-driver".to_string(),
+            "configmap".to_string(),
+        );
 
         // Add compression type for decoding
         let compression_type = match self.config.compression {
@@ -70,7 +73,10 @@ impl ConfigMapDriver {
             CompressionMethod::Gzip { .. } => "gzip",
             CompressionMethod::Zstd { .. } => "zstd",
         };
-        labels.insert("sherpack.io/compression".to_string(), compression_type.to_string());
+        labels.insert(
+            "sherpack.io/compression".to_string(),
+            compression_type.to_string(),
+        );
 
         let mut data = BTreeMap::new();
         data.insert("release".to_string(), encoded);
@@ -131,10 +137,13 @@ impl StorageDriver for ConfigMapDriver {
 
     async fn get_latest(&self, namespace: &str, name: &str) -> Result<StoredRelease> {
         let history = self.history(namespace, name).await?;
-        history.into_iter().next().ok_or_else(|| KubeError::ReleaseNotFound {
-            name: name.to_string(),
-            namespace: namespace.to_string(),
-        })
+        history
+            .into_iter()
+            .next()
+            .ok_or_else(|| KubeError::ReleaseNotFound {
+                name: name.to_string(),
+                namespace: namespace.to_string(),
+            })
     }
 
     async fn list(

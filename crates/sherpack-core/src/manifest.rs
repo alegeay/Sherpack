@@ -86,14 +86,15 @@ impl Manifest {
 
         // Add schema file if present
         if let Some(schema_path) = &pack.schema_path
-            && schema_path.exists() {
-                let hash = hash_file(schema_path)?;
-                let rel_path = schema_path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "values.schema.yaml".to_string());
-                files.insert(rel_path, hash);
-            }
+            && schema_path.exists()
+        {
+            let hash = hash_file(schema_path)?;
+            let rel_path = schema_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "values.schema.yaml".to_string());
+            files.insert(rel_path, hash);
+        }
 
         // Add template files
         let template_files = pack.template_files()?;
@@ -167,12 +168,13 @@ impl Manifest {
             } else if in_files_section {
                 // File line: path sha256:HASH
                 if let Some((path, hash_part)) = line.rsplit_once(' ')
-                    && let Some(hash) = hash_part.strip_prefix("sha256:") {
-                        files.push(FileEntry {
-                            path: path.to_string(),
-                            sha256: hash.to_string(),
-                        });
-                    }
+                    && let Some(hash) = hash_part.strip_prefix("sha256:")
+                {
+                    files.push(FileEntry {
+                        path: path.to_string(),
+                        sha256: hash.to_string(),
+                    });
+                }
             } else {
                 // Header section: key: value
                 if let Some((key, value)) = line.split_once(':') {
@@ -230,7 +232,6 @@ impl Manifest {
             digest,
         })
     }
-
 
     /// Verify that all files match their checksums
     ///
@@ -419,12 +420,10 @@ sha256:789xyz
 
     #[test]
     fn test_verification() {
-        let files = vec![
-            FileEntry {
-                path: "test.txt".to_string(),
-                sha256: hash_bytes(b"content"),
-            },
-        ];
+        let files = vec![FileEntry {
+            path: "test.txt".to_string(),
+            sha256: hash_bytes(b"content"),
+        }];
         let digest = calculate_digest(&files);
 
         let manifest = Manifest {
@@ -442,7 +441,10 @@ sha256:789xyz
                 if path == "test.txt" {
                     Ok(b"content".to_vec())
                 } else {
-                    Err(std::io::Error::new(std::io::ErrorKind::NotFound, "not found"))
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "not found",
+                    ))
                 }
             })
             .unwrap();
@@ -457,7 +459,10 @@ sha256:789xyz
                 if path == "test.txt" {
                     Ok(b"wrong content".to_vec())
                 } else {
-                    Err(std::io::Error::new(std::io::ErrorKind::NotFound, "not found"))
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "not found",
+                    ))
                 }
             })
             .unwrap();

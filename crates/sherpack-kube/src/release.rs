@@ -112,10 +112,7 @@ impl StoredRelease {
 
     /// Storage key for this release
     pub fn storage_key(&self) -> String {
-        format!(
-            "sh.sherpack.release.v1.{}.v{}",
-            self.name, self.version
-        )
+        format!("sh.sherpack.release.v1.{}.v{}", self.name, self.version)
     }
 
     /// Check if this release is in a terminal state
@@ -250,12 +247,24 @@ impl ReleaseState {
     pub fn is_stale(&self) -> bool {
         let now = Utc::now();
         match self {
-            Self::PendingInstall { started_at, timeout }
-            | Self::PendingUpgrade { started_at, timeout, .. }
-            | Self::PendingRollback { started_at, timeout, .. }
-            | Self::PendingUninstall { started_at, timeout } => {
-                now.signed_duration_since(*started_at) > *timeout
+            Self::PendingInstall {
+                started_at,
+                timeout,
             }
+            | Self::PendingUpgrade {
+                started_at,
+                timeout,
+                ..
+            }
+            | Self::PendingRollback {
+                started_at,
+                timeout,
+                ..
+            }
+            | Self::PendingUninstall {
+                started_at,
+                timeout,
+            } => now.signed_duration_since(*started_at) > *timeout,
             Self::Recovering { started_at, .. } => {
                 // Recovery timeout: 2 minutes
                 now.signed_duration_since(*started_at) > Duration::minutes(2)
@@ -272,9 +281,7 @@ impl ReleaseState {
             | Self::PendingUpgrade { started_at, .. }
             | Self::PendingRollback { started_at, .. }
             | Self::PendingUninstall { started_at, .. }
-            | Self::Recovering { started_at, .. } => {
-                Some(now.signed_duration_since(*started_at))
-            }
+            | Self::Recovering { started_at, .. } => Some(now.signed_duration_since(*started_at)),
             _ => None,
         }
     }
@@ -312,7 +319,11 @@ impl std::fmt::Display for ReleaseState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Failed { reason, .. } => write!(f, "failed: {}", reason),
-            Self::Recovering { from_status, attempt, .. } => {
+            Self::Recovering {
+                from_status,
+                attempt,
+                ..
+            } => {
                 write!(f, "recovering from {} (attempt {})", from_status, attempt)
             }
             other => write!(f, "{}", other.status_name()),
@@ -357,10 +368,7 @@ pub enum ValueSource {
     PackDefault,
 
     /// From user's values file
-    ValuesFile {
-        path: String,
-        line: Option<u32>,
-    },
+    ValuesFile { path: String, line: Option<u32> },
 
     /// From --set command line flag
     CommandLine {
@@ -388,11 +396,26 @@ impl std::fmt::Display for ValueSource {
                     write!(f, "{}", path)
                 }
             }
-            Self::CommandLine { flag, timestamp, user } => {
+            Self::CommandLine {
+                flag,
+                timestamp,
+                user,
+            } => {
                 if let Some(u) = user {
-                    write!(f, "--set {} by {} at {}", flag, u, timestamp.format("%Y-%m-%d %H:%M"))
+                    write!(
+                        f,
+                        "--set {} by {} at {}",
+                        flag,
+                        u,
+                        timestamp.format("%Y-%m-%d %H:%M")
+                    )
                 } else {
-                    write!(f, "--set {} at {}", flag, timestamp.format("%Y-%m-%d %H:%M"))
+                    write!(
+                        f,
+                        "--set {} at {}",
+                        flag,
+                        timestamp.format("%Y-%m-%d %H:%M")
+                    )
                 }
             }
             Self::Environment { var } => write!(f, "env ${}", var),
@@ -452,12 +475,14 @@ mod tests {
 
     #[test]
     fn test_terminal_states() {
-        assert!(ReleaseState::Deployed.is_pending() == false);
-        assert!(ReleaseState::PendingInstall {
-            started_at: Utc::now(),
-            timeout: Duration::minutes(5),
-        }
-        .is_pending());
+        assert!(!ReleaseState::Deployed.is_pending());
+        assert!(
+            ReleaseState::PendingInstall {
+                started_at: Utc::now(),
+                timeout: Duration::minutes(5),
+            }
+            .is_pending()
+        );
     }
 
     #[test]

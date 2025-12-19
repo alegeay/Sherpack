@@ -142,7 +142,9 @@ impl LockFile {
 
     /// Get a locked dependency by name
     pub fn get(&self, name: &str) -> Option<&LockedDependency> {
-        self.dependencies.iter().find(|d| d.effective_name() == name)
+        self.dependencies
+            .iter()
+            .find(|d| d.effective_name() == name)
     }
 
     /// Build a map of name -> locked dependency

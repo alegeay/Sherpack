@@ -663,7 +663,10 @@ impl CrdAnalyzer {
             changes.push(CrdChange {
                 kind: ChangeKind::ChangeFieldType,
                 path: format!("{}.type", path),
-                message: format!("Field '{}' type changed from {} to {}", name, old.type_, new.type_),
+                message: format!(
+                    "Field '{}' type changed from {} to {}",
+                    name, old.type_, new.type_
+                ),
                 old_value: Some(format!("{}", old.type_)),
                 new_value: Some(format!("{}", new.type_)),
             });
@@ -723,7 +726,13 @@ impl CrdAnalyzer {
 
         // Array items
         if let (Some(old_items), Some(new_items)) = (&old.items, &new.items) {
-            Self::compare_property(old_items, new_items, &format!("{}[]", name), &format!("{}.items", path), changes);
+            Self::compare_property(
+                old_items,
+                new_items,
+                &format!("{}[]", name),
+                &format!("{}.items", path),
+                changes,
+            );
         }
     }
 
@@ -799,7 +808,11 @@ impl CrdAnalyzer {
                     message: format!(
                         "Field '{}' maxLength {} ({} → {})",
                         name,
-                        if new_v > old_v { "increased" } else { "decreased" },
+                        if new_v > old_v {
+                            "increased"
+                        } else {
+                            "decreased"
+                        },
                         old_v,
                         new_v
                     ),
@@ -842,7 +855,11 @@ impl CrdAnalyzer {
                     message: format!(
                         "Field '{}' minLength {} ({} → {})",
                         name,
-                        if new_v < old_v { "decreased" } else { "increased" },
+                        if new_v < old_v {
+                            "decreased"
+                        } else {
+                            "increased"
+                        },
                         old_v,
                         new_v
                     ),
@@ -973,10 +990,20 @@ impl CrdAnalyzer {
                         message: format!(
                             "Field '{}' enum values added: {}",
                             name,
-                            added.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                            added
+                                .iter()
+                                .map(|s| s.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
                         ),
                         old_value: None,
-                        new_value: Some(added.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")),
+                        new_value: Some(
+                            added
+                                .iter()
+                                .map(|s| s.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        ),
                     });
                 }
             }
@@ -984,11 +1011,7 @@ impl CrdAnalyzer {
                 changes.push(CrdChange {
                     kind: ChangeKind::TightenValidation,
                     path: format!("{}.enum", path),
-                    message: format!(
-                        "Field '{}' enum constraint added ({})",
-                        name,
-                        enums.len()
-                    ),
+                    message: format!("Field '{}' enum constraint added ({})", name, enums.len()),
                     old_value: None,
                     new_value: Some(format!("{} values", enums.len())),
                 });

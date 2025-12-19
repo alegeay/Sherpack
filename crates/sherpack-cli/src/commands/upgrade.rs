@@ -1,14 +1,14 @@
 //! Upgrade command - upgrade an existing release
 
-use std::path::Path;
 use console::style;
 use miette::IntoDiagnostic;
 use sherpack_core::{LoadedPack, Values, parse_set_values};
 use sherpack_kube::{
     KubeClient, UpgradeOptions,
-    storage::{FileDriver, StorageConfig},
     actions::ImmutableStrategy,
+    storage::{FileDriver, StorageConfig},
 };
+use std::path::Path;
 
 use crate::error::Result;
 
@@ -106,8 +106,7 @@ pub async fn run(
         .join("sherpack")
         .join("releases");
 
-    let storage = FileDriver::new(storage_path, StorageConfig::default())
-        .into_diagnostic()?;
+    let storage = FileDriver::new(storage_path, StorageConfig::default()).into_diagnostic()?;
 
     // Create client
     let client = KubeClient::new(storage).await.into_diagnostic()?;
@@ -134,7 +133,10 @@ pub async fn run(
     }
 
     // Execute upgrade
-    let release = client.upgrade(&pack, values, &options).await.into_diagnostic()?;
+    let release = client
+        .upgrade(&pack, values, &options)
+        .await
+        .into_diagnostic()?;
 
     if dry_run {
         println!(

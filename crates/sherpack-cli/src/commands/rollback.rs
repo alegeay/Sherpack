@@ -4,8 +4,8 @@ use console::style;
 use miette::IntoDiagnostic;
 use sherpack_kube::{
     KubeClient, RollbackOptions,
-    storage::{FileDriver, StorageConfig},
     actions::ImmutableStrategy,
+    storage::{FileDriver, StorageConfig},
 };
 
 use crate::error::Result;
@@ -44,8 +44,7 @@ pub async fn run(
         .join("sherpack")
         .join("releases");
 
-    let storage = FileDriver::new(storage_path, StorageConfig::default())
-        .into_diagnostic()?;
+    let storage = FileDriver::new(storage_path, StorageConfig::default()).into_diagnostic()?;
 
     // Create client
     let client = KubeClient::new(storage).await.into_diagnostic()?;

@@ -7,9 +7,9 @@
 
 #![allow(dead_code)]
 
-use console::{style, Style};
+use console::{Style, style};
 use sherpack_engine::RenderReport;
-use sherpack_kube::crd::{ChangeSeverity, CrdAnalysis, CrdChange, ChangeKind};
+use sherpack_kube::crd::{ChangeKind, ChangeSeverity, CrdAnalysis, CrdChange};
 use sherpack_kube::{CrdDeletionImpact, DeletionConfirmation, DeletionImpactSummary};
 use std::collections::BTreeMap;
 use std::io::{self, Write};
@@ -260,11 +260,7 @@ impl CrdDiffRenderer {
         }
 
         if analysis.changes.is_empty() {
-            writeln!(
-                self.writer,
-                "  {} No changes detected",
-                style("✓").green()
-            )?;
+            writeln!(self.writer, "  {} No changes detected", style("✓").green())?;
             return Ok(());
         }
 
@@ -444,12 +440,7 @@ impl CrdDiffRenderer {
             )?;
         }
         if warn > 0 {
-            writeln!(
-                self.writer,
-                "  {} {} warning(s)",
-                style("⚠").yellow(),
-                warn
-            )?;
+            writeln!(self.writer, "  {} {} warning(s)", style("⚠").yellow(), warn)?;
         }
         if danger > 0 {
             writeln!(
@@ -493,10 +484,7 @@ pub fn display_crd_analyses(analyses: &[CrdAnalysis]) {
 }
 
 /// Format a CRD upgrade decision for display
-pub fn format_upgrade_decision(
-    analyses: &[CrdAnalysis],
-    force_update: bool,
-) -> String {
+pub fn format_upgrade_decision(analyses: &[CrdAnalysis], force_update: bool) -> String {
     let total_safe: usize = analyses.iter().map(|a| a.count_by_severity().0).sum();
     let total_warn: usize = analyses.iter().map(|a| a.count_by_severity().1).sum();
     let total_danger: usize = analyses.iter().map(|a| a.count_by_severity().2).sum();
@@ -565,10 +553,7 @@ pub fn display_deletion_impact(summary: &DeletionImpactSummary) {
         );
     }
     if !summary.has_blocked() && !summary.has_data_loss() {
-        println!(
-            "  {} No data loss expected",
-            style("✓").green()
-        );
+        println!("  {} No data loss expected", style("✓").green());
     }
 }
 
@@ -585,17 +570,10 @@ fn display_single_crd_impact(impact: &CrdDeletionImpact) {
         style("✗").red()
     };
 
-    println!(
-        "  {} {}",
-        icon,
-        style(&impact.crd_name).cyan().bold()
-    );
+    println!("  {} {}", icon, style(&impact.crd_name).cyan().bold());
 
     // Show policy
-    println!(
-        "    Policy: {}",
-        style(format!("{}", impact.policy)).dim()
-    );
+    println!("    Policy: {}", style(format!("{}", impact.policy)).dim());
 
     // Show if blocked
     if let Some(reason) = &impact.blocked_reason {
@@ -623,18 +601,11 @@ fn display_single_crd_impact(impact: &CrdDeletionImpact) {
             } else {
                 ns.to_string()
             };
-            println!(
-                "      - {} ({} resources)",
-                ns_display,
-                count
-            );
+            println!("      - {} ({} resources)", ns_display, count);
         }
 
         if sorted.len() > 5 {
-            println!(
-                "      ... and {} more namespace(s)",
-                sorted.len() - 5
-            );
+            println!("      ... and {} more namespace(s)", sorted.len() - 5);
         }
     }
 }
@@ -646,11 +617,7 @@ pub fn display_deletion_confirmation(confirmation: &DeletionConfirmation) {
     }
 
     println!();
-    println!(
-        "{} {}",
-        style("!").red().bold(),
-        confirmation.explanation
-    );
+    println!("{} {}", style("!").red().bold(), confirmation.explanation);
 
     if !confirmation.required_flags.is_empty() {
         println!();
@@ -660,7 +627,10 @@ pub fn display_deletion_confirmation(confirmation: &DeletionConfirmation) {
         }
     } else {
         println!();
-        println!("  {} Cannot proceed - policy blocks deletion", style("✗").red());
+        println!(
+            "  {} Cannot proceed - policy blocks deletion",
+            style("✗").red()
+        );
     }
 }
 
@@ -694,7 +664,6 @@ pub fn format_deletion_warning(summary: &DeletionImpactSummary) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
     use std::sync::{Arc, Mutex};
 
     /// A thread-safe buffer for testing
@@ -708,7 +677,7 @@ mod tests {
             Self::default()
         }
 
-        fn to_string(&self) -> String {
+        fn contents(&self) -> String {
             let guard = self.inner.lock().unwrap();
             String::from_utf8(guard.clone()).unwrap()
         }
@@ -755,7 +724,7 @@ mod tests {
         };
 
         renderer.render(&analysis).unwrap();
-        let output_str = buffer.to_string();
+        let output_str = buffer.contents();
 
         assert!(output_str.contains("tests.example.com"));
         assert!(output_str.contains("New CRD"));
@@ -773,7 +742,7 @@ mod tests {
         };
 
         renderer.render(&analysis).unwrap();
-        let output_str = buffer.to_string();
+        let output_str = buffer.contents();
 
         assert!(output_str.contains("No changes detected"));
     }

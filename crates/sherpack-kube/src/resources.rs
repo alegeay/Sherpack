@@ -11,10 +11,10 @@
 //! - Retry logic for transient conflicts
 
 use kube::{
+    Client,
     api::{Api, DeleteParams, DynamicObject, Patch, PatchParams},
     core::{GroupVersionKind, TypeMeta},
     discovery::{ApiCapabilities, ApiResource, Discovery, Scope},
-    Client,
 };
 
 use crate::crd::ResourceCategory;
@@ -131,8 +131,14 @@ impl ParsedResource {
             .as_ref()
             .map(|annotations| {
                 // Check both Helm and Sherpack annotations (no allocation)
-                annotations.get(RESOURCE_POLICY_ANNOTATION).map(String::as_str) == Some(RESOURCE_POLICY_KEEP)
-                    || annotations.get(SHERPACK_RESOURCE_POLICY).map(String::as_str) == Some(RESOURCE_POLICY_KEEP)
+                annotations
+                    .get(RESOURCE_POLICY_ANNOTATION)
+                    .map(String::as_str)
+                    == Some(RESOURCE_POLICY_KEEP)
+                    || annotations
+                        .get(SHERPACK_RESOURCE_POLICY)
+                        .map(String::as_str)
+                        == Some(RESOURCE_POLICY_KEEP)
             })
             .unwrap_or(false)
     }
@@ -210,7 +216,11 @@ impl ResourceManager {
     }
 
     /// Parse a YAML manifest into ParsedResource list
-    fn parse_manifest(&self, manifest: &str, default_namespace: &str) -> Result<Vec<ParsedResource>> {
+    fn parse_manifest(
+        &self,
+        manifest: &str,
+        default_namespace: &str,
+    ) -> Result<Vec<ParsedResource>> {
         let mut resources = Vec::new();
 
         for (index, doc) in manifest.split("---").enumerate() {
@@ -220,7 +230,10 @@ impl ResourceManager {
             }
 
             // Skip YAML comments-only documents
-            if doc.lines().all(|l| l.trim().is_empty() || l.trim().starts_with('#')) {
+            if doc
+                .lines()
+                .all(|l| l.trim().is_empty() || l.trim().starts_with('#'))
+            {
                 continue;
             }
 
@@ -240,11 +253,7 @@ impl ResourceManager {
     }
 
     /// Parse a single YAML document into ParsedResource
-    fn parse_single_document(
-        &self,
-        doc: &str,
-        default_namespace: &str,
-    ) -> Result<ParsedResource> {
+    fn parse_single_document(&self, doc: &str, default_namespace: &str) -> Result<ParsedResource> {
         // Parse YAML into DynamicObject
         let mut obj: DynamicObject = serde_yaml::from_str(doc)
             .map_err(|e| KubeError::Serialization(format!("YAML parse error: {}", e)))?;
@@ -294,7 +303,11 @@ impl ResourceManager {
 
             match self.apply_single_resource(resource, dry_run).await {
                 Ok(result) => {
-                    let action = if result.created { "created" } else { "configured" };
+                    let action = if result.created {
+                        "created"
+                    } else {
+                        "configured"
+                    };
                     summary.succeeded.push(format!("{} ({})", name, action));
                 }
                 Err(e) => {
@@ -312,12 +325,9 @@ impl ResourceManager {
         resource: &ParsedResource,
         dry_run: bool,
     ) -> Result<ApplyResult> {
-        let name = resource
-            .obj
-            .metadata
-            .name
-            .as_deref()
-            .ok_or_else(|| KubeError::InvalidConfig("Resource missing metadata.name".to_string()))?;
+        let name = resource.obj.metadata.name.as_deref().ok_or_else(|| {
+            KubeError::InvalidConfig("Resource missing metadata.name".to_string())
+        })?;
 
         let api = self.api_for_resource(resource);
 
@@ -368,7 +378,9 @@ impl ResourceManager {
 
             // Check for keep policy
             if resource.has_keep_policy() {
-                summary.skipped.push((name, "resource-policy: keep".to_string()));
+                summary
+                    .skipped
+                    .push((name, "resource-policy: keep".to_string()));
                 continue;
             }
 
@@ -400,12 +412,9 @@ impl ResourceManager {
         resource: &ParsedResource,
         dry_run: bool,
     ) -> Result<DeleteResult> {
-        let name = resource
-            .obj
-            .metadata
-            .name
-            .as_deref()
-            .ok_or_else(|| KubeError::InvalidConfig("Resource missing metadata.name".to_string()))?;
+        let name = resource.obj.metadata.name.as_deref().ok_or_else(|| {
+            KubeError::InvalidConfig("Resource missing metadata.name".to_string())
+        })?;
 
         let api = self.api_for_resource(resource);
 
@@ -445,11 +454,19 @@ impl ResourceManager {
         sorted.sort_by(|a, b| {
             let cat_a = ResourceCategory::from_resource(
                 &a.gvk.kind,
-                a.obj.types.as_ref().map(|t| t.api_version.as_str()).unwrap_or("v1"),
+                a.obj
+                    .types
+                    .as_ref()
+                    .map(|t| t.api_version.as_str())
+                    .unwrap_or("v1"),
             );
             let cat_b = ResourceCategory::from_resource(
                 &b.gvk.kind,
-                b.obj.types.as_ref().map(|t| t.api_version.as_str()).unwrap_or("v1"),
+                b.obj
+                    .types
+                    .as_ref()
+                    .map(|t| t.api_version.as_str())
+                    .unwrap_or("v1"),
             );
             cat_a.cmp(&cat_b)
         });
@@ -462,11 +479,19 @@ impl ResourceManager {
         sorted.sort_by(|a, b| {
             let cat_a = ResourceCategory::from_resource(
                 &a.gvk.kind,
-                a.obj.types.as_ref().map(|t| t.api_version.as_str()).unwrap_or("v1"),
+                a.obj
+                    .types
+                    .as_ref()
+                    .map(|t| t.api_version.as_str())
+                    .unwrap_or("v1"),
             );
             let cat_b = ResourceCategory::from_resource(
                 &b.gvk.kind,
-                b.obj.types.as_ref().map(|t| t.api_version.as_str()).unwrap_or("v1"),
+                b.obj
+                    .types
+                    .as_ref()
+                    .map(|t| t.api_version.as_str())
+                    .unwrap_or("v1"),
             );
             cat_b.cmp(&cat_a) // Reverse order
         });
@@ -479,6 +504,7 @@ impl ResourceManager {
     }
 
     /// Filter resources into CRDs and non-CRDs
+    #[allow(dead_code)]
     fn partition_crds<'a>(
         &self,
         resources: &'a [ParsedResource],
@@ -501,7 +527,6 @@ impl ResourceManager {
         }
     }
 }
-
 
 /// Convert TypeMeta to GroupVersionKind
 ///
@@ -600,7 +625,10 @@ mod tests {
         let mut summary = OperationSummary::default();
         summary.succeeded.push("deployment/nginx".to_string());
         summary.succeeded.push("service/nginx".to_string());
-        summary.skipped.push(("secret/keep-me".to_string(), "resource-policy: keep".to_string()));
+        summary.skipped.push((
+            "secret/keep-me".to_string(),
+            "resource-policy: keep".to_string(),
+        ));
 
         assert!(summary.is_success());
         assert_eq!(summary.total(), 3);
@@ -621,7 +649,10 @@ mod tests {
     fn test_operation_summary_with_failures() {
         let mut summary = OperationSummary::default();
         summary.succeeded.push("deployment/app".to_string());
-        summary.failed.push(("service/broken".to_string(), "Connection refused".to_string()));
+        summary.failed.push((
+            "service/broken".to_string(),
+            "Connection refused".to_string(),
+        ));
 
         assert!(!summary.is_success());
         assert_eq!(summary.total(), 2);
@@ -632,8 +663,12 @@ mod tests {
     #[test]
     fn test_operation_summary_only_skipped() {
         let mut summary = OperationSummary::default();
-        summary.skipped.push(("secret/keep".to_string(), "keep policy".to_string()));
-        summary.skipped.push(("configmap/keep".to_string(), "keep policy".to_string()));
+        summary
+            .skipped
+            .push(("secret/keep".to_string(), "keep policy".to_string()));
+        summary
+            .skipped
+            .push(("configmap/keep".to_string(), "keep policy".to_string()));
 
         assert!(summary.is_success());
         assert_eq!(summary.total(), 2);
@@ -691,7 +726,10 @@ mod tests {
         };
 
         assert!(!result.deleted);
-        assert_eq!(result.skip_reason, Some("resource-policy: keep".to_string()));
+        assert_eq!(
+            result.skip_reason,
+            Some("resource-policy: keep".to_string())
+        );
     }
 
     #[test]

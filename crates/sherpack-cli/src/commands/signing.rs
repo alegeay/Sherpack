@@ -18,8 +18,7 @@ pub fn load_secret_key(key_path: &Path) -> Result<SecretKey> {
     }
 
     // Key is encrypted, prompt for password
-    let password =
-        rpassword::prompt_password("Enter key password: ").into_diagnostic()?;
+    let password = rpassword::prompt_password("Enter key password: ").into_diagnostic()?;
     try_decrypt(&key_content, Some(password))
 }
 

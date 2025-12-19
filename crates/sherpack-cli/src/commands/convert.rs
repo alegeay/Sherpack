@@ -5,7 +5,9 @@
 
 use console::style;
 use miette::{IntoDiagnostic, Result, WrapErr};
-use sherpack_convert::{convert_with_options, ConvertOptions, ConversionResult, WarningCategory, WarningSeverity};
+use sherpack_convert::{
+    ConversionResult, ConvertOptions, WarningCategory, WarningSeverity, convert_with_options,
+};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -82,11 +84,7 @@ fn print_files(result: &ConversionResult, output_path: &Path, chart_path: &Path)
 
     for file in &result.converted_files {
         let rel_path = file.strip_prefix(output_path).unwrap_or(file);
-        println!(
-            "  {} {}",
-            style("✓").green().bold(),
-            rel_path.display()
-        );
+        println!("  {} {}", style("✓").green().bold(), rel_path.display());
     }
 
     if !result.copied_files.is_empty() {
@@ -96,11 +94,7 @@ fn print_files(result: &ConversionResult, output_path: &Path, chart_path: &Path)
 
         for file in &result.copied_files {
             let rel_path = file.strip_prefix(output_path).unwrap_or(file);
-            println!(
-                "  {} {}",
-                style("→").blue(),
-                rel_path.display()
-            );
+            println!("  {} {}", style("→").blue(), rel_path.display());
         }
     }
 
@@ -111,11 +105,7 @@ fn print_files(result: &ConversionResult, output_path: &Path, chart_path: &Path)
 
         for file in &result.skipped_files {
             let rel_path = file.strip_prefix(chart_path).unwrap_or(file);
-            println!(
-                "  {} {}",
-                style("○").yellow(),
-                rel_path.display()
-            );
+            println!("  {} {}", style("○").yellow(), rel_path.display());
         }
     }
 
@@ -130,16 +120,22 @@ fn print_warnings(result: &ConversionResult, output_path: &Path, chart_path: &Pa
     // Group warnings by category
     let mut by_category: HashMap<WarningCategory, Vec<_>> = HashMap::new();
     for warning in &result.warnings {
-        by_category.entry(warning.category).or_default().push(warning);
+        by_category
+            .entry(warning.category)
+            .or_default()
+            .push(warning);
     }
 
     // Skip info-level warnings unless verbose
-    let has_significant_warnings = result.warnings.iter().any(|w| {
-        w.severity != WarningSeverity::Info
-    });
+    let has_significant_warnings = result
+        .warnings
+        .iter()
+        .any(|w| w.severity != WarningSeverity::Info);
 
     if !has_significant_warnings && !verbose {
-        let info_count = result.warnings.iter()
+        let info_count = result
+            .warnings
+            .iter()
             .filter(|w| w.severity == WarningSeverity::Info)
             .count();
         if info_count > 0 {
@@ -161,7 +157,11 @@ fn print_warnings(result: &ConversionResult, output_path: &Path, chart_path: &Pa
 
     // Print security/unsupported warnings first (most important)
     if let Some(security_warnings) = by_category.get(&WarningCategory::Security) {
-        println!("  {} {}", style("Security").red().bold(), style("─ requires attention").dim());
+        println!(
+            "  {} {}",
+            style("Security").red().bold(),
+            style("─ requires attention").dim()
+        );
         for warning in security_warnings {
             print_warning(warning, output_path, chart_path);
         }
@@ -169,7 +169,11 @@ fn print_warnings(result: &ConversionResult, output_path: &Path, chart_path: &Pa
     }
 
     if let Some(unsupported) = by_category.get(&WarningCategory::UnsupportedFeature) {
-        println!("  {} {}", style("Unsupported").magenta().bold(), style("─ manual migration needed").dim());
+        println!(
+            "  {} {}",
+            style("Unsupported").magenta().bold(),
+            style("─ manual migration needed").dim()
+        );
         for warning in unsupported {
             print_warning(warning, output_path, chart_path);
         }
@@ -177,7 +181,11 @@ fn print_warnings(result: &ConversionResult, output_path: &Path, chart_path: &Pa
     }
 
     if let Some(gitops_warnings) = by_category.get(&WarningCategory::GitOps) {
-        println!("  {} {}", style("GitOps").yellow().bold(), style("─ review for compatibility").dim());
+        println!(
+            "  {} {}",
+            style("GitOps").yellow().bold(),
+            style("─ review for compatibility").dim()
+        );
         for warning in gitops_warnings {
             print_warning(warning, output_path, chart_path);
         }
@@ -185,17 +193,24 @@ fn print_warnings(result: &ConversionResult, output_path: &Path, chart_path: &Pa
     }
 
     // Show syntax warnings only in verbose mode
-    if verbose
-        && let Some(syntax_warnings) = by_category.get(&WarningCategory::Syntax) {
-            println!("  {} {}", style("Syntax").cyan().bold(), style("─ automatic conversions").dim());
-            for warning in syntax_warnings {
-                print_warning(warning, output_path, chart_path);
-            }
-            println!();
+    if verbose && let Some(syntax_warnings) = by_category.get(&WarningCategory::Syntax) {
+        println!(
+            "  {} {}",
+            style("Syntax").cyan().bold(),
+            style("─ automatic conversions").dim()
+        );
+        for warning in syntax_warnings {
+            print_warning(warning, output_path, chart_path);
         }
+        println!();
+    }
 }
 
-fn print_warning(warning: &sherpack_convert::ConversionWarning, output_path: &Path, chart_path: &Path) {
+fn print_warning(
+    warning: &sherpack_convert::ConversionWarning,
+    output_path: &Path,
+    chart_path: &Path,
+) {
     let icon = match warning.severity {
         WarningSeverity::Info => style("ℹ").cyan(),
         WarningSeverity::Warning => style("⚠").yellow(),
@@ -203,7 +218,8 @@ fn print_warning(warning: &sherpack_convert::ConversionWarning, output_path: &Pa
         WarningSeverity::Error => style("✗").red().bold(),
     };
 
-    let rel_file = warning.file
+    let rel_file = warning
+        .file
         .strip_prefix(output_path)
         .or_else(|_| warning.file.strip_prefix(chart_path))
         .unwrap_or(&warning.file);
@@ -222,18 +238,11 @@ fn print_warning(warning: &sherpack_convert::ConversionWarning, output_path: &Pa
     );
 
     // Show message on next line, indented
-    println!(
-        "      {}",
-        style(&warning.message).dim()
-    );
+    println!("      {}", style(&warning.message).dim());
 
     // Show suggestion with better formatting
     if let Some(ref suggestion) = warning.suggestion {
-        println!(
-            "      {} {}",
-            style("→").green(),
-            suggestion
-        );
+        println!("      {} {}", style("→").green(), suggestion);
     }
 
     // Show doc link if present
@@ -251,13 +260,19 @@ fn print_summary(result: &ConversionResult) {
     let copied = result.copied_files.len();
     let skipped = result.skipped_files.len();
 
-    let error_count = result.warnings.iter()
+    let error_count = result
+        .warnings
+        .iter()
         .filter(|w| w.severity == WarningSeverity::Error)
         .count();
-    let unsupported_count = result.warnings.iter()
+    let unsupported_count = result
+        .warnings
+        .iter()
         .filter(|w| w.severity == WarningSeverity::Unsupported)
         .count();
-    let warning_count = result.warnings.iter()
+    let warning_count = result
+        .warnings
+        .iter()
         .filter(|w| w.severity == WarningSeverity::Warning)
         .count();
 
@@ -333,7 +348,9 @@ fn print_next_steps(result: &ConversionResult, output_path: &Path, dry_run: bool
         return;
     }
 
-    let has_unsupported = result.warnings.iter()
+    let has_unsupported = result
+        .warnings
+        .iter()
         .any(|w| w.severity == WarningSeverity::Unsupported);
 
     println!("  {}", style("Next Steps").bold());
@@ -345,7 +362,10 @@ fn print_next_steps(result: &ConversionResult, output_path: &Path, dry_run: bool
         style("1.").dim(),
         style(format!("sherpack lint {}", output_path.display())).cyan()
     );
-    println!("     {}", style("Validate the converted pack structure").dim());
+    println!(
+        "     {}",
+        style("Validate the converted pack structure").dim()
+    );
 
     // Step 2: If unsupported features, review them
     if has_unsupported {
@@ -355,7 +375,10 @@ fn print_next_steps(result: &ConversionResult, output_path: &Path, dry_run: bool
             style("2.").dim(),
             style("Review unsupported features above").yellow()
         );
-        println!("     {}", style("Replace with recommended alternatives").dim());
+        println!(
+            "     {}",
+            style("Replace with recommended alternatives").dim()
+        );
     }
 
     // Step 3: Test render
@@ -363,19 +386,42 @@ fn print_next_steps(result: &ConversionResult, output_path: &Path, dry_run: bool
     println!(
         "  {} {}",
         style(if has_unsupported { "3." } else { "2." }).dim(),
-        style(format!("sherpack template test-release {} -f values.yaml", output_path.display())).cyan()
+        style(format!(
+            "sherpack template test-release {} -f values.yaml",
+            output_path.display()
+        ))
+        .cyan()
     );
-    println!("     {}", style("Test template rendering with your values").dim());
+    println!(
+        "     {}",
+        style("Test template rendering with your values").dim()
+    );
 
     println!();
 
     // Show elegance comparison
     println!("  {}", style("Why Sherpack?").bold().green());
     println!("  {}", style("─────────────").dim());
-    println!("  {} Helm:     {}", style("  ").dim(), style("{{ index .Values.list 0 }}").dim());
-    println!("  {} Sherpack: {}", style("→").green(), style("{{ values.list[0] }}").cyan());
+    println!(
+        "  {} Helm:     {}",
+        style("  ").dim(),
+        style("{{ index .Values.list 0 }}").dim()
+    );
+    println!(
+        "  {} Sherpack: {}",
+        style("→").green(),
+        style("{{ values.list[0] }}").cyan()
+    );
     println!();
-    println!("  {} Helm:     {}", style("  ").dim(), style("{{ ternary \"a\" \"b\" .cond }}").dim());
-    println!("  {} Sherpack: {}", style("→").green(), style("{{ \"a\" if cond else \"b\" }}").cyan());
+    println!(
+        "  {} Helm:     {}",
+        style("  ").dim(),
+        style("{{ ternary \"a\" \"b\" .cond }}").dim()
+    );
+    println!(
+        "  {} Sherpack: {}",
+        style("→").green(),
+        style("{{ \"a\" if cond else \"b\" }}").cyan()
+    );
     println!();
 }

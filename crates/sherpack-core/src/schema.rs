@@ -137,11 +137,7 @@ impl Schema {
 
         match format {
             SchemaFormat::JsonSchema => {
-                let value: JsonValue = if path
-                    .extension()
-                    .map(|e| e == "json")
-                    .unwrap_or(false)
-                {
+                let value: JsonValue = if path.extension().map(|e| e == "json").unwrap_or(false) {
                     serde_json::from_str(&content)?
                 } else {
                     serde_yaml::from_str(&content)?
@@ -369,20 +365,21 @@ fn extract_defaults_recursive(schema: &JsonValue) -> JsonValue {
 
     // For objects, recursively extract property defaults
     if obj.get("type") == Some(&JsonValue::String("object".into()))
-        && let Some(props) = obj.get("properties").and_then(|p| p.as_object()) {
-            let mut defaults = serde_json::Map::new();
+        && let Some(props) = obj.get("properties").and_then(|p| p.as_object())
+    {
+        let mut defaults = serde_json::Map::new();
 
-            for (key, prop_schema) in props {
-                let prop_default = extract_defaults_recursive(prop_schema);
-                if !prop_default.is_null() {
-                    defaults.insert(key.clone(), prop_default);
-                }
-            }
-
-            if !defaults.is_empty() {
-                return JsonValue::Object(defaults);
+        for (key, prop_schema) in props {
+            let prop_default = extract_defaults_recursive(prop_schema);
+            if !prop_default.is_null() {
+                defaults.insert(key.clone(), prop_default);
             }
         }
+
+        if !defaults.is_empty() {
+            return JsonValue::Object(defaults);
+        }
+    }
 
     JsonValue::Null
 }

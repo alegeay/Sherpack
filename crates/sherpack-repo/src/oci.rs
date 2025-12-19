@@ -3,9 +3,9 @@
 //! Basic push/pull operations for OCI-compliant registries.
 //! NOTE: Search is NOT supported due to catalog API limitations across registries.
 
+use oci_distribution::Reference;
 use oci_distribution::client::{Client, ClientConfig, ClientProtocol};
 use oci_distribution::secrets::RegistryAuth;
-use oci_distribution::Reference;
 use std::path::Path;
 
 use crate::config::Repository;
@@ -255,11 +255,12 @@ impl OciReference {
             .trim_start_matches("http://");
 
         // Split registry from path
-        let (registry, rest) = clean
-            .split_once('/')
-            .ok_or_else(|| RepoError::InvalidOciReference {
-                reference: s.to_string(),
-            })?;
+        let (registry, rest) =
+            clean
+                .split_once('/')
+                .ok_or_else(|| RepoError::InvalidOciReference {
+                    reference: s.to_string(),
+                })?;
 
         // Check for digest
         if let Some((repo_tag, digest)) = rest.rsplit_once('@') {

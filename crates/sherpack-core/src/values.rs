@@ -322,9 +322,7 @@ fn get_nested<'a>(value: &'a JsonValue, path: &[&str]) -> Option<&'a JsonValue> 
     let remaining = &path[1..];
 
     match value {
-        JsonValue::Object(map) => {
-            map.get(key).and_then(|v| get_nested(v, remaining))
-        }
+        JsonValue::Object(map) => map.get(key).and_then(|v| get_nested(v, remaining)),
         _ => None,
     }
 }
@@ -367,19 +365,25 @@ mod tests {
 
     #[test]
     fn test_deep_merge() {
-        let mut base = Values::from_yaml(r#"
+        let mut base = Values::from_yaml(
+            r#"
 image:
   repository: nginx
   tag: "1.0"
 replicas: 1
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
-        let overlay = Values::from_yaml(r#"
+        let overlay = Values::from_yaml(
+            r#"
 image:
   tag: "2.0"
   pullPolicy: Always
 replicas: 3
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         base.merge(&overlay);
 
@@ -392,7 +396,9 @@ replicas: 3
     #[test]
     fn test_set_nested() {
         let mut values = Values::new();
-        values.set("image.tag", JsonValue::String("v1".into())).unwrap();
+        values
+            .set("image.tag", JsonValue::String("v1".into()))
+            .unwrap();
         values.set("replicas", JsonValue::Number(3.into())).unwrap();
 
         assert_eq!(values.get("image.tag").unwrap(), "v1");
@@ -416,7 +422,8 @@ replicas: 3
 
     #[test]
     fn test_scope_for_subchart_basic() {
-        let parent = Values::from_yaml(r#"
+        let parent = Values::from_yaml(
+            r#"
 global:
   imageRegistry: docker.io
 redis:
@@ -424,7 +431,9 @@ redis:
   replicas: 3
 postgresql:
   enabled: false
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let scoped = parent.scope_for_subchart("redis");
 
@@ -442,11 +451,14 @@ postgresql:
 
     #[test]
     fn test_scope_for_subchart_no_global() {
-        let parent = Values::from_yaml(r#"
+        let parent = Values::from_yaml(
+            r#"
 redis:
   host: localhost
   port: 6379
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let scoped = parent.scope_for_subchart("redis");
 
@@ -457,12 +469,15 @@ redis:
 
     #[test]
     fn test_scope_for_subchart_missing_subchart() {
-        let parent = Values::from_yaml(r#"
+        let parent = Values::from_yaml(
+            r#"
 global:
   debug: true
 redis:
   enabled: true
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let scoped = parent.scope_for_subchart("postgresql");
 
@@ -473,21 +488,27 @@ redis:
 
     #[test]
     fn test_for_subchart_with_defaults() {
-        let subchart_defaults = Values::from_yaml(r#"
+        let subchart_defaults = Values::from_yaml(
+            r#"
 enabled: false
 replicas: 1
 image:
   repository: redis
   tag: "7.0"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
-        let parent = Values::from_yaml(r#"
+        let parent = Values::from_yaml(
+            r#"
 global:
   pullPolicy: Always
 redis:
   enabled: true
   replicas: 3
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let result = Values::for_subchart(subchart_defaults, &parent, "redis");
 
@@ -505,14 +526,17 @@ redis:
 
     #[test]
     fn test_export_to_parent() {
-        let subchart = Values::from_yaml(r#"
+        let subchart = Values::from_yaml(
+            r#"
 global:
   imageRegistry: docker.io
 enabled: true
 replicas: 3
 image:
   tag: "7.0"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let exported = subchart.export_to_parent("redis");
 
@@ -527,13 +551,16 @@ image:
 
     #[test]
     fn test_scope_and_export_roundtrip() {
-        let original_parent = Values::from_yaml(r#"
+        let original_parent = Values::from_yaml(
+            r#"
 global:
   env: production
 redis:
   enabled: true
   maxMemory: 256mb
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         // Scope for subchart
         let scoped = original_parent.scope_for_subchart("redis");
@@ -578,13 +605,16 @@ redis:
 
     #[test]
     fn test_for_subchart_json() {
-        let subchart_defaults = Values::from_yaml(r#"
+        let subchart_defaults = Values::from_yaml(
+            r#"
 enabled: false
 replicas: 1
 image:
   repository: redis
   tag: "7.0"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         let parent_json = serde_json::json!({
             "global": {

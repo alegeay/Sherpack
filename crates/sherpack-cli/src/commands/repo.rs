@@ -63,7 +63,10 @@ pub async fn add(
         Err(_) => "Unknown",
     };
 
-    println!("\"{}\" has been added to your repositories ({})", name, repo_type);
+    println!(
+        "\"{}\" has been added to your repositories ({})",
+        name, repo_type
+    );
     println!();
     println!("Run 'sherpack repo update {}' to fetch the index", name);
 
@@ -119,9 +122,9 @@ pub async fn update(name: Option<&str>) -> Result<()> {
     let mut cache = IndexCache::open().map_err(|e| CliError::internal(e.to_string()))?;
 
     let repos_to_update: Vec<_> = if let Some(name) = name {
-        let repo = config.get(name).ok_or_else(|| {
-            CliError::input(format!("Repository '{}' not found", name))
-        })?;
+        let repo = config
+            .get(name)
+            .ok_or_else(|| CliError::input(format!("Repository '{}' not found", name)))?;
         vec![repo.clone()]
     } else {
         config.repositories.clone()
@@ -146,12 +149,7 @@ pub async fn update(name: Option<&str>) -> Result<()> {
                     if repo.repo_type == RepositoryType::Http {
                         if let Ok(packs) = backend.list().await {
                             cache
-                                .upsert_repository(
-                                    &repo.name,
-                                    &repo.url,
-                                    "http",
-                                    None,
-                                )
+                                .upsert_repository(&repo.name, &repo.url, "http", None)
                                 .ok();
                             cache.add_packs(&repo.name, &packs).ok();
                             println!("done ({} packs)", packs.len());

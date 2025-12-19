@@ -6,10 +6,10 @@
 use std::time::Duration;
 
 use kube::{
+    Client,
     api::{Api, DynamicObject, Patch, PatchParams},
     core::GroupVersionKind,
-    discovery::{ApiResource, Discovery, Scope},
-    Client,
+    discovery::{ApiResource, Discovery},
 };
 use serde::{Deserialize, Serialize};
 
@@ -105,12 +105,10 @@ impl ResourceCategory {
         ];
 
         // Extract group from apiVersion (e.g., "apps/v1" -> "apps")
-        let group = api_version.rsplit('/').last().map(|_| {
-            api_version
-                .rsplit('/')
-                .nth(1)
-                .unwrap_or(api_version)
-        });
+        let group = api_version
+            .rsplit('/')
+            .next_back()
+            .map(|_| api_version.rsplit('/').nth(1).unwrap_or(api_version));
 
         match group {
             Some(g) => !core_groups.contains(&g),
@@ -222,7 +220,7 @@ impl CrdManager {
     ///
     /// A CRD is ready when it has the "Established" condition set to "True".
     pub async fn wait_for_crd(&self, name: &str, timeout: Duration) -> Result<()> {
-        use tokio::time::{sleep, Instant};
+        use tokio::time::{Instant, sleep};
 
         let api: Api<DynamicObject> = Api::all_with(
             self.client.clone(),
@@ -324,12 +322,10 @@ impl CrdManager {
             kind: plural.to_string(),
         };
 
-        if let Some((ar, caps)) = discovery.resolve_gvk(&gvk) {
-            let api: Api<DynamicObject> = if caps.scope == Scope::Namespaced {
-                Api::all_with(self.client.clone(), &ar)
-            } else {
-                Api::all_with(self.client.clone(), &ar)
-            };
+        if let Some((ar, _caps)) = discovery.resolve_gvk(&gvk) {
+            // Use all_with for both namespaced and cluster-scoped resources
+            // to search across all namespaces
+            let api: Api<DynamicObject> = Api::all_with(self.client.clone(), &ar);
 
             match api.list(&Default::default()).await {
                 Ok(list) => Ok(list.items.len()),
@@ -351,7 +347,9 @@ impl CrdManager {
 
         api.delete(name, &DeleteParams::default())
             .await
-            .map_err(|e| KubeError::InvalidConfig(format!("Failed to delete CRD {}: {}", name, e)))?;
+            .map_err(|e| {
+                KubeError::InvalidConfig(format!("Failed to delete CRD {}: {}", name, e))
+            })?;
 
         Ok(())
     }
@@ -501,8 +499,12 @@ mod tests {
         assert!(!ResourceCategory::is_custom_api_version("batch/v1"));
 
         // Custom APIs
-        assert!(ResourceCategory::is_custom_api_version("cert-manager.io/v1"));
-        assert!(ResourceCategory::is_custom_api_version("example.com/v1alpha1"));
+        assert!(ResourceCategory::is_custom_api_version(
+            "cert-manager.io/v1"
+        ));
+        assert!(ResourceCategory::is_custom_api_version(
+            "example.com/v1alpha1"
+        ));
     }
 
     #[test]

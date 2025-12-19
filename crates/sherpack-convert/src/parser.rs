@@ -364,12 +364,11 @@ fn parse_command(pair: pest::iterators::Pair<Rule>) -> Result<Command> {
         Rule::identifier | Rule::bare_identifier => {
             // Bare identifier is a function call with no args (like "now" or "fail" or "quote")
             let name = match pair.as_rule() {
-                Rule::bare_identifier => {
-                    pair.into_inner()
-                        .next()
-                        .map(|p| p.as_str().to_string())
-                        .unwrap_or_default()
-                }
+                Rule::bare_identifier => pair
+                    .into_inner()
+                    .next()
+                    .map(|p| p.as_str().to_string())
+                    .unwrap_or_default(),
                 _ => pair.as_str().to_string(),
             };
             Ok(Command::Function { name, args: vec![] })
@@ -533,7 +532,9 @@ fn extract_string_literal(pair: pest::iterators::Pair<Rule>) -> Result<String> {
             return parse_string_literal(inner);
         }
     }
-    Err(ParseError::InvalidString("No string literal found".to_string()))
+    Err(ParseError::InvalidString(
+        "No string literal found".to_string(),
+    ))
 }
 
 fn parse_range_clause(pair: pest::iterators::Pair<Rule>) -> Result<RangeVars> {
@@ -710,7 +711,8 @@ mod tests {
         assert!(result.is_ok(), "And with eq failed: {:?}", result);
 
         // Full nested
-        let result = parse("{{- if and (eq .Values.a \"x\") (or .Values.b .Values.c) }}ok{{- end }}");
+        let result =
+            parse("{{- if and (eq .Values.a \"x\") (or .Values.b .Values.c) }}ok{{- end }}");
         assert!(result.is_ok(), "Full nested failed: {:?}", result);
     }
 

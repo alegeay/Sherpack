@@ -23,13 +23,13 @@
 
 use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
-use kube::api::{Api, DeleteParams, ListParams, PostParams};
 use kube::Client;
+use kube::api::{Api, DeleteParams, ListParams, PostParams};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-use super::{storage_labels, CompressionMethod, MAX_RESOURCE_SIZE};
+use super::{CompressionMethod, MAX_RESOURCE_SIZE, storage_labels};
 use crate::error::{KubeError, Result};
 use crate::release::StoredRelease;
 
@@ -123,19 +123,34 @@ pub fn chunk_labels(
     chunk_index: usize,
 ) -> BTreeMap<String, String> {
     let mut labels = storage_labels(release);
-    labels.insert("sherpack.io/storage-driver".to_string(), "secrets".to_string());
+    labels.insert(
+        "sherpack.io/storage-driver".to_string(),
+        "secrets".to_string(),
+    );
     labels.insert("sherpack.io/chunked".to_string(), "true".to_string());
-    labels.insert("sherpack.io/chunk-index".to_string(), chunk_index.to_string());
-    labels.insert("sherpack.io/chunk-parent".to_string(), parent_key.to_string());
+    labels.insert(
+        "sherpack.io/chunk-index".to_string(),
+        chunk_index.to_string(),
+    );
+    labels.insert(
+        "sherpack.io/chunk-parent".to_string(),
+        parent_key.to_string(),
+    );
     labels
 }
 
 /// Labels for an index Secret (chunked release)
 pub fn index_labels(release: &StoredRelease, compression: &str) -> BTreeMap<String, String> {
     let mut labels = storage_labels(release);
-    labels.insert("sherpack.io/storage-driver".to_string(), "secrets".to_string());
+    labels.insert(
+        "sherpack.io/storage-driver".to_string(),
+        "secrets".to_string(),
+    );
     labels.insert("sherpack.io/chunked".to_string(), "true".to_string());
-    labels.insert("sherpack.io/compression".to_string(), compression.to_string());
+    labels.insert(
+        "sherpack.io/compression".to_string(),
+        compression.to_string(),
+    );
     labels
 }
 
@@ -173,15 +188,12 @@ pub fn build_chunk_secret(
 }
 
 /// Build an index Secret for chunked data
-pub fn build_index_secret(
-    release: &StoredRelease,
-    index: &ChunkedIndex,
-) -> Result<Secret> {
+pub fn build_index_secret(release: &StoredRelease, index: &ChunkedIndex) -> Result<Secret> {
     let key = release.storage_key();
     let labels = index_labels(release, &index.compression);
 
-    let index_json = serde_json::to_string(index)
-        .map_err(|e| KubeError::Serialization(e.to_string()))?;
+    let index_json =
+        serde_json::to_string(index).map_err(|e| KubeError::Serialization(e.to_string()))?;
 
     let mut data = BTreeMap::new();
     data.insert(
@@ -211,8 +223,16 @@ pub fn is_chunked_index(secret: &Secret) -> bool {
         .and_then(|l| l.get("sherpack.io/chunked"))
         .map(|v| v == "true")
         .unwrap_or(false)
-        && secret.data.as_ref().map(|d| d.contains_key("index")).unwrap_or(false)
-        && !secret.data.as_ref().map(|d| d.contains_key("release")).unwrap_or(false)
+        && secret
+            .data
+            .as_ref()
+            .map(|d| d.contains_key("index"))
+            .unwrap_or(false)
+        && !secret
+            .data
+            .as_ref()
+            .map(|d| d.contains_key("release"))
+            .unwrap_or(false)
 }
 
 /// Parse chunked index from Secret
@@ -255,7 +275,8 @@ impl ChunkedStorage {
         let api = self.secrets_api(&release.namespace);
 
         // Clean up any orphaned chunks from failed previous attempts
-        self.cleanup_orphaned_chunks(&release.namespace, &key).await?;
+        self.cleanup_orphaned_chunks(&release.namespace, &key)
+            .await?;
 
         // Split data into chunks
         let chunks = split_into_chunks(encoded_data);
@@ -268,9 +289,9 @@ impl ChunkedStorage {
         let pp = PostParams::default();
         for (i, chunk_data) in chunks.iter().enumerate() {
             let chunk_secret = build_chunk_secret(release, &key, i, chunk_data);
-            api.create(&pp, &chunk_secret).await.map_err(|e| {
-                KubeError::Storage(format!("Failed to create chunk {}: {}", i, e))
-            })?;
+            api.create(&pp, &chunk_secret)
+                .await
+                .map_err(|e| KubeError::Storage(format!("Failed to create chunk {}: {}", i, e)))?;
         }
 
         // Create index Secret last (makes release visible)
@@ -284,11 +305,7 @@ impl ChunkedStorage {
     }
 
     /// Read a chunked release
-    pub async fn read_chunked(
-        &self,
-        namespace: &str,
-        index_secret: &Secret,
-    ) -> Result<String> {
+    pub async fn read_chunked(&self, namespace: &str, index_secret: &Secret) -> Result<String> {
         let index = parse_chunked_index(index_secret)?;
         let parent_key = index_secret
             .metadata
@@ -429,7 +446,8 @@ impl ChunkedStorage {
         self.delete_chunked(&release.namespace, &key).await?;
 
         // Create new chunked release
-        self.create_chunked(release, encoded_data, compression).await
+        self.create_chunked(release, encoded_data, compression)
+            .await
     }
 }
 
@@ -547,7 +565,10 @@ mod tests {
         let labels = chunk_labels(&release, "sh.sherpack.release.v1.myapp.v1", 2);
 
         assert_eq!(labels.get("sherpack.io/chunked"), Some(&"true".to_string()));
-        assert_eq!(labels.get("sherpack.io/chunk-index"), Some(&"2".to_string()));
+        assert_eq!(
+            labels.get("sherpack.io/chunk-index"),
+            Some(&"2".to_string())
+        );
         assert_eq!(
             labels.get("sherpack.io/chunk-parent"),
             Some(&"sh.sherpack.release.v1.myapp.v1".to_string())

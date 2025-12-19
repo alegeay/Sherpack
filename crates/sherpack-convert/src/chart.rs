@@ -294,7 +294,10 @@ impl SherpackPack {
 
         if let Some(ref kube_version) = self.kube_version {
             // Quote kubeVersion if it contains special characters
-            if kube_version.starts_with('>') || kube_version.starts_with('<') || kube_version.starts_with('=') {
+            if kube_version.starts_with('>')
+                || kube_version.starts_with('<')
+                || kube_version.starts_with('=')
+            {
                 yaml.push_str(&format!("  kubeVersion: \"{}\"\n", kube_version));
             } else {
                 yaml.push_str(&format!("  kubeVersion: {}\n", kube_version));

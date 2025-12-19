@@ -2,17 +2,13 @@
 
 use console::style;
 use miette::{IntoDiagnostic, Result};
-use sherpack_core::{create_archive, default_archive_name, LoadedPack};
+use sherpack_core::{LoadedPack, create_archive, default_archive_name};
 use std::path::Path;
 
 use super::signing::sign_archive;
 use crate::util::{format_size, truncate_hash};
 
-pub fn run(
-    path: &Path,
-    output: Option<&Path>,
-    sign_key: Option<&Path>,
-) -> Result<()> {
+pub fn run(path: &Path, output: Option<&Path>, sign_key: Option<&Path>) -> Result<()> {
     // Load the pack
     let pack = LoadedPack::load(path).into_diagnostic()?;
 
@@ -50,8 +46,7 @@ pub fn run(
     }
 
     // Print manifest info
-    let manifest =
-        sherpack_core::read_manifest_from_archive(&created_path).into_diagnostic()?;
+    let manifest = sherpack_core::read_manifest_from_archive(&created_path).into_diagnostic()?;
 
     println!();
     println!("{}:", style("Contents").bold());

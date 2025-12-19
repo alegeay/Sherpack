@@ -37,7 +37,11 @@ where
         // Split multi-document YAML
         for doc in content.split("---") {
             let doc = doc.trim();
-            if doc.is_empty() || doc.lines().all(|l| l.trim().is_empty() || l.trim().starts_with('#')) {
+            if doc.is_empty()
+                || doc
+                    .lines()
+                    .all(|l| l.trim().is_empty() || l.trim().starts_with('#'))
+            {
                 continue;
             }
 
@@ -286,9 +290,8 @@ pub fn lint_crds(
                     .to_string(),
             );
         } else {
-            warning.suggestion = Some(
-                "File uses templating. Will be rendered before installation.".to_string(),
-            );
+            warning.suggestion =
+                Some("File uses templating. Will be rendered before installation.".to_string());
         }
 
         warnings.push(warning);
@@ -450,10 +453,7 @@ metadata:
 
     #[test]
     fn test_lint_templated_crd_in_crds_dir() {
-        let templated = TemplatedCrdFile::analyze(
-            "mycrd.yaml",
-            "name: {{ values.name }}",
-        );
+        let templated = TemplatedCrdFile::analyze("mycrd.yaml", "name: {{ values.name }}");
 
         let warnings = lint_crds(&[], &[], &[templated]);
 
@@ -479,7 +479,11 @@ metadata:
 
         let warnings = lint_crds(&[crd], &[], &[]);
 
-        assert!(warnings.iter().any(|w| w.code == CrdLintCode::ExternalPolicyInPack));
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.code == CrdLintCode::ExternalPolicyInPack)
+        );
     }
 
     #[test]

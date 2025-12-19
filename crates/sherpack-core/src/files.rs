@@ -162,10 +162,12 @@ impl SandboxedFileProvider {
         }
 
         // Canonicalize to resolve symlinks and .. components
-        let canonical = full_path.canonicalize().map_err(|e| CoreError::FileAccess {
-            path: relative.to_string(),
-            message: format!("failed to resolve path: {}", e),
-        })?;
+        let canonical = full_path
+            .canonicalize()
+            .map_err(|e| CoreError::FileAccess {
+                path: relative.to_string(),
+                message: format!("failed to resolve path: {}", e),
+            })?;
 
         // Verify the path is within the sandbox
         if !canonical.starts_with(&self.canonical_root) {
@@ -225,10 +227,9 @@ impl FileProvider for SandboxedFileProvider {
 
     fn glob(&self, pattern: &str) -> Result<Vec<FileEntry>> {
         // Validate the glob pattern
-        let glob_pattern =
-            glob::Pattern::new(pattern).map_err(|e| CoreError::GlobPattern {
-                message: format!("invalid glob pattern '{}': {}", pattern, e),
-            })?;
+        let glob_pattern = glob::Pattern::new(pattern).map_err(|e| CoreError::GlobPattern {
+            message: format!("invalid glob pattern '{}': {}", pattern, e),
+        })?;
 
         let mut entries = Vec::new();
 
@@ -264,10 +265,7 @@ impl FileProvider for SandboxedFileProvider {
 
                 entries.push(FileEntry {
                     path: rel_str.to_string(),
-                    name: entry
-                        .file_name()
-                        .to_string_lossy()
-                        .to_string(),
+                    name: entry.file_name().to_string_lossy().to_string(),
                     content,
                     size,
                 });
@@ -313,9 +311,13 @@ impl MockFileProvider {
     }
 
     /// Add multiple files at once
-    pub fn with_files(mut self, files: impl IntoIterator<Item = (&'static str, &'static str)>) -> Self {
+    pub fn with_files(
+        mut self,
+        files: impl IntoIterator<Item = (&'static str, &'static str)>,
+    ) -> Self {
         for (path, content) in files {
-            self.files.insert(path.to_string(), content.as_bytes().to_vec());
+            self.files
+                .insert(path.to_string(), content.as_bytes().to_vec());
         }
         self
     }
@@ -323,10 +325,13 @@ impl MockFileProvider {
 
 impl FileProvider for MockFileProvider {
     fn get(&self, path: &str) -> Result<Vec<u8>> {
-        self.files.get(path).cloned().ok_or_else(|| CoreError::FileAccess {
-            path: path.to_string(),
-            message: "file not found".to_string(),
-        })
+        self.files
+            .get(path)
+            .cloned()
+            .ok_or_else(|| CoreError::FileAccess {
+                path: path.to_string(),
+                message: "file not found".to_string(),
+            })
     }
 
     fn exists(&self, path: &str) -> bool {
@@ -334,10 +339,9 @@ impl FileProvider for MockFileProvider {
     }
 
     fn glob(&self, pattern: &str) -> Result<Vec<FileEntry>> {
-        let glob_pattern =
-            glob::Pattern::new(pattern).map_err(|e| CoreError::GlobPattern {
-                message: format!("invalid glob pattern '{}': {}", pattern, e),
-            })?;
+        let glob_pattern = glob::Pattern::new(pattern).map_err(|e| CoreError::GlobPattern {
+            message: format!("invalid glob pattern '{}': {}", pattern, e),
+        })?;
 
         let mut entries: Vec<_> = self
             .files
@@ -450,7 +454,11 @@ mod tests {
         // Create test files
         std::fs::write(temp.path().join("config/app.yaml"), "key: value").unwrap();
         std::fs::write(temp.path().join("config/db.yaml"), "host: localhost").unwrap();
-        std::fs::write(temp.path().join("scripts/init.sh"), "#!/bin/bash\necho hello").unwrap();
+        std::fs::write(
+            temp.path().join("scripts/init.sh"),
+            "#!/bin/bash\necho hello",
+        )
+        .unwrap();
         std::fs::write(temp.path().join("README.md"), "# Test Pack").unwrap();
 
         temp
@@ -566,8 +574,7 @@ mod tests {
 
     #[test]
     fn test_files_wrapper() {
-        let mock = MockFileProvider::new()
-            .with_text_file("test.txt", "hello world");
+        let mock = MockFileProvider::new().with_text_file("test.txt", "hello world");
 
         let files = Files::new(mock);
 
@@ -627,6 +634,11 @@ mod tests {
         // Invalid glob pattern (unclosed bracket)
         let result = provider.glob("[invalid");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid glob pattern"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("invalid glob pattern")
+        );
     }
 }

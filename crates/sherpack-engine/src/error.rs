@@ -5,9 +5,9 @@ use miette::{Diagnostic, NamedSource, SourceSpan};
 use thiserror::Error;
 
 use crate::suggestions::{
-    extract_filter_name, extract_function_name, extract_variable_name, suggest_iteration_fix,
-    suggest_undefined_variable, suggest_unknown_filter, suggest_unknown_function,
-    AVAILABLE_FILTERS,
+    AVAILABLE_FILTERS, extract_filter_name, extract_function_name, extract_variable_name,
+    suggest_iteration_fix, suggest_undefined_variable, suggest_unknown_filter,
+    suggest_unknown_function,
 };
 
 /// Main engine error type
@@ -257,14 +257,15 @@ fn extract_expression_from_display(display: &str) -> Option<String> {
         if trimmed.contains(" > ") || trimmed.starts_with("> ") {
             // This is the error line - extract expression
             if let Some(start) = line.find("{{")
-                && let Some(end) = line[start..].find("}}") {
-                    let expr = line[start + 2..start + end].trim();
-                    // Get the first part before any filter (for undefined var)
-                    let expr_part = expr.split('|').next().unwrap_or(expr).trim();
-                    if !expr_part.is_empty() {
-                        return Some(expr_part.to_string());
-                    }
+                && let Some(end) = line[start..].find("}}")
+            {
+                let expr = line[start + 2..start + end].trim();
+                // Get the first part before any filter (for undefined var)
+                let expr_part = expr.split('|').next().unwrap_or(expr).trim();
+                if !expr_part.is_empty() {
+                    return Some(expr_part.to_string());
                 }
+            }
         }
 
         // Also check the line after a ^^^^^ marker for the error line
@@ -273,13 +274,14 @@ fn extract_expression_from_display(display: &str) -> Option<String> {
             if i > 0 {
                 let prev_line = lines[i - 1];
                 if let Some(start) = prev_line.find("{{")
-                    && let Some(end) = prev_line[start..].find("}}") {
-                        let expr = prev_line[start + 2..start + end].trim();
-                        let expr_part = expr.split('|').next().unwrap_or(expr).trim();
-                        if !expr_part.is_empty() {
-                            return Some(expr_part.to_string());
-                        }
+                    && let Some(end) = prev_line[start..].find("}}")
+                {
+                    let expr = prev_line[start + 2..start + end].trim();
+                    let expr_part = expr.split('|').next().unwrap_or(expr).trim();
+                    if !expr_part.is_empty() {
+                        return Some(expr_part.to_string());
                     }
+                }
             }
         }
     }
@@ -302,19 +304,21 @@ fn extract_filter_from_display(display: &str) -> Option<String> {
         if trimmed.contains(" > ") || trimmed.starts_with("> ") {
             // Look for {{ ... | filter }} pattern
             if let Some(start) = line.find("{{")
-                && let Some(end) = line[start..].find("}}") {
-                    let expr = &line[start + 2..start + end];
-                    // Find the pipe and get the filter name
-                    if let Some(pipe_pos) = expr.rfind('|') {
-                        let filter_part = expr[pipe_pos + 1..].trim();
-                        // Filter name is the first word
-                        let filter_name = filter_part.split_whitespace().next();
-                        if let Some(name) = filter_name
-                            && !name.is_empty() {
-                                return Some(name.to_string());
-                            }
+                && let Some(end) = line[start..].find("}}")
+            {
+                let expr = &line[start + 2..start + end];
+                // Find the pipe and get the filter name
+                if let Some(pipe_pos) = expr.rfind('|') {
+                    let filter_part = expr[pipe_pos + 1..].trim();
+                    // Filter name is the first word
+                    let filter_name = filter_part.split_whitespace().next();
+                    if let Some(name) = filter_name
+                        && !name.is_empty()
+                    {
+                        return Some(name.to_string());
                     }
                 }
+            }
         }
     }
 
@@ -358,8 +362,8 @@ fn generate_suggestion(
     match kind {
         TemplateErrorKind::UndefinedVariable => {
             // Try to extract variable name from detailed display first
-            let var_name = extract_expression_from_display(&detailed)
-                .or_else(|| extract_variable_name(&msg));
+            let var_name =
+                extract_expression_from_display(&detailed).or_else(|| extract_variable_name(&msg));
 
             if let Some(var_name) = var_name {
                 // Check for common typo: "value" instead of "values"
@@ -448,8 +452,8 @@ fn generate_suggestion(
 
         TemplateErrorKind::UnknownFilter => {
             // Try to extract filter name from detailed display first
-            let filter_name = extract_filter_from_display(&detailed)
-                .or_else(|| extract_filter_name(&msg));
+            let filter_name =
+                extract_filter_from_display(&detailed).or_else(|| extract_filter_name(&msg));
 
             if let Some(filter_name) = filter_name {
                 return suggest_unknown_filter(&filter_name);
@@ -701,8 +705,14 @@ mod tests {
     fn test_render_report_multiple_errors_same_template() {
         let mut report = RenderReport::new();
 
-        report.add_error("template.yaml".to_string(), TemplateError::simple("error 1"));
-        report.add_error("template.yaml".to_string(), TemplateError::simple("error 2"));
+        report.add_error(
+            "template.yaml".to_string(),
+            TemplateError::simple("error 1"),
+        );
+        report.add_error(
+            "template.yaml".to_string(),
+            TemplateError::simple("error 2"),
+        );
 
         assert_eq!(report.total_errors, 2);
         assert_eq!(report.templates_with_errors(), 1);
@@ -816,10 +826,7 @@ mod tests {
             TemplateErrorKind::UnknownFilter.to_code_string(),
             "unknown_filter"
         );
-        assert_eq!(
-            TemplateErrorKind::SyntaxError.to_code_string(),
-            "syntax"
-        );
+        assert_eq!(TemplateErrorKind::SyntaxError.to_code_string(), "syntax");
     }
 
     #[test]

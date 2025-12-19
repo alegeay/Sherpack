@@ -10,53 +10,83 @@
 //! - **Progress Reporting**: Real-time feedback during deployment operations
 //! - **Annotations**: Helm-compatible annotation parsing with Sherpack extensions
 
-pub mod error;
-pub mod release;
-pub mod storage;
-pub mod hooks;
-pub mod diff;
-pub mod health;
 pub mod actions;
-pub mod resources;
-pub mod client;
 pub mod annotations;
-pub mod waves;
-pub mod progress;
+pub mod client;
 pub mod crd;
+pub mod diff;
+pub mod error;
+pub mod health;
+pub mod hooks;
+pub mod progress;
+pub mod release;
+pub mod resources;
+pub mod storage;
+pub mod waves;
 
-pub use error::{KubeError, Result};
-pub use release::{StoredRelease, ReleaseState, ValueSource, ValuesProvenance};
-pub use storage::{StorageDriver, StorageConfig, CompressionMethod, LargeReleaseStrategy, MockStorageDriver, OperationCounts};
-pub use hooks::{Hook, HookPhase, HookFailurePolicy, HookCleanupPolicy, HookExecutor};
-pub use diff::{DiffEngine, DiffResult, ResourceChange, ChangeType};
-pub use health::{HealthChecker, HealthCheckConfig, HealthStatus, ResourceHealth};
-pub use actions::{InstallOptions, UpgradeOptions, UninstallOptions, RollbackOptions};
-pub use resources::{ResourceManager, ApplyResult, DeleteResult, OperationSummary};
+pub use actions::{InstallOptions, RollbackOptions, UninstallOptions, UpgradeOptions};
+pub use annotations::{DeletePolicy, FailurePolicy, ResourceRef};
 pub use client::KubeClient;
-pub use annotations::{ResourceRef, DeletePolicy, FailurePolicy};
-pub use waves::{ExecutionPlan, Wave, Resource, WaveExecutionConfig};
-pub use progress::{ProgressReporter, ResourceStatus, ResourceState};
+pub use diff::{ChangeType, DiffEngine, DiffResult, ResourceChange};
+pub use error::{KubeError, Result};
+pub use health::{HealthCheckConfig, HealthChecker, HealthStatus, ResourceHealth};
+pub use hooks::{Hook, HookCleanupPolicy, HookExecutor, HookFailurePolicy, HookPhase};
+pub use progress::{ProgressReporter, ResourceState, ResourceStatus};
+pub use release::{ReleaseState, StoredRelease, ValueSource, ValuesProvenance};
+pub use resources::{ApplyResult, DeleteResult, OperationSummary, ResourceManager};
+pub use storage::{
+    CompressionMethod, LargeReleaseStrategy, MockStorageDriver, OperationCounts, StorageConfig,
+    StorageDriver,
+};
+pub use waves::{ExecutionPlan, Resource, Wave, WaveExecutionConfig};
 // CRD handling - Phase 2 Safe Updates
 pub use crd::{
-    // Apply operations
-    ResourceCategory, CrdManager, CrdApplyResult, CrdUpgradeResult,
-    // Schema types
-    CrdSchema, CrdScope, CrdParser,
+    ChangeKind,
+    ChangeSeverity,
+    CrdAnalysis,
     // Analysis types
-    CrdAnalyzer, CrdAnalysis, CrdChange, ChangeKind, ChangeSeverity,
+    CrdAnalyzer,
+    CrdApplyResult,
+    CrdChange,
+    CrdManager,
+    CrdParser,
+    // Schema types
+    CrdSchema,
+    CrdScope,
+    CrdUpgradeResult,
+    ForceStrategy,
+    // Apply operations
+    ResourceCategory,
+    SafeStrategy,
+    SkipStrategy,
+    UpgradeDecision,
     // Strategy types
-    UpgradeStrategy, UpgradeDecision, SafeStrategy, ForceStrategy, SkipStrategy,
+    UpgradeStrategy,
     strategy_from_options,
 };
 
 // CRD handling - Phase 3 Templated CRDs
 pub use crd::{
-    // Policy types
-    CrdPolicy, CrdLocation, CrdOwnership, DetectedCrd,
-    CRD_POLICY_ANNOTATION, HELM_RESOURCE_POLICY,
+    CRD_POLICY_ANNOTATION,
+    CrdDeletionImpact,
     // Detection types
-    CrdLintCode, CrdLintWarning, LintSeverity, TemplatedCrdFile, JinjaConstruct,
-    contains_jinja_syntax, detect_crds_in_manifests, is_crd_manifest, lint_crds,
+    CrdLintCode,
+    CrdLintWarning,
+    CrdLocation,
+    CrdOwnership,
+    // Policy types
+    CrdPolicy,
     // Protection types
-    CrdProtection, CrdDeletionImpact, DeletionImpactSummary, DeletionConfirmation,
+    CrdProtection,
+    DeletionConfirmation,
+    DeletionImpactSummary,
+    DetectedCrd,
+    HELM_RESOURCE_POLICY,
+    JinjaConstruct,
+    LintSeverity,
+    TemplatedCrdFile,
+    contains_jinja_syntax,
+    detect_crds_in_manifests,
+    is_crd_manifest,
+    lint_crds,
 };

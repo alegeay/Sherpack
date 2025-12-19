@@ -10,10 +10,7 @@ use sherpack_kube::{
 use crate::error::Result;
 
 /// Run the recover command
-pub async fn run(
-    name: &str,
-    namespace: &str,
-) -> Result<()> {
+pub async fn run(name: &str, namespace: &str) -> Result<()> {
     println!(
         "{} Attempting to recover release {}",
         style("→").blue().bold(),
@@ -26,8 +23,7 @@ pub async fn run(
         .join("sherpack")
         .join("releases");
 
-    let storage = FileDriver::new(storage_path, StorageConfig::default())
-        .into_diagnostic()?;
+    let storage = FileDriver::new(storage_path, StorageConfig::default()).into_diagnostic()?;
 
     // Create client
     let client = KubeClient::new(storage).await.into_diagnostic()?;

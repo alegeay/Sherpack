@@ -1,13 +1,13 @@
 //! Install command - deploy a pack to Kubernetes
 
-use std::path::Path;
 use console::style;
 use miette::IntoDiagnostic;
 use sherpack_core::{LoadedPack, Values, parse_set_values};
 use sherpack_kube::{
-    KubeClient, InstallOptions,
+    InstallOptions, KubeClient,
     storage::{FileDriver, StorageConfig},
 };
+use std::path::Path;
 
 use crate::error::Result;
 
@@ -81,8 +81,7 @@ pub async fn run(
         .join("sherpack")
         .join("releases");
 
-    let storage = FileDriver::new(storage_path, StorageConfig::default())
-        .into_diagnostic()?;
+    let storage = FileDriver::new(storage_path, StorageConfig::default()).into_diagnostic()?;
 
     // Create client
     let client = KubeClient::new(storage).await.into_diagnostic()?;
@@ -100,7 +99,10 @@ pub async fn run(
     }
 
     // Execute install
-    let release = client.install(&pack, values, &options).await.into_diagnostic()?;
+    let release = client
+        .install(&pack, values, &options)
+        .await
+        .into_diagnostic()?;
 
     if dry_run {
         println!(

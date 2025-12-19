@@ -3,15 +3,15 @@
 //! This module provides `PackRenderer`, which orchestrates the rendering
 //! of a pack and all its subcharts with proper value scoping.
 
-use std::collections::HashMap;
 use indexmap::IndexMap;
+use std::collections::HashMap;
 
 use serde_json::Value as JsonValue;
-use sherpack_core::{LoadedPack, TemplateContext, Values, Dependency};
+use sherpack_core::{Dependency, LoadedPack, TemplateContext, Values};
 
 use crate::engine::Engine;
-use crate::error::{EngineError, RenderReport, RenderIssue, TemplateError};
-use crate::subchart::{SubchartConfig, SubchartInfo, DiscoveryResult};
+use crate::error::{EngineError, RenderIssue, RenderReport, TemplateError};
+use crate::subchart::{DiscoveryResult, SubchartConfig, SubchartInfo};
 
 /// Result of rendering a pack (with or without subcharts)
 #[derive(Debug)]
@@ -66,11 +66,7 @@ impl PackRenderer {
     ///
     /// This scans the subcharts directory (default: `charts/`) for valid packs
     /// and evaluates their conditions against the provided values.
-    pub fn discover_subcharts(
-        &self,
-        pack: &LoadedPack,
-        values: &JsonValue,
-    ) -> DiscoveryResult {
+    pub fn discover_subcharts(&self, pack: &LoadedPack, values: &JsonValue) -> DiscoveryResult {
         let mut result = DiscoveryResult::new();
         let subcharts_dir = pack.root.join(&self.config.subcharts_dir);
 
@@ -105,7 +101,9 @@ impl PackRenderer {
             let entry = match entry {
                 Ok(e) => e,
                 Err(e) => {
-                    result.warnings.push(format!("Failed to read directory entry: {}", e));
+                    result
+                        .warnings
+                        .push(format!("Failed to read directory entry: {}", e));
                     continue;
                 }
             };
@@ -124,10 +122,9 @@ impl PackRenderer {
             let subchart_pack = match LoadedPack::load(&path) {
                 Ok(p) => p,
                 Err(e) => {
-                    result.warnings.push(format!(
-                        "Failed to load subchart '{}': {}",
-                        dir_name, e
-                    ));
+                    result
+                        .warnings
+                        .push(format!("Failed to load subchart '{}': {}", dir_name, e));
                     continue;
                 }
             };
@@ -184,7 +181,10 @@ impl PackRenderer {
 
         // Check static enabled flag
         if !dep.enabled {
-            return (false, Some("Statically disabled (enabled: false)".to_string()));
+            return (
+                false,
+                Some("Statically disabled (enabled: false)".to_string()),
+            );
         }
 
         // Check condition
@@ -298,7 +298,10 @@ impl PackRenderer {
             } else {
                 report.add_warning(
                     "subchart_missing",
-                    format!("Subchart '{}' not found in {}/", missing, self.config.subcharts_dir),
+                    format!(
+                        "Subchart '{}' not found in {}/",
+                        missing, self.config.subcharts_dir
+                    ),
                 );
             }
         }
@@ -323,10 +326,7 @@ impl PackRenderer {
                     Err(e) => {
                         report.add_warning(
                             "subchart_values",
-                            format!(
-                                "Failed to load values.yaml for '{}': {}",
-                                subchart.name, e
-                            ),
+                            format!("Failed to load values.yaml for '{}': {}", subchart.name, e),
                         );
                         Values::new()
                     }
@@ -336,11 +336,8 @@ impl PackRenderer {
             };
 
             // Scope values for this subchart
-            let scoped_values = Values::for_subchart_json(
-                subchart_defaults,
-                &context.values,
-                &subchart.name,
-            );
+            let scoped_values =
+                Values::for_subchart_json(subchart_defaults, &context.values, &subchart.name);
 
             // Create context for subchart
             let subchart_context = TemplateContext::new(
@@ -350,11 +347,8 @@ impl PackRenderer {
             );
 
             // Recursively render subchart (handles its own subcharts)
-            let subchart_result = self.render_recursive(
-                &subchart.pack,
-                &subchart_context,
-                depth + 1,
-            );
+            let subchart_result =
+                self.render_recursive(&subchart.pack, &subchart_context, depth + 1);
 
             // Merge subchart manifests with prefix
             for (name, manifest) in subchart_result.manifests {
@@ -620,8 +614,8 @@ mod tests {
 
     #[test]
     fn test_render_pack_with_subcharts() {
-        use std::path::PathBuf;
         use sherpack_core::ReleaseInfo;
+        use std::path::PathBuf;
 
         let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -637,7 +631,8 @@ mod tests {
         let pack = LoadedPack::load(&fixture_path).expect("Failed to load fixture");
         let renderer = PackRenderer::new(Engine::lenient());
 
-        let values = Values::from_yaml(r#"
+        let values = Values::from_yaml(
+            r#"
 global:
   imageRegistry: docker.io
   pullPolicy: IfNotPresent
@@ -655,7 +650,9 @@ redis:
     password: secret123
 postgresql:
   enabled: false
-"#).expect("Failed to parse values");
+"#,
+        )
+        .expect("Failed to parse values");
 
         let release = ReleaseInfo::for_install("test-release", "default");
         let context = TemplateContext::new(values, release, &pack.pack.metadata);
@@ -669,25 +666,37 @@ postgresql:
         assert!(result.manifests.contains_key("redis/deployment.yaml"));
 
         // Should NOT have postgresql manifest (disabled)
-        let has_postgresql = result.manifests.keys().any(|k| k.starts_with("postgresql/"));
+        let has_postgresql = result
+            .manifests
+            .keys()
+            .any(|k| k.starts_with("postgresql/"));
         assert!(!has_postgresql, "PostgreSQL should be disabled");
 
         // Verify redis manifest uses scoped values
         let redis_manifest = result.manifests.get("redis/deployment.yaml").unwrap();
-        assert!(redis_manifest.contains("replicas: 3"), "Should use parent's redis.replicas=3");
-        assert!(redis_manifest.contains("REDIS_PASSWORD"), "Auth should be enabled");
+        assert!(
+            redis_manifest.contains("replicas: 3"),
+            "Should use parent's redis.replicas=3"
+        );
+        assert!(
+            redis_manifest.contains("REDIS_PASSWORD"),
+            "Auth should be enabled"
+        );
 
         // Verify parent manifest has correct content
         let parent_manifest = result.manifests.get("deployment.yaml").unwrap();
         assert!(parent_manifest.contains("test-release-my-application"));
         assert!(parent_manifest.contains("REDIS_HOST"));
-        assert!(!parent_manifest.contains("DATABASE_HOST"), "PostgreSQL env should not be present");
+        assert!(
+            !parent_manifest.contains("DATABASE_HOST"),
+            "PostgreSQL env should not be present"
+        );
     }
 
     #[test]
     fn test_subchart_global_values_passed() {
-        use std::path::PathBuf;
         use sherpack_core::ReleaseInfo;
+        use std::path::PathBuf;
 
         let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -703,7 +712,8 @@ postgresql:
         let pack = LoadedPack::load(&fixture_path).expect("Failed to load fixture");
         let renderer = PackRenderer::new(Engine::lenient());
 
-        let values = Values::from_yaml(r#"
+        let values = Values::from_yaml(
+            r#"
 global:
   imageRegistry: my-registry.io
   pullPolicy: Always
@@ -717,7 +727,9 @@ redis:
   enabled: true
 postgresql:
   enabled: false
-"#).expect("Failed to parse values");
+"#,
+        )
+        .expect("Failed to parse values");
 
         let release = ReleaseInfo::for_install("test", "default");
         let context = TemplateContext::new(values, release, &pack.pack.metadata);
@@ -726,6 +738,9 @@ postgresql:
 
         // Redis manifest should use global.imageRegistry
         let redis_manifest = result.manifests.get("redis/deployment.yaml").unwrap();
-        assert!(redis_manifest.contains("my-registry.io"), "Should use global imageRegistry");
+        assert!(
+            redis_manifest.contains("my-registry.io"),
+            "Should use global imageRegistry"
+        );
     }
 }

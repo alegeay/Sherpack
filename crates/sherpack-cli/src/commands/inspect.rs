@@ -2,23 +2,18 @@
 
 use console::style;
 use miette::{IntoDiagnostic, Result};
-use sherpack_core::{list_archive, read_manifest_from_archive, read_file_from_archive};
+use sherpack_core::{list_archive, read_file_from_archive, read_manifest_from_archive};
 use std::path::Path;
 
 use crate::util::{format_size, truncate_hash};
 
-pub fn run(
-    archive_path: &Path,
-    show_manifest: bool,
-    show_checksums: bool,
-) -> Result<()> {
+pub fn run(archive_path: &Path, show_manifest: bool, show_checksums: bool) -> Result<()> {
     // Read manifest
     let manifest = read_manifest_from_archive(archive_path).into_diagnostic()?;
 
     if show_manifest {
         // Just print the raw manifest
-        let manifest_bytes = read_file_from_archive(archive_path, "MANIFEST")
-            .into_diagnostic()?;
+        let manifest_bytes = read_file_from_archive(archive_path, "MANIFEST").into_diagnostic()?;
         let manifest_text = String::from_utf8(manifest_bytes)
             .map_err(|e| miette::miette!("Invalid UTF-8 in MANIFEST: {}", e))?;
         println!("{}", manifest_text);
@@ -83,11 +78,7 @@ pub fn run(
     let total_size: u64 = entries.iter().filter(|e| !e.is_dir).map(|e| e.size).sum();
 
     println!();
-    println!(
-        "{} files, {} total",
-        file_count,
-        format_size(total_size)
-    );
+    println!("{} files, {} total", file_count, format_size(total_size));
 
     Ok(())
 }

@@ -60,10 +60,19 @@ pub fn b64encode(value: String) -> String {
 pub fn b64decode(value: String) -> Result<String, Error> {
     let decoded = base64::engine::general_purpose::STANDARD
         .decode(value.as_bytes())
-        .map_err(|e| Error::new(ErrorKind::InvalidOperation, format!("base64 decode error: {}", e)))?;
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidOperation,
+                format!("base64 decode error: {}", e),
+            )
+        })?;
 
-    String::from_utf8(decoded)
-        .map_err(|e| Error::new(ErrorKind::InvalidOperation, format!("UTF-8 decode error: {}", e)))
+    String::from_utf8(decoded).map_err(|e| {
+        Error::new(
+            ErrorKind::InvalidOperation,
+            format!("UTF-8 decode error: {}", e),
+        )
+    })
 }
 
 /// Quote a string with double quotes
@@ -207,7 +216,10 @@ pub fn coalesce(args: Vec<Value>) -> Value {
 ///
 /// Usage: {% if values | haskey("foo") %}
 pub fn haskey(value: Value, key: String) -> bool {
-    value.get_attr(&key).map(|v| !v.is_undefined()).unwrap_or(false)
+    value
+        .get_attr(&key)
+        .map(|v| !v.is_undefined())
+        .unwrap_or(false)
 }
 
 /// Get all keys from a dict
@@ -264,7 +276,7 @@ fn deep_merge_json(base: &mut serde_json::Value, overlay: &serde_json::Value) {
 ///
 /// Usage: {{ value | sha256 }}
 pub fn sha256sum(value: String) -> String {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
     format!("{:x}", hasher.finalize())
@@ -425,7 +437,8 @@ pub fn tostrings(value: Value, kwargs: minijinja::value::Kwargs) -> Result<Vec<S
 ///
 /// Usage: {{ version | semver_match(">=1.21.0") }}
 pub fn semver_match(version: Value, constraint: String) -> Result<bool, Error> {
-    let version_str = version.as_str()
+    let version_str = version
+        .as_str()
         .ok_or_else(|| Error::new(ErrorKind::InvalidOperation, "version must be a string"))?;
 
     // Clean up the version string (remove 'v' prefix if present)
@@ -436,7 +449,9 @@ pub fn semver_match(version: Value, constraint: String) -> Result<bool, Error> {
         Ok(v) => v,
         Err(_) => {
             // Try to parse as major.minor.patch only
-            let parts: Vec<&str> = version_clean.split('-').next()
+            let parts: Vec<&str> = version_clean
+                .split('-')
+                .next()
                 .unwrap_or(version_clean)
                 .split('.')
                 .collect();
@@ -451,7 +466,10 @@ pub fn semver_match(version: Value, constraint: String) -> Result<bool, Error> {
                 let minor: u64 = parts[1].parse().unwrap_or(0);
                 Version::new(major, minor, 0)
             } else {
-                return Err(Error::new(ErrorKind::InvalidOperation, format!("Invalid version format: {}", version_str)));
+                return Err(Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!("Invalid version format: {}", version_str),
+                ));
             }
         }
     };
@@ -463,11 +481,18 @@ pub fn semver_match(version: Value, constraint: String) -> Result<bool, Error> {
     let req = VersionReq::parse(constraint_clean)
         .or_else(|_| {
             // Try to handle Kubernetes-style constraints like ">=1.31.0-0"
-            let constraint_base = constraint_clean.split('-').next()
+            let constraint_base = constraint_clean
+                .split('-')
+                .next()
                 .unwrap_or(constraint_clean);
             VersionReq::parse(constraint_base)
         })
-        .map_err(|e| Error::new(ErrorKind::InvalidOperation, format!("Invalid constraint '{}': {}", constraint, e)))?;
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidOperation,
+                format!("Invalid constraint '{}': {}", constraint, e),
+            )
+        })?;
 
     Ok(req.matches(&parsed_version))
 }
@@ -482,17 +507,28 @@ pub fn int(value: Value) -> Result<i64, Error> {
             } else if let Ok(f) = f64::try_from(value.clone()) {
                 Ok(f as i64)
             } else {
-                Err(Error::new(ErrorKind::InvalidOperation, "Cannot convert to int"))
+                Err(Error::new(
+                    ErrorKind::InvalidOperation,
+                    "Cannot convert to int",
+                ))
             }
         }
         ValueKind::String => {
             let s = value.as_str().unwrap_or("");
             s.parse::<i64>()
                 .or_else(|_| s.parse::<f64>().map(|f| f as i64))
-                .map_err(|_| Error::new(ErrorKind::InvalidOperation, format!("Cannot parse '{}' as int", s)))
+                .map_err(|_| {
+                    Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!("Cannot parse '{}' as int", s),
+                    )
+                })
         }
         ValueKind::Bool => Ok(if value.is_true() { 1 } else { 0 }),
-        _ => Err(Error::new(ErrorKind::InvalidOperation, format!("Cannot convert {:?} to int", value.kind()))),
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("Cannot convert {:?} to int", value.kind()),
+        )),
     }
 }
 
@@ -506,11 +542,18 @@ pub fn float(value: Value) -> Result<f64, Error> {
         }
         ValueKind::String => {
             let s = value.as_str().unwrap_or("");
-            s.parse::<f64>()
-                .map_err(|_| Error::new(ErrorKind::InvalidOperation, format!("Cannot parse '{}' as float", s)))
+            s.parse::<f64>().map_err(|_| {
+                Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!("Cannot parse '{}' as float", s),
+                )
+            })
         }
         ValueKind::Bool => Ok(if value.is_true() { 1.0 } else { 0.0 }),
-        _ => Err(Error::new(ErrorKind::InvalidOperation, format!("Cannot convert {:?} to float", value.kind()))),
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("Cannot convert {:?} to float", value.kind()),
+        )),
     }
 }
 
@@ -523,10 +566,16 @@ pub fn abs(value: Value) -> Result<Value, Error> {
             } else if let Ok(f) = f64::try_from(value) {
                 Ok(Value::from(f.abs()))
             } else {
-                Err(Error::new(ErrorKind::InvalidOperation, "Cannot get absolute value"))
+                Err(Error::new(
+                    ErrorKind::InvalidOperation,
+                    "Cannot get absolute value",
+                ))
             }
         }
-        _ => Err(Error::new(ErrorKind::InvalidOperation, format!("abs requires a number, got {:?}", value.kind()))),
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("abs requires a number, got {:?}", value.kind()),
+        )),
     }
 }
 
@@ -570,7 +619,9 @@ pub fn cleanpath(path: String) -> String {
     for part in path.split('/') {
         match part {
             "" | "." => continue,
-            ".." => { parts.pop(); }
+            ".." => {
+                parts.pop();
+            }
             _ => parts.push(part),
         }
     }
@@ -594,7 +645,12 @@ pub fn cleanpath(path: String) -> String {
 pub fn regex_match(value: String, pattern: String) -> Result<bool, Error> {
     regex::Regex::new(&pattern)
         .map(|re| re.is_match(&value))
-        .map_err(|e| Error::new(ErrorKind::InvalidOperation, format!("invalid regex '{}': {}", pattern, e)))
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidOperation,
+                format!("invalid regex '{}': {}", pattern, e),
+            )
+        })
 }
 
 /// Replace all matches with replacement (supports capture groups: $1, $2, etc.)
@@ -602,23 +658,46 @@ pub fn regex_match(value: String, pattern: String) -> Result<bool, Error> {
 pub fn regex_replace(value: String, pattern: String, replacement: String) -> Result<String, Error> {
     regex::Regex::new(&pattern)
         .map(|re| re.replace_all(&value, replacement.as_str()).to_string())
-        .map_err(|e| Error::new(ErrorKind::InvalidOperation, format!("invalid regex '{}': {}", pattern, e)))
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidOperation,
+                format!("invalid regex '{}': {}", pattern, e),
+            )
+        })
 }
 
 /// Find first match, returns empty string if no match
 /// {{ "port: 8080" | regex_find("[0-9]+") }}  →  "8080"
 pub fn regex_find(value: String, pattern: String) -> Result<String, Error> {
     regex::Regex::new(&pattern)
-        .map(|re| re.find(&value).map(|m| m.as_str().to_string()).unwrap_or_default())
-        .map_err(|e| Error::new(ErrorKind::InvalidOperation, format!("invalid regex '{}': {}", pattern, e)))
+        .map(|re| {
+            re.find(&value)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default()
+        })
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidOperation,
+                format!("invalid regex '{}': {}", pattern, e),
+            )
+        })
 }
 
 /// Find all matches
 /// {{ "a1b2c3" | regex_find_all("[0-9]+") }}  →  ["1", "2", "3"]
 pub fn regex_find_all(value: String, pattern: String) -> Result<Vec<String>, Error> {
     regex::Regex::new(&pattern)
-        .map(|re| re.find_iter(&value).map(|m| m.as_str().to_string()).collect())
-        .map_err(|e| Error::new(ErrorKind::InvalidOperation, format!("invalid regex '{}': {}", pattern, e)))
+        .map(|re| {
+            re.find_iter(&value)
+                .map(|m| m.as_str().to_string())
+                .collect()
+        })
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidOperation,
+                format!("invalid regex '{}': {}", pattern, e),
+            )
+        })
 }
 
 // =============================================================================
@@ -630,13 +709,17 @@ pub fn regex_find_all(value: String, pattern: String) -> Result<Vec<String>, Err
 pub fn values(dict: Value) -> Result<Value, Error> {
     match dict.kind() {
         ValueKind::Map => {
-            let items: Vec<Value> = dict.try_iter()
+            let items: Vec<Value> = dict
+                .try_iter()
                 .map_err(|_| Error::new(ErrorKind::InvalidOperation, "cannot iterate dict"))?
                 .filter_map(|k| dict.get_item(&k).ok())
                 .collect();
             Ok(Value::from(items))
         }
-        _ => Err(Error::new(ErrorKind::InvalidOperation, format!("values requires a dict, got {:?}", dict.kind()))),
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("values requires a dict, got {:?}", dict.kind()),
+        )),
     }
 }
 
@@ -647,15 +730,18 @@ pub fn pick(dict: Value, keys: &[Value]) -> Result<Value, Error> {
         ValueKind::Map => {
             let mut result = indexmap::IndexMap::new();
             for key in keys {
-                if let Some(key_str) = key.as_str() {
-                    if let Ok(val) = dict.get_item(key) {
-                        result.insert(key_str.to_string(), val);
-                    }
+                if let Some(key_str) = key.as_str()
+                    && let Ok(val) = dict.get_item(key)
+                {
+                    result.insert(key_str.to_string(), val);
                 }
             }
             Ok(Value::from_iter(result))
         }
-        _ => Err(Error::new(ErrorKind::InvalidOperation, format!("pick requires a dict, got {:?}", dict.kind()))),
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("pick requires a dict, got {:?}", dict.kind()),
+        )),
     }
 }
 
@@ -664,25 +750,28 @@ pub fn pick(dict: Value, keys: &[Value]) -> Result<Value, Error> {
 pub fn omit(dict: Value, keys: &[Value]) -> Result<Value, Error> {
     match dict.kind() {
         ValueKind::Map => {
-            let exclude: std::collections::HashSet<String> = keys.iter()
+            let exclude: std::collections::HashSet<String> = keys
+                .iter()
                 .filter_map(|k| k.as_str().map(|s| s.to_string()))
                 .collect();
 
             let mut result = indexmap::IndexMap::new();
             if let Ok(iter) = dict.try_iter() {
                 for key in iter {
-                    if let Some(key_str) = key.as_str() {
-                        if !exclude.contains(key_str) {
-                            if let Ok(val) = dict.get_item(&key) {
-                                result.insert(key_str.to_string(), val);
-                            }
-                        }
+                    if let Some(key_str) = key.as_str()
+                        && !exclude.contains(key_str)
+                        && let Ok(val) = dict.get_item(&key)
+                    {
+                        result.insert(key_str.to_string(), val);
                     }
                 }
             }
             Ok(Value::from_iter(result))
         }
-        _ => Err(Error::new(ErrorKind::InvalidOperation, format!("omit requires a dict, got {:?}", dict.kind()))),
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("omit requires a dict, got {:?}", dict.kind()),
+        )),
     }
 }
 
@@ -695,13 +784,17 @@ pub fn omit(dict: Value, keys: &[Value]) -> Result<Value, Error> {
 pub fn append(list: Value, item: Value) -> Result<Value, Error> {
     match list.kind() {
         ValueKind::Seq => {
-            let mut items: Vec<Value> = list.try_iter()
+            let mut items: Vec<Value> = list
+                .try_iter()
                 .map_err(|_| Error::new(ErrorKind::InvalidOperation, "cannot iterate list"))?
                 .collect();
             items.push(item);
             Ok(Value::from(items))
         }
-        _ => Err(Error::new(ErrorKind::InvalidOperation, format!("append requires a list, got {:?}", list.kind()))),
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("append requires a list, got {:?}", list.kind()),
+        )),
     }
 }
 
@@ -711,11 +804,16 @@ pub fn prepend(list: Value, item: Value) -> Result<Value, Error> {
     match list.kind() {
         ValueKind::Seq => {
             let mut items: Vec<Value> = vec![item];
-            items.extend(list.try_iter()
-                .map_err(|_| Error::new(ErrorKind::InvalidOperation, "cannot iterate list"))?);
+            items.extend(
+                list.try_iter()
+                    .map_err(|_| Error::new(ErrorKind::InvalidOperation, "cannot iterate list"))?,
+            );
             Ok(Value::from(items))
         }
-        _ => Err(Error::new(ErrorKind::InvalidOperation, format!("prepend requires a list, got {:?}", list.kind()))),
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("prepend requires a list, got {:?}", list.kind()),
+        )),
     }
 }
 
@@ -724,14 +822,19 @@ pub fn prepend(list: Value, item: Value) -> Result<Value, Error> {
 pub fn concat(list1: Value, list2: Value) -> Result<Value, Error> {
     match (list1.kind(), list2.kind()) {
         (ValueKind::Seq, ValueKind::Seq) => {
-            let mut items: Vec<Value> = list1.try_iter()
+            let mut items: Vec<Value> = list1
+                .try_iter()
                 .map_err(|_| Error::new(ErrorKind::InvalidOperation, "cannot iterate first list"))?
                 .collect();
-            items.extend(list2.try_iter()
-                .map_err(|_| Error::new(ErrorKind::InvalidOperation, "cannot iterate second list"))?);
+            items.extend(list2.try_iter().map_err(|_| {
+                Error::new(ErrorKind::InvalidOperation, "cannot iterate second list")
+            })?);
             Ok(Value::from(items))
         }
-        _ => Err(Error::new(ErrorKind::InvalidOperation, "concat requires two lists")),
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            "concat requires two lists",
+        )),
     }
 }
 
@@ -740,13 +843,17 @@ pub fn concat(list1: Value, list2: Value) -> Result<Value, Error> {
 pub fn without(list: Value, exclude: &[Value]) -> Result<Value, Error> {
     match list.kind() {
         ValueKind::Seq => {
-            let items: Vec<Value> = list.try_iter()
+            let items: Vec<Value> = list
+                .try_iter()
                 .map_err(|_| Error::new(ErrorKind::InvalidOperation, "cannot iterate list"))?
                 .filter(|item| !exclude.contains(item))
                 .collect();
             Ok(Value::from(items))
         }
-        _ => Err(Error::new(ErrorKind::InvalidOperation, format!("without requires a list, got {:?}", list.kind()))),
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("without requires a list, got {:?}", list.kind()),
+        )),
     }
 }
 
@@ -755,21 +862,23 @@ pub fn without(list: Value, exclude: &[Value]) -> Result<Value, Error> {
 pub fn compact(list: Value) -> Result<Value, Error> {
     match list.kind() {
         ValueKind::Seq => {
-            let items: Vec<Value> = list.try_iter()
+            let items: Vec<Value> = list
+                .try_iter()
                 .map_err(|_| Error::new(ErrorKind::InvalidOperation, "cannot iterate list"))?
-                .filter(|item| {
-                    match item.kind() {
-                        ValueKind::Undefined | ValueKind::None => false,
-                        ValueKind::String => !item.as_str().unwrap_or("").is_empty(),
-                        ValueKind::Seq => item.len().unwrap_or(0) > 0,
-                        ValueKind::Map => item.len().unwrap_or(0) > 0,
-                        _ => true,
-                    }
+                .filter(|item| match item.kind() {
+                    ValueKind::Undefined | ValueKind::None => false,
+                    ValueKind::String => !item.as_str().unwrap_or("").is_empty(),
+                    ValueKind::Seq => item.len().unwrap_or(0) > 0,
+                    ValueKind::Map => item.len().unwrap_or(0) > 0,
+                    _ => true,
                 })
                 .collect();
             Ok(Value::from(items))
         }
-        _ => Err(Error::new(ErrorKind::InvalidOperation, format!("compact requires a list, got {:?}", list.kind()))),
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("compact requires a list, got {:?}", list.kind()),
+        )),
     }
 }
 
@@ -787,10 +896,16 @@ pub fn floor(value: Value) -> Result<i64, Error> {
             } else if let Ok(f) = f64::try_from(value) {
                 Ok(f.floor() as i64)
             } else {
-                Err(Error::new(ErrorKind::InvalidOperation, "cannot convert to number"))
+                Err(Error::new(
+                    ErrorKind::InvalidOperation,
+                    "cannot convert to number",
+                ))
             }
         }
-        _ => Err(Error::new(ErrorKind::InvalidOperation, format!("floor requires a number, got {:?}", value.kind()))),
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("floor requires a number, got {:?}", value.kind()),
+        )),
     }
 }
 
@@ -804,10 +919,16 @@ pub fn ceil(value: Value) -> Result<i64, Error> {
             } else if let Ok(f) = f64::try_from(value) {
                 Ok(f.ceil() as i64)
             } else {
-                Err(Error::new(ErrorKind::InvalidOperation, "cannot convert to number"))
+                Err(Error::new(
+                    ErrorKind::InvalidOperation,
+                    "cannot convert to number",
+                ))
             }
         }
-        _ => Err(Error::new(ErrorKind::InvalidOperation, format!("ceil requires a number, got {:?}", value.kind()))),
+        _ => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("ceil requires a number, got {:?}", value.kind()),
+        )),
     }
 }
 
@@ -818,7 +939,7 @@ pub fn ceil(value: Value) -> Result<i64, Error> {
 /// SHA-1 hash (hex encoded)
 /// {{ "hello" | sha1 }}
 pub fn sha1sum(value: String) -> String {
-    use sha1::{Sha1, Digest};
+    use sha1::{Digest, Sha1};
     let mut hasher = Sha1::new();
     hasher.update(value.as_bytes());
     format!("{:x}", hasher.finalize())
@@ -827,7 +948,7 @@ pub fn sha1sum(value: String) -> String {
 /// SHA-512 hash (hex encoded)
 /// {{ "hello" | sha512 }}
 pub fn sha512sum(value: String) -> String {
-    use sha2::{Sha512, Digest};
+    use sha2::{Digest, Sha512};
     let mut hasher = Sha512::new();
     hasher.update(value.as_bytes());
     format!("{:x}", hasher.finalize())
@@ -836,7 +957,7 @@ pub fn sha512sum(value: String) -> String {
 /// MD5 hash (hex encoded) - Note: MD5 is cryptographically broken, use only for checksums
 /// {{ "hello" | md5 }}
 pub fn md5sum(value: String) -> String {
-    use md5::{Md5, Digest};
+    use md5::{Digest, Md5};
     let mut hasher = Md5::new();
     hasher.update(value.as_bytes());
     format!("{:x}", hasher.finalize())
@@ -902,7 +1023,9 @@ pub fn pascalcase(value: String) -> String {
 /// {{ "hello world" | substr(6) }}  →  "world"
 pub fn substr(value: String, start: usize, length: Option<usize>) -> String {
     let chars: Vec<char> = value.chars().collect();
-    let end = length.map(|l| (start + l).min(chars.len())).unwrap_or(chars.len());
+    let end = length
+        .map(|l| (start + l).min(chars.len()))
+        .unwrap_or(chars.len());
     let start = start.min(chars.len());
     chars[start..end].iter().collect()
 }
@@ -947,7 +1070,7 @@ mod tests {
 
     #[test]
     fn test_toyaml() {
-        let value = Value::from_serialize(&serde_json::json!({
+        let value = Value::from_serialize(serde_json::json!({
             "name": "test",
             "port": 8080
         }));
@@ -1087,14 +1210,14 @@ mod tests {
     #[test]
     fn test_float_filter() {
         // Float passthrough
-        let result = float(Value::from(3.14)).unwrap();
-        assert!((result - 3.14).abs() < 0.001);
+        let result = float(Value::from(2.5)).unwrap();
+        assert!((result - 2.5).abs() < 0.001);
         // Integer conversion
         let result = float(Value::from(42)).unwrap();
         assert!((result - 42.0).abs() < 0.001);
         // String parsing
-        let result = float(Value::from("3.14")).unwrap();
-        assert!((result - 3.14).abs() < 0.001);
+        let result = float(Value::from("2.5")).unwrap();
+        assert!((result - 2.5).abs() < 0.001);
         // Bool conversion
         assert_eq!(float(Value::from(true)).unwrap(), 1.0);
         assert_eq!(float(Value::from(false)).unwrap(), 0.0);
@@ -1109,11 +1232,11 @@ mod tests {
         let result = abs(Value::from(-5)).unwrap();
         assert_eq!(result.as_i64().unwrap(), 5);
         // Positive float
-        let result = abs(Value::from(3.14)).unwrap();
-        assert!((f64::try_from(result).unwrap() - 3.14).abs() < 0.001);
+        let result = abs(Value::from(2.5)).unwrap();
+        assert!((f64::try_from(result).unwrap() - 2.5).abs() < 0.001);
         // Negative float
-        let result = abs(Value::from(-3.14)).unwrap();
-        assert!((f64::try_from(result).unwrap() - 3.14).abs() < 0.001);
+        let result = abs(Value::from(-2.5)).unwrap();
+        assert!((f64::try_from(result).unwrap() - 2.5).abs() < 0.001);
         // Zero
         let result = abs(Value::from(0)).unwrap();
         assert_eq!(result.as_i64().unwrap(), 0);
@@ -1171,19 +1294,35 @@ mod tests {
     #[test]
     fn test_regex_replace() {
         assert_eq!(
-            regex_replace("v1.2.3".to_string(), r"v(\d+)".to_string(), "version-$1".to_string()).unwrap(),
+            regex_replace(
+                "v1.2.3".to_string(),
+                r"v(\d+)".to_string(),
+                "version-$1".to_string()
+            )
+            .unwrap(),
             "version-1.2.3"
         );
         assert_eq!(
-            regex_replace("foo bar baz".to_string(), r"\s+".to_string(), "-".to_string()).unwrap(),
+            regex_replace(
+                "foo bar baz".to_string(),
+                r"\s+".to_string(),
+                "-".to_string()
+            )
+            .unwrap(),
             "foo-bar-baz"
         );
     }
 
     #[test]
     fn test_regex_find() {
-        assert_eq!(regex_find("port: 8080".to_string(), r"\d+".to_string()).unwrap(), "8080");
-        assert_eq!(regex_find("no numbers".to_string(), r"\d+".to_string()).unwrap(), "");
+        assert_eq!(
+            regex_find("port: 8080".to_string(), r"\d+".to_string()).unwrap(),
+            "8080"
+        );
+        assert_eq!(
+            regex_find("no numbers".to_string(), r"\d+".to_string()).unwrap(),
+            ""
+        );
     }
 
     #[test]
@@ -1202,7 +1341,9 @@ mod tests {
         let mut env = Environment::new();
         env.add_filter("values", values);
 
-        let result = env.render_str(r#"{{ {"a": 1, "b": 2} | values | sort | list }}"#, ()).unwrap();
+        let result = env
+            .render_str(r#"{{ {"a": 1, "b": 2} | values | sort | list }}"#, ())
+            .unwrap();
         assert!(result.contains("1") && result.contains("2"));
     }
 
@@ -1212,7 +1353,9 @@ mod tests {
         let mut env = Environment::new();
         env.add_filter("pick", pick);
 
-        let result = env.render_str(r#"{{ {"a": 1, "b": 2, "c": 3} | pick("a", "c") }}"#, ()).unwrap();
+        let result = env
+            .render_str(r#"{{ {"a": 1, "b": 2, "c": 3} | pick("a", "c") }}"#, ())
+            .unwrap();
         assert!(result.contains("a") && result.contains("c") && !result.contains("b"));
     }
 
@@ -1222,7 +1365,9 @@ mod tests {
         let mut env = Environment::new();
         env.add_filter("omit", omit);
 
-        let result = env.render_str(r#"{{ {"a": 1, "b": 2, "c": 3} | omit("b") }}"#, ()).unwrap();
+        let result = env
+            .render_str(r#"{{ {"a": 1, "b": 2, "c": 3} | omit("b") }}"#, ())
+            .unwrap();
         assert!(result.contains("a") && result.contains("c") && !result.contains(": 2"));
     }
 
@@ -1256,7 +1401,9 @@ mod tests {
         let mut env = Environment::new();
         env.add_filter("concat", concat);
 
-        let result = env.render_str(r#"{{ [1, 2] | concat([3, 4]) }}"#, ()).unwrap();
+        let result = env
+            .render_str(r#"{{ [1, 2] | concat([3, 4]) }}"#, ())
+            .unwrap();
         assert_eq!(result, "[1, 2, 3, 4]");
     }
 
@@ -1266,7 +1413,9 @@ mod tests {
         let mut env = Environment::new();
         env.add_filter("without", without);
 
-        let result = env.render_str(r#"{{ [1, 2, 3, 2] | without(2) }}"#, ()).unwrap();
+        let result = env
+            .render_str(r#"{{ [1, 2, 3, 2] | without(2) }}"#, ())
+            .unwrap();
         assert_eq!(result, "[1, 3]");
     }
 
@@ -1276,7 +1425,9 @@ mod tests {
         let mut env = Environment::new();
         env.add_filter("compact", compact);
 
-        let result = env.render_str(r#"{{ ["a", "", "b"] | compact }}"#, ()).unwrap();
+        let result = env
+            .render_str(r#"{{ ["a", "", "b"] | compact }}"#, ())
+            .unwrap();
         assert!(result.contains("a") && result.contains("b") && !result.contains(r#""""#));
     }
 
@@ -1307,7 +1458,10 @@ mod tests {
     #[test]
     fn test_sha1sum() {
         // SHA-1 of "hello"
-        assert_eq!(sha1sum("hello".to_string()), "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d");
+        assert_eq!(
+            sha1sum("hello".to_string()),
+            "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"
+        );
     }
 
     #[test]
@@ -1321,7 +1475,10 @@ mod tests {
     #[test]
     fn test_md5sum() {
         // MD5 of "hello"
-        assert_eq!(md5sum("hello".to_string()), "5d41402abc4b2a76b9719d911017c592");
+        assert_eq!(
+            md5sum("hello".to_string()),
+            "5d41402abc4b2a76b9719d911017c592"
+        );
     }
 
     // =========================================================================
@@ -1360,7 +1517,10 @@ mod tests {
 
     #[test]
     fn test_wrap_filter() {
-        assert_eq!(wrap("hello world foo bar".to_string(), 10), "hello\nworld foo\nbar");
+        assert_eq!(
+            wrap("hello world foo bar".to_string(), 10),
+            "hello\nworld foo\nbar"
+        );
         assert_eq!(wrap("short".to_string(), 20), "short");
     }
 

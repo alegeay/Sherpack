@@ -8,30 +8,32 @@
 //! - `Schema`: Values schema validation
 //! - `Files`: Sandboxed file access for templates
 
-pub mod pack;
-pub mod values;
-pub mod release;
+pub mod archive;
 pub mod context;
 pub mod error;
-pub mod schema;
-pub mod manifest;
-pub mod archive;
 pub mod files;
+pub mod manifest;
+pub mod pack;
+pub mod release;
+pub mod schema;
+pub mod values;
 
-pub use pack::{
-    Pack, PackMetadata, PackKind, Dependency, ResolvePolicy, LoadedPack,
-    CrdConfig, CrdUpgradeConfig, CrdUninstallConfig, CrdUpgradeStrategy, CrdManifest,
+pub use archive::{
+    ArchiveEntry, create_archive, default_archive_name, extract_archive, list_archive,
+    read_file_from_archive, read_manifest_from_archive, verify_archive,
 };
-pub use values::{Values, parse_set_values};
-pub use release::{Release, ReleaseStatus, ReleaseInfo};
 pub use context::TemplateContext;
 pub use error::{CoreError, ValidationErrorInfo};
-pub use schema::{Schema, SchemaValidator, ValidationResult, SherpSchema, SherpProperty, SherpType};
-pub use manifest::{Manifest, VerificationResult, MismatchedFile};
-pub use manifest::FileEntry as ManifestFileEntry;
-pub use archive::{
-    create_archive, extract_archive, list_archive, read_manifest_from_archive,
-    read_file_from_archive, verify_archive, default_archive_name, ArchiveEntry,
-};
-pub use files::{Files, FileProvider, SandboxedFileProvider, MockFileProvider};
 pub use files::FileEntry as FilesFileEntry;
+pub use files::{FileProvider, Files, MockFileProvider, SandboxedFileProvider};
+pub use manifest::FileEntry as ManifestFileEntry;
+pub use manifest::{Manifest, MismatchedFile, VerificationResult};
+pub use pack::{
+    CrdConfig, CrdManifest, CrdUninstallConfig, CrdUpgradeConfig, CrdUpgradeStrategy, Dependency,
+    LoadedPack, Pack, PackKind, PackMetadata, ResolvePolicy,
+};
+pub use release::{Release, ReleaseInfo, ReleaseStatus};
+pub use schema::{
+    Schema, SchemaValidator, SherpProperty, SherpSchema, SherpType, ValidationResult,
+};
+pub use values::{Values, parse_set_values};

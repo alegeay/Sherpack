@@ -41,30 +41,30 @@
 //! - Lock files verify SHA256 integrity by default
 //! - Diamond dependencies cause errors, not silent conflicts
 
-pub mod error;
+pub mod backend;
+pub mod cache;
 pub mod config;
 pub mod credentials;
-pub mod index;
-pub mod http;
-pub mod oci;
-pub mod cache;
-pub mod lock;
 pub mod dependency;
-pub mod backend;
+pub mod error;
+pub mod http;
+pub mod index;
+pub mod lock;
+pub mod oci;
 
 // Re-exports for convenience
-pub use error::{RepoError, Result};
+pub use backend::{RepositoryBackend, create_backend, create_backend_by_name};
+pub use cache::{CacheStats, CachedPack, IndexCache};
 pub use config::{Repository, RepositoryConfig, RepositoryType};
 pub use credentials::{
-    Credentials, CredentialStore, ResolvedCredentials, ScopedCredentials, SecureHttpClient,
+    CredentialStore, Credentials, ResolvedCredentials, ScopedCredentials, SecureHttpClient,
 };
-pub use index::{PackEntry, RepositoryIndex};
-pub use http::HttpRepository;
-pub use oci::{OciRegistry, OciReference};
-pub use cache::{IndexCache, CachedPack, CacheStats};
-pub use lock::{LockFile, LockedDependency, LockPolicy, VerifyResult};
 pub use dependency::{
-    DependencyResolver, DependencyGraph, DependencySpec, ResolvedDependency,
-    FilterResult, SkipReason, SkippedDependency, filter_dependencies,
+    DependencyGraph, DependencyResolver, DependencySpec, FilterResult, ResolvedDependency,
+    SkipReason, SkippedDependency, filter_dependencies,
 };
-pub use backend::{RepositoryBackend, create_backend, create_backend_by_name};
+pub use error::{RepoError, Result};
+pub use http::HttpRepository;
+pub use index::{PackEntry, RepositoryIndex};
+pub use lock::{LockFile, LockPolicy, LockedDependency, VerifyResult};
+pub use oci::{OciReference, OciRegistry};

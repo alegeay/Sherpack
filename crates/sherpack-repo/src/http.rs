@@ -5,7 +5,9 @@
 use std::path::Path;
 
 use crate::config::Repository;
-use crate::credentials::{CachedResponse, ResolvedCredentials, ScopedCredentials, SecureHttpClient};
+use crate::credentials::{
+    CachedResponse, ResolvedCredentials, ScopedCredentials, SecureHttpClient,
+};
 use crate::error::{RepoError, Result};
 use crate::index::{PackEntry, RepositoryIndex};
 
@@ -85,9 +87,7 @@ impl HttpRepository {
 
         self.cached_index
             .as_ref()
-            .ok_or(RepoError::IndexNotFound {
-                url: index_url,
-            })
+            .ok_or(RepoError::IndexNotFound { url: index_url })
     }
 
     /// Get the cached index without fetching
@@ -105,10 +105,13 @@ impl HttpRepository {
     pub async fn get_latest(&mut self, name: &str) -> Result<PackEntry> {
         let repo_name = self.repo.name.clone();
         let index = self.fetch_index().await?;
-        index.get_latest(name).cloned().ok_or_else(|| RepoError::PackNotFound {
-            name: name.to_string(),
-            repo: repo_name,
-        })
+        index
+            .get_latest(name)
+            .cloned()
+            .ok_or_else(|| RepoError::PackNotFound {
+                name: name.to_string(),
+                repo: repo_name,
+            })
     }
 
     /// Get a specific version of a pack
@@ -133,10 +136,12 @@ impl HttpRepository {
 
     /// Download a pack archive
     pub async fn download(&self, entry: &PackEntry) -> Result<Vec<u8>> {
-        let url = entry.download_url().ok_or_else(|| RepoError::PackNotFound {
-            name: entry.name.clone(),
-            repo: self.repo.name.clone(),
-        })?;
+        let url = entry
+            .download_url()
+            .ok_or_else(|| RepoError::PackNotFound {
+                name: entry.name.clone(),
+                repo: self.repo.name.clone(),
+            })?;
 
         // Resolve relative URLs
         let full_url = if url.starts_with("http://") || url.starts_with("https://") {

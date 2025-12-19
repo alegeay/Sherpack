@@ -1,7 +1,9 @@
 //! Search command
 
 use crate::error::{CliError, Result};
-use sherpack_repo::{IndexCache, RepositoryConfig, CredentialStore, create_backend, RepositoryType};
+use sherpack_repo::{
+    CredentialStore, IndexCache, RepositoryConfig, RepositoryType, create_backend,
+};
 
 /// Search for packs across repositories
 pub async fn run(
@@ -30,20 +32,29 @@ pub async fn run(
     }
 
     if json_output {
-        let json = serde_json::to_string_pretty(&results.iter().map(|r| {
-            serde_json::json!({
-                "name": r.name,
-                "version": r.version,
-                "description": r.description,
-                "repository": r.repo_name,
-            })
-        }).collect::<Vec<_>>()).unwrap_or_default();
+        let json = serde_json::to_string_pretty(
+            &results
+                .iter()
+                .map(|r| {
+                    serde_json::json!({
+                        "name": r.name,
+                        "version": r.version,
+                        "description": r.description,
+                        "repository": r.repo_name,
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+        .unwrap_or_default();
         println!("{}", json);
         return Ok(());
     }
 
     // Print results
-    println!("{:<30} {:<15} {:<15} DESCRIPTION", "NAME", "VERSION", "REPO");
+    println!(
+        "{:<30} {:<15} {:<15} DESCRIPTION",
+        "NAME", "VERSION", "REPO"
+    );
     println!("{}", "-".repeat(90));
 
     for pack in results {
@@ -102,37 +113,35 @@ async fn search_online(query: &str, repo_name: Option<&str>) -> Result<()> {
     for repo in repos {
         // OCI repos don't support search
         if repo.repo_type == RepositoryType::Oci {
-            println!("Note: Search not supported for OCI registry '{}'. Use Artifact Hub for discovery.", repo.name);
+            println!(
+                "Note: Search not supported for OCI registry '{}'. Use Artifact Hub for discovery.",
+                repo.name
+            );
             continue;
         }
 
         let credentials = cred_store.get(&repo.name).and_then(|c| c.resolve().ok());
 
         match create_backend(repo.clone(), credentials).await {
-            Ok(mut backend) => {
-                match backend.search(query).await {
-                    Ok(results) => {
-                        for pack in results {
-                            found_any = true;
-                            let desc = pack
-                                .description
-                                .as_deref()
-                                .unwrap_or("")
-                                .chars()
-                                .take(40)
-                                .collect::<String>();
+            Ok(mut backend) => match backend.search(query).await {
+                Ok(results) => {
+                    for pack in results {
+                        found_any = true;
+                        let desc = pack
+                            .description
+                            .as_deref()
+                            .unwrap_or("")
+                            .chars()
+                            .take(40)
+                            .collect::<String>();
 
-                            println!(
-                                "{}/{}\t{}\t{}",
-                                repo.name, pack.name, pack.version, desc
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("Search failed for {}: {}", repo.name, e);
+                        println!("{}/{}\t{}\t{}", repo.name, pack.name, pack.version, desc);
                     }
                 }
-            }
+                Err(e) => {
+                    eprintln!("Search failed for {}: {}", repo.name, e);
+                }
+            },
             Err(e) => {
                 eprintln!("Failed to connect to {}: {}", repo.name, e);
             }

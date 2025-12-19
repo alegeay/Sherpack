@@ -3,8 +3,8 @@
 //! This module provides types for discovering and managing subcharts
 //! within a Sherpack pack.
 
+use sherpack_core::{Dependency, LoadedPack};
 use std::path::PathBuf;
-use sherpack_core::{LoadedPack, Dependency};
 
 /// Configuration for subchart rendering
 #[derive(Debug, Clone)]

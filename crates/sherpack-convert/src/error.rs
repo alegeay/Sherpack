@@ -290,36 +290,53 @@ impl ConversionSummary {
     }
 
     /// Get warnings grouped by severity
-    pub fn warnings_by_severity(&self) -> std::collections::HashMap<WarningSeverity, Vec<&ConversionWarning>> {
+    pub fn warnings_by_severity(
+        &self,
+    ) -> std::collections::HashMap<WarningSeverity, Vec<&ConversionWarning>> {
         let mut grouped = std::collections::HashMap::new();
         for warning in &self.warnings {
-            grouped.entry(warning.severity).or_insert_with(Vec::new).push(warning);
+            grouped
+                .entry(warning.severity)
+                .or_insert_with(Vec::new)
+                .push(warning);
         }
         grouped
     }
 
     /// Get warnings grouped by category
-    pub fn warnings_by_category(&self) -> std::collections::HashMap<WarningCategory, Vec<&ConversionWarning>> {
+    pub fn warnings_by_category(
+        &self,
+    ) -> std::collections::HashMap<WarningCategory, Vec<&ConversionWarning>> {
         let mut grouped = std::collections::HashMap::new();
         for warning in &self.warnings {
-            grouped.entry(warning.category).or_insert_with(Vec::new).push(warning);
+            grouped
+                .entry(warning.category)
+                .or_insert_with(Vec::new)
+                .push(warning);
         }
         grouped
     }
 
     /// Get count of warnings by severity
     pub fn count_by_severity(&self, severity: WarningSeverity) -> usize {
-        self.warnings.iter().filter(|w| w.severity == severity).count()
+        self.warnings
+            .iter()
+            .filter(|w| w.severity == severity)
+            .count()
     }
 
     /// Check if there are any errors
     pub fn has_errors(&self) -> bool {
-        self.warnings.iter().any(|w| w.severity == WarningSeverity::Error)
+        self.warnings
+            .iter()
+            .any(|w| w.severity == WarningSeverity::Error)
     }
 
     /// Check if there are any unsupported features
     pub fn has_unsupported(&self) -> bool {
-        self.warnings.iter().any(|w| w.severity == WarningSeverity::Unsupported)
+        self.warnings
+            .iter()
+            .any(|w| w.severity == WarningSeverity::Unsupported)
     }
 
     /// Get a success message
@@ -344,7 +361,11 @@ impl ConversionSummary {
             msg.push_str(&format!(
                 " with {} warning{}",
                 info_count + warning_count + unsupported_count,
-                if info_count + warning_count + unsupported_count == 1 { "" } else { "s" }
+                if info_count + warning_count + unsupported_count == 1 {
+                    ""
+                } else {
+                    "s"
+                }
             ));
         }
 

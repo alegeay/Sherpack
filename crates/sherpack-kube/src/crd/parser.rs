@@ -17,9 +17,8 @@ pub struct CrdParser;
 impl CrdParser {
     /// Parse a CRD YAML manifest into a structured schema
     pub fn parse(yaml: &str) -> Result<CrdSchema> {
-        let value: Value = serde_yaml::from_str(yaml).map_err(|e| {
-            KubeError::Serialization(format!("Invalid CRD YAML: {}", e))
-        })?;
+        let value: Value = serde_yaml::from_str(yaml)
+            .map_err(|e| KubeError::Serialization(format!("Invalid CRD YAML: {}", e)))?;
 
         Self::parse_value(&value)
     }
@@ -148,9 +147,7 @@ impl CrdParser {
         let name = version
             .get("name")
             .and_then(Value::as_str)
-            .ok_or_else(|| {
-                KubeError::InvalidConfig("Version missing 'name' field".to_string())
-            })?
+            .ok_or_else(|| KubeError::InvalidConfig("Version missing 'name' field".to_string()))?
             .to_string();
 
         let served = version
@@ -242,7 +239,7 @@ impl CrdParser {
         let type_ = prop
             .get("type")
             .and_then(Value::as_str)
-            .map(PropertyType::from_str)
+            .map(PropertyType::parse)
             .unwrap_or_default();
 
         let description = prop
@@ -259,10 +256,7 @@ impl CrdParser {
             .and_then(Value::as_str)
             .map(String::from);
 
-        let enum_values = prop
-            .get("enum")
-            .and_then(Value::as_array)
-            .cloned();
+        let enum_values = prop.get("enum").and_then(Value::as_array).cloned();
 
         let minimum = prop.get("minimum").and_then(Value::as_f64);
         let maximum = prop.get("maximum").and_then(Value::as_f64);
@@ -298,15 +292,12 @@ impl CrdParser {
                     .collect()
             });
 
-        let required = prop
-            .get("required")
-            .and_then(Value::as_array)
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(Value::as_str)
-                    .map(String::from)
-                    .collect()
-            });
+        let required = prop.get("required").and_then(Value::as_array).map(|arr| {
+            arr.iter()
+                .filter_map(Value::as_str)
+                .map(String::from)
+                .collect()
+        });
 
         // Parse array items
         let items = prop
@@ -598,7 +589,10 @@ spec:
         let dns_names = &spec_props["dnsNames"];
         assert_eq!(dns_names.type_, PropertyType::Array);
         assert!(dns_names.items.is_some());
-        assert_eq!(dns_names.items.as_ref().unwrap().type_, PropertyType::String);
+        assert_eq!(
+            dns_names.items.as_ref().unwrap().type_,
+            PropertyType::String
+        );
     }
 
     #[test]
@@ -611,10 +605,12 @@ metadata:
 "#;
         let result = CrdParser::parse(yaml);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Expected CustomResourceDefinition"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Expected CustomResourceDefinition")
+        );
     }
 
     #[test]

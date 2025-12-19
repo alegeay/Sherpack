@@ -1,31 +1,31 @@
 //! CLI commands
 
-pub mod template;
+pub mod convert;
 pub mod create;
-pub mod lint;
-pub mod show;
-pub mod validate;
-pub mod package;
 pub mod inspect;
 pub mod keygen;
+pub mod lint;
+pub mod package;
+pub mod show;
 pub mod sign;
 pub mod signing;
+pub mod template;
+pub mod validate;
 pub mod verify;
-pub mod convert;
 
 // Phase 4 - Kubernetes deployment commands
-pub mod install;
-pub mod upgrade;
-pub mod uninstall;
-pub mod rollback;
-pub mod list;
 pub mod history;
-pub mod status;
+pub mod install;
+pub mod list;
 pub mod recover;
+pub mod rollback;
+pub mod status;
+pub mod uninstall;
+pub mod upgrade;
 
 // Phase 5 - Repository management
-pub mod repo;
-pub mod search;
+pub mod dep;
 pub mod pull;
 pub mod push;
-pub mod dep;
+pub mod repo;
+pub mod search;

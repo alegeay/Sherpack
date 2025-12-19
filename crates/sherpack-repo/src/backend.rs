@@ -145,13 +145,13 @@ impl RepositoryBackend for HttpBackend {
             url: self.0.url().to_string(),
         })?;
 
-        let entry = index.get_version(name, version).ok_or_else(|| {
-            RepoError::VersionNotFound {
+        let entry = index
+            .get_version(name, version)
+            .ok_or_else(|| RepoError::VersionNotFound {
                 name: name.to_string(),
                 version: version.to_string(),
                 repo: self.0.name().to_string(),
-            }
-        })?;
+            })?;
 
         self.0.download(entry).await
     }
@@ -283,9 +283,10 @@ impl RepositoryBackend for OciBackend {
         // List tags and find best match
         let tags = self.0.list_tags(name).await?;
 
-        let req = semver::VersionReq::parse(constraint).map_err(|e| RepoError::ResolutionFailed {
-            message: format!("Invalid version constraint '{}': {}", constraint, e),
-        })?;
+        let req =
+            semver::VersionReq::parse(constraint).map_err(|e| RepoError::ResolutionFailed {
+                message: format!("Invalid version constraint '{}': {}", constraint, e),
+            })?;
 
         let best_version = tags
             .iter()
@@ -360,10 +361,7 @@ impl RepositoryBackend for FileBackend {
 
     async fn search(&mut self, query: &str) -> Result<Vec<PackEntry>> {
         let all = self.list().await?;
-        Ok(all
-            .into_iter()
-            .filter(|p| p.name.contains(query))
-            .collect())
+        Ok(all.into_iter().filter(|p| p.name.contains(query)).collect())
     }
 
     async fn list(&mut self) -> Result<Vec<PackEntry>> {
@@ -479,9 +477,9 @@ impl RepositoryBackend for FileBackend {
 
     async fn exists(&mut self, name: &str, version: Option<&str>) -> Result<bool> {
         let all = self.list().await?;
-        Ok(all.iter().any(|p| {
-            p.name == name && version.map(|v| p.version == v).unwrap_or(true)
-        }))
+        Ok(all
+            .iter()
+            .any(|p| p.name == name && version.map(|v| p.version == v).unwrap_or(true)))
     }
 }
 

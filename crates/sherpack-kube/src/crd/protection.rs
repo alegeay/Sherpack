@@ -11,10 +11,10 @@
 //! This module ensures users understand the impact before proceeding.
 
 use kube::{
+    Client,
     api::{Api, DynamicObject, ListParams},
     core::GroupVersionKind,
     discovery::{ApiCapabilities, ApiResource, Discovery, Scope},
-    Client,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -207,9 +207,7 @@ impl CrdProtection {
         let mut summary = DeletionImpactSummary::new();
 
         for crd in crds {
-            let impact = self
-                .analyze_deletion_impact(&crd.name, crd.policy)
-                .await?;
+            let impact = self.analyze_deletion_impact(&crd.name, crd.policy).await?;
             summary.add(impact);
         }
 
@@ -232,9 +230,7 @@ impl CrdProtection {
             };
 
             if let Some((ar, caps)) = discovery.resolve_gvk(&gvk) {
-                return self
-                    .count_with_api_resource(&ar, &caps)
-                    .await;
+                return self.count_with_api_resource(&ar, &caps).await;
             }
         }
 
@@ -437,7 +433,10 @@ mod tests {
         ));
 
         // Add a blocked CRD
-        summary.add(CrdDeletionImpact::empty("second.example.com", CrdPolicy::Shared));
+        summary.add(CrdDeletionImpact::empty(
+            "second.example.com",
+            CrdPolicy::Shared,
+        ));
 
         assert_eq!(summary.total_crds, 1);
         assert_eq!(summary.total_resources, 5);
@@ -467,30 +466,48 @@ mod tests {
         let confirmation = DeletionConfirmation::from_impact(&summary);
 
         assert!(confirmation.required);
-        assert!(confirmation.required_flags.contains(&"--delete-crds".to_string()));
-        assert!(confirmation
-            .required_flags
-            .contains(&"--confirm-crd-deletion".to_string()));
+        assert!(
+            confirmation
+                .required_flags
+                .contains(&"--delete-crds".to_string())
+        );
+        assert!(
+            confirmation
+                .required_flags
+                .contains(&"--confirm-crd-deletion".to_string())
+        );
     }
 
     #[test]
     fn test_deletion_confirmation_from_impact_no_data_loss() {
         let mut summary = DeletionImpactSummary::new();
-        summary.add(CrdDeletionImpact::empty("tests.example.com", CrdPolicy::Managed));
+        summary.add(CrdDeletionImpact::empty(
+            "tests.example.com",
+            CrdPolicy::Managed,
+        ));
 
         let confirmation = DeletionConfirmation::from_impact(&summary);
 
         assert!(confirmation.required);
-        assert!(confirmation.required_flags.contains(&"--delete-crds".to_string()));
-        assert!(!confirmation
-            .required_flags
-            .contains(&"--confirm-crd-deletion".to_string()));
+        assert!(
+            confirmation
+                .required_flags
+                .contains(&"--delete-crds".to_string())
+        );
+        assert!(
+            !confirmation
+                .required_flags
+                .contains(&"--confirm-crd-deletion".to_string())
+        );
     }
 
     #[test]
     fn test_deletion_confirmation_from_blocked() {
         let mut summary = DeletionImpactSummary::new();
-        summary.add(CrdDeletionImpact::empty("tests.example.com", CrdPolicy::Shared));
+        summary.add(CrdDeletionImpact::empty(
+            "tests.example.com",
+            CrdPolicy::Shared,
+        ));
 
         let confirmation = DeletionConfirmation::from_impact(&summary);
 

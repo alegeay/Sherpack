@@ -3,9 +3,7 @@
 use std::path::PathBuf;
 
 use crate::error::{CliError, Result};
-use sherpack_repo::{
-    CredentialStore, IndexCache, Repository, RepositoryConfig, create_backend,
-};
+use sherpack_repo::{CredentialStore, IndexCache, Repository, RepositoryConfig, create_backend};
 
 /// Pull a pack from a repository
 pub async fn run(
@@ -139,11 +137,7 @@ fn parse_pack_ref(
 
     // Handle name:version format
     if let Some((name, version)) = pack_ref.rsplit_once(':') {
-        return Ok((
-            None,
-            name.to_string(),
-            Some(version.to_string()),
-        ));
+        return Ok((None, name.to_string(), Some(version.to_string())));
     }
 
     // Just name

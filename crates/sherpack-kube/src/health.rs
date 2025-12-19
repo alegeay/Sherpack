@@ -182,10 +182,7 @@ impl HealthStatus {
     /// Generate a human-readable summary
     pub fn summary(&self) -> String {
         if self.healthy {
-            format!(
-                "Healthy: {} resources ready",
-                self.resources.len()
-            )
+            format!("Healthy: {} resources ready", self.resources.len())
         } else {
             let unhealthy = self.unhealthy_resources();
             let failed = self.failed_checks();
@@ -267,7 +264,11 @@ impl HealthChecker {
     }
 
     /// Check health of a release
-    pub async fn check(&self, release: &StoredRelease, client: &kube::Client) -> Result<HealthStatus> {
+    pub async fn check(
+        &self,
+        release: &StoredRelease,
+        client: &kube::Client,
+    ) -> Result<HealthStatus> {
         let start = Utc::now();
         let deadline = start + self.config.timeout;
 
@@ -502,7 +503,9 @@ impl HealthChecker {
                     c.iter()
                         .filter(|cond| cond.status == "False")
                         .filter_map(|cond| {
-                            cond.message.as_ref().map(|m| format!("{}: {}", cond.type_, m))
+                            cond.message
+                                .as_ref()
+                                .map(|m| format!("{}: {}", cond.type_, m))
                         })
                         .collect::<Vec<_>>()
                         .join("; ")
@@ -686,7 +689,10 @@ impl HealthChecker {
         // Check job conditions for failure
         let has_failed_condition = status
             .and_then(|s| s.conditions.as_ref())
-            .map(|c| c.iter().any(|cond| cond.type_ == "Failed" && cond.status == "True"))
+            .map(|c| {
+                c.iter()
+                    .any(|cond| cond.type_ == "Failed" && cond.status == "True")
+            })
             .unwrap_or(false);
 
         let healthy = succeeded > 0;
@@ -704,7 +710,10 @@ impl HealthChecker {
                 .unwrap_or_else(|| format!("Job failed with {} failures", failed));
             Some(reason)
         } else if !healthy {
-            Some(format!("Running: {} active, {} succeeded", active, succeeded))
+            Some(format!(
+                "Running: {} active, {} succeeded",
+                active, succeeded
+            ))
         } else {
             None
         };
@@ -726,7 +735,12 @@ impl HealthChecker {
 
         // Build request with timeout
         let client = match reqwest::Client::builder()
-            .timeout(check.timeout.to_std().unwrap_or(std::time::Duration::from_secs(30)))
+            .timeout(
+                check
+                    .timeout
+                    .to_std()
+                    .unwrap_or(std::time::Duration::from_secs(30)),
+            )
             .build()
         {
             Ok(c) => c,
@@ -994,7 +1008,10 @@ metadata:
 
         let resources = checker.parse_resources(manifest);
         assert_eq!(resources.len(), 1); // Only Deployment, not Service
-        assert_eq!(resources[0], ("Deployment".to_string(), "my-app".to_string()));
+        assert_eq!(
+            resources[0],
+            ("Deployment".to_string(), "my-app".to_string())
+        );
     }
 
     #[test]
@@ -1016,13 +1033,18 @@ metadata:
         let config = HealthCheckConfig::default();
         let checker = HealthChecker::new(config.clone());
 
-        assert_eq!(checker.config.timeout.num_seconds(), config.timeout.num_seconds());
+        assert_eq!(
+            checker.config.timeout.num_seconds(),
+            config.timeout.num_seconds()
+        );
     }
 
     #[test]
     fn test_parse_resources_statefulset() {
-        let mut config = HealthCheckConfig::default();
-        config.check_statefulsets = true;
+        let config = HealthCheckConfig {
+            check_statefulsets: true,
+            ..Default::default()
+        };
         let checker = HealthChecker::new(config);
 
         let manifest = r#"
@@ -1036,13 +1058,18 @@ spec:
 
         let resources = checker.parse_resources(manifest);
         assert_eq!(resources.len(), 1);
-        assert_eq!(resources[0], ("StatefulSet".to_string(), "my-db".to_string()));
+        assert_eq!(
+            resources[0],
+            ("StatefulSet".to_string(), "my-db".to_string())
+        );
     }
 
     #[test]
     fn test_parse_resources_daemonset() {
-        let mut config = HealthCheckConfig::default();
-        config.check_daemonsets = true;
+        let config = HealthCheckConfig {
+            check_daemonsets: true,
+            ..Default::default()
+        };
         let checker = HealthChecker::new(config);
 
         let manifest = r#"
@@ -1058,7 +1085,10 @@ spec:
 
         let resources = checker.parse_resources(manifest);
         assert_eq!(resources.len(), 1);
-        assert_eq!(resources[0], ("DaemonSet".to_string(), "my-agent".to_string()));
+        assert_eq!(
+            resources[0],
+            ("DaemonSet".to_string(), "my-agent".to_string())
+        );
     }
 
     #[test]

@@ -11,11 +11,14 @@ use super::StorageDriver;
 use crate::error::{KubeError, Result};
 use crate::release::StoredRelease;
 
+/// Type alias for the nested storage structure: namespace -> name -> version -> release
+type ReleaseStore = HashMap<String, HashMap<String, HashMap<u32, StoredRelease>>>;
+
 /// In-memory storage driver for testing
 #[derive(Clone)]
 pub struct MockStorageDriver {
     /// Storage: namespace -> name -> version -> release
-    store: Arc<RwLock<HashMap<String, HashMap<String, HashMap<u32, StoredRelease>>>>>,
+    store: Arc<RwLock<ReleaseStore>>,
     /// Track operation counts for assertions
     operations: Arc<RwLock<OperationCounts>>,
 }
@@ -338,7 +341,10 @@ mod tests {
         driver.create(&release).await.unwrap();
 
         let result = driver.create(&release).await;
-        assert!(matches!(result, Err(KubeError::ReleaseAlreadyExists { .. })));
+        assert!(matches!(
+            result,
+            Err(KubeError::ReleaseAlreadyExists { .. })
+        ));
     }
 
     #[tokio::test]
@@ -353,9 +359,18 @@ mod tests {
     async fn test_mock_get_latest() {
         let driver = MockStorageDriver::new();
 
-        driver.create(&create_test_release("myapp", "default", 1)).await.unwrap();
-        driver.create(&create_test_release("myapp", "default", 2)).await.unwrap();
-        driver.create(&create_test_release("myapp", "default", 3)).await.unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 1))
+            .await
+            .unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 2))
+            .await
+            .unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 3))
+            .await
+            .unwrap();
 
         let latest = driver.get_latest("default", "myapp").await.unwrap();
         assert_eq!(latest.version, 3);
@@ -365,9 +380,18 @@ mod tests {
     async fn test_mock_list_all() {
         let driver = MockStorageDriver::new();
 
-        driver.create(&create_test_release("app1", "default", 1)).await.unwrap();
-        driver.create(&create_test_release("app2", "default", 1)).await.unwrap();
-        driver.create(&create_test_release("app1", "staging", 1)).await.unwrap();
+        driver
+            .create(&create_test_release("app1", "default", 1))
+            .await
+            .unwrap();
+        driver
+            .create(&create_test_release("app2", "default", 1))
+            .await
+            .unwrap();
+        driver
+            .create(&create_test_release("app1", "staging", 1))
+            .await
+            .unwrap();
 
         let all = driver.list(None, None, false).await.unwrap();
         assert_eq!(all.len(), 3);
@@ -377,9 +401,18 @@ mod tests {
     async fn test_mock_list_by_namespace() {
         let driver = MockStorageDriver::new();
 
-        driver.create(&create_test_release("app1", "default", 1)).await.unwrap();
-        driver.create(&create_test_release("app2", "default", 1)).await.unwrap();
-        driver.create(&create_test_release("app1", "staging", 1)).await.unwrap();
+        driver
+            .create(&create_test_release("app1", "default", 1))
+            .await
+            .unwrap();
+        driver
+            .create(&create_test_release("app2", "default", 1))
+            .await
+            .unwrap();
+        driver
+            .create(&create_test_release("app1", "staging", 1))
+            .await
+            .unwrap();
 
         let in_default = driver.list(Some("default"), None, false).await.unwrap();
         assert_eq!(in_default.len(), 2);
@@ -389,9 +422,18 @@ mod tests {
     async fn test_mock_list_excludes_superseded() {
         let driver = MockStorageDriver::new();
 
-        driver.create(&create_test_release("myapp", "default", 1)).await.unwrap();
-        driver.create(&create_test_release("myapp", "default", 2)).await.unwrap();
-        driver.create(&create_test_release("myapp", "default", 3)).await.unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 1))
+            .await
+            .unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 2))
+            .await
+            .unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 3))
+            .await
+            .unwrap();
 
         // Without superseded, should only get latest
         let latest_only = driver.list(None, None, false).await.unwrap();
@@ -407,9 +449,18 @@ mod tests {
     async fn test_mock_history() {
         let driver = MockStorageDriver::new();
 
-        driver.create(&create_test_release("myapp", "default", 1)).await.unwrap();
-        driver.create(&create_test_release("myapp", "default", 2)).await.unwrap();
-        driver.create(&create_test_release("myapp", "default", 3)).await.unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 1))
+            .await
+            .unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 2))
+            .await
+            .unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 3))
+            .await
+            .unwrap();
 
         let history = driver.history("default", "myapp").await.unwrap();
         assert_eq!(history.len(), 3);
@@ -437,8 +488,14 @@ mod tests {
     async fn test_mock_delete() {
         let driver = MockStorageDriver::new();
 
-        driver.create(&create_test_release("myapp", "default", 1)).await.unwrap();
-        driver.create(&create_test_release("myapp", "default", 2)).await.unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 1))
+            .await
+            .unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 2))
+            .await
+            .unwrap();
 
         let deleted = driver.delete("default", "myapp", 1).await.unwrap();
         assert_eq!(deleted.version, 1);
@@ -456,9 +513,18 @@ mod tests {
     async fn test_mock_delete_all() {
         let driver = MockStorageDriver::new();
 
-        driver.create(&create_test_release("myapp", "default", 1)).await.unwrap();
-        driver.create(&create_test_release("myapp", "default", 2)).await.unwrap();
-        driver.create(&create_test_release("myapp", "default", 3)).await.unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 1))
+            .await
+            .unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 2))
+            .await
+            .unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 3))
+            .await
+            .unwrap();
 
         let deleted = driver.delete_all("default", "myapp").await.unwrap();
         assert_eq!(deleted.len(), 3);
@@ -486,10 +552,16 @@ mod tests {
     async fn test_operation_counts() {
         let driver = MockStorageDriver::new();
 
-        driver.create(&create_test_release("myapp", "default", 1)).await.unwrap();
+        driver
+            .create(&create_test_release("myapp", "default", 1))
+            .await
+            .unwrap();
         let _ = driver.get("default", "myapp", 1).await;
         let _ = driver.list(None, None, false).await;
-        driver.update(&create_test_release("myapp", "default", 1)).await.unwrap();
+        driver
+            .update(&create_test_release("myapp", "default", 1))
+            .await
+            .unwrap();
         let _ = driver.delete("default", "myapp", 1).await;
 
         let counts = driver.operation_counts();

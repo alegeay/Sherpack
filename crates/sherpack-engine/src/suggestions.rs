@@ -86,9 +86,9 @@ pub const AVAILABLE_FUNCTIONS: &[&str] = &[
     "tofloat",
     "now",
     "printf",
-    "tpl",      // Dynamic template evaluation
-    "tpl_ctx",  // Dynamic template with full context
-    "lookup",   // K8s resource lookup (returns empty in template mode)
+    "tpl",     // Dynamic template evaluation
+    "tpl_ctx", // Dynamic template with full context
+    "lookup",  // K8s resource lookup (returns empty in template mode)
     // Built-in MiniJinja globals
     "range",
     "lipsum",
@@ -98,13 +98,7 @@ pub const AVAILABLE_FUNCTIONS: &[&str] = &[
 ];
 
 /// Top-level context variables always available in templates
-pub const CONTEXT_VARIABLES: &[&str] = &[
-    "values",
-    "release",
-    "pack",
-    "capabilities",
-    "template",
-];
+pub const CONTEXT_VARIABLES: &[&str] = &["values", "release", "pack", "capabilities", "template"];
 
 /// Suggestion result with confidence scoring
 #[derive(Debug, Clone)]
@@ -186,10 +180,14 @@ pub fn suggest_undefined_variable(
     // Check available values
     let candidates: Vec<&str> = available_variables.iter().map(|s| s.as_str()).collect();
 
-    let value_match = find_closest_matches(variable_name, &candidates, 3, SuggestionCategory::Variable);
+    let value_match =
+        find_closest_matches(variable_name, &candidates, 3, SuggestionCategory::Variable);
 
     if !value_match.is_empty() {
-        let suggestions: Vec<String> = value_match.iter().map(|s| format!("`{}`", s.text)).collect();
+        let suggestions: Vec<String> = value_match
+            .iter()
+            .map(|s| format!("`{}`", s.text))
+            .collect();
         Some(format!("Did you mean {}?", suggestions.join(" or ")))
     } else {
         None
@@ -198,7 +196,12 @@ pub fn suggest_undefined_variable(
 
 /// Suggest corrections for an unknown filter
 pub fn suggest_unknown_filter(filter_name: &str) -> Option<String> {
-    let matches = find_closest_matches(filter_name, AVAILABLE_FILTERS, 3, SuggestionCategory::Filter);
+    let matches = find_closest_matches(
+        filter_name,
+        AVAILABLE_FILTERS,
+        3,
+        SuggestionCategory::Filter,
+    );
 
     if !matches.is_empty() {
         let suggestions: Vec<String> = matches.iter().map(|s| format!("`{}`", s.text)).collect();
@@ -216,7 +219,12 @@ pub fn suggest_unknown_filter(filter_name: &str) -> Option<String> {
 
 /// Suggest corrections for an unknown function
 pub fn suggest_unknown_function(func_name: &str) -> Option<String> {
-    let matches = find_closest_matches(func_name, AVAILABLE_FUNCTIONS, 3, SuggestionCategory::Function);
+    let matches = find_closest_matches(
+        func_name,
+        AVAILABLE_FUNCTIONS,
+        3,
+        SuggestionCategory::Function,
+    );
 
     if !matches.is_empty() {
         let suggestions: Vec<String> = matches.iter().map(|s| format!("`{}`", s.text)).collect();
@@ -291,7 +299,9 @@ pub fn suggest_iteration_fix(type_name: &str) -> String {
             "Objects require `| dictsort` to iterate: `{% for key, value in obj | dictsort %}`"
                 .to_string()
         }
-        "string" => "Strings iterate character by character. Did you mean to split it first?".to_string(),
+        "string" => {
+            "Strings iterate character by character. Did you mean to split it first?".to_string()
+        }
         "null" | "none" => {
             "Value is null/undefined. Check that it exists or use `| default([])` for empty list"
                 .to_string()
@@ -344,7 +354,8 @@ mod tests {
 
     #[test]
     fn test_find_closest_matches() {
-        let matches = find_closest_matches("toyml", AVAILABLE_FILTERS, 3, SuggestionCategory::Filter);
+        let matches =
+            find_closest_matches("toyml", AVAILABLE_FILTERS, 3, SuggestionCategory::Filter);
         assert!(!matches.is_empty());
         assert_eq!(matches[0].text, "toyaml");
         assert_eq!(matches[0].distance, 1);

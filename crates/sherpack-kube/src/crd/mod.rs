@@ -98,12 +98,12 @@ pub use schema::{
 pub use parser::CrdParser;
 
 // Analyzer types
-pub use analyzer::{ChangeSeverity, ChangeKind, CrdAnalysis, CrdAnalyzer, CrdChange};
+pub use analyzer::{ChangeKind, ChangeSeverity, CrdAnalysis, CrdAnalyzer, CrdChange};
 
 // Strategy types
 pub use strategy::{
-    CautiousStrategy, CustomStrategy, ForceStrategy, SafeStrategy, SkipStrategy,
-    SkippedChange, StrategyBuilder, UpgradeDecision, UpgradeStrategy, strategy_from_options,
+    CautiousStrategy, CustomStrategy, ForceStrategy, SafeStrategy, SkipStrategy, SkippedChange,
+    StrategyBuilder, UpgradeDecision, UpgradeStrategy, strategy_from_options,
 };
 
 // Apply types
@@ -111,14 +111,14 @@ pub use apply::{CrdApplyResult, CrdManager, CrdUpgradeResult, ResourceCategory};
 
 // Policy types (Phase 3)
 pub use policy::{
-    CrdLocation, CrdOwnership, CrdPolicy, DetectedCrd, CRD_POLICY_ANNOTATION, HELM_RESOURCE_POLICY,
+    CRD_POLICY_ANNOTATION, CrdLocation, CrdOwnership, CrdPolicy, DetectedCrd, HELM_RESOURCE_POLICY,
 };
 
 // Detection types (Phase 3)
 pub use detection::{
-    contains_jinja_syntax, detect_crds_in_manifests, extract_crd_name, is_crd_manifest, lint_crds,
     CrdLintCode, CrdLintWarning, CrdsScanResult, JinjaConstruct, LintSeverity, NonCrdFile,
-    TemplatedCrdFile,
+    TemplatedCrdFile, contains_jinja_syntax, detect_crds_in_manifests, extract_crd_name,
+    is_crd_manifest, lint_crds,
 };
 
 // Protection types (Phase 3)

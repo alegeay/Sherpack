@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
 
-use console::{style, Term};
+use console::{Term, style};
 
 /// Progress reporter for deployment operations
 pub struct ProgressReporter {
@@ -191,11 +191,7 @@ impl ProgressReporter {
 
             let line = format!(
                 "  {} {}/{}{}{}",
-                styled_symbol,
-                resource.kind,
-                resource.name,
-                readiness,
-                message
+                styled_symbol, resource.kind, resource.name, readiness, message
             );
 
             let _ = writeln!(io::stderr(), "{}", line);
@@ -230,7 +226,10 @@ impl ProgressReporter {
         let _ = writeln!(
             io::stderr(),
             "  {} Hook {} ({}){}",
-            symbol, name, duration_str, error_msg
+            symbol,
+            name,
+            duration_str,
+            error_msg
         );
     }
 

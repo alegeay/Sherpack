@@ -107,11 +107,7 @@ pub struct TemplateInfo {
 
 impl TemplateContext {
     /// Create a new template context
-    pub fn new(
-        values: Values,
-        release: ReleaseInfo,
-        pack: &PackMetadata,
-    ) -> Self {
+    pub fn new(values: Values, release: ReleaseInfo, pack: &PackMetadata) -> Self {
         Self {
             values: values.into_inner(),
             release,

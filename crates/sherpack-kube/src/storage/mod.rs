@@ -11,21 +11,21 @@
 //! - **Large release handling**: Automatic chunking or external storage for >1MB releases
 //! - **JSON format**: Human-readable after decompression (vs Helm's protobuf)
 
-mod secrets;
+mod chunked;
 mod configmap;
 mod file;
 mod mock;
-mod chunked;
+mod secrets;
 
-pub use secrets::SecretsDriver;
+pub use chunked::{CHUNK_SIZE, ChunkedIndex, ChunkedStorage};
 pub use configmap::ConfigMapDriver;
 pub use file::FileDriver;
 pub use mock::{MockStorageDriver, OperationCounts};
-pub use chunked::{ChunkedIndex, ChunkedStorage, CHUNK_SIZE};
+pub use secrets::SecretsDriver;
 
-use async_trait::async_trait;
 use crate::error::{KubeError, Result};
 use crate::release::StoredRelease;
+use async_trait::async_trait;
 
 /// Maximum size for a single Kubernetes Secret/ConfigMap (1MB - some overhead)
 pub const MAX_RESOURCE_SIZE: usize = 1_000_000;
@@ -150,17 +150,17 @@ pub fn compress(data: &[u8], method: CompressionMethod) -> Result<Vec<u8>> {
         CompressionMethod::None => Ok(data.to_vec()),
         CompressionMethod::Gzip { level } => {
             use std::io::Write;
-            let mut encoder = flate2::write::GzEncoder::new(
-                Vec::new(),
-                flate2::Compression::new(level),
-            );
-            encoder.write_all(data).map_err(|e| KubeError::Compression(e.to_string()))?;
-            encoder.finish().map_err(|e| KubeError::Compression(e.to_string()))
-        }
-        CompressionMethod::Zstd { level } => {
-            zstd::encode_all(std::io::Cursor::new(data), level)
+            let mut encoder =
+                flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::new(level));
+            encoder
+                .write_all(data)
+                .map_err(|e| KubeError::Compression(e.to_string()))?;
+            encoder
+                .finish()
                 .map_err(|e| KubeError::Compression(e.to_string()))
         }
+        CompressionMethod::Zstd { level } => zstd::encode_all(std::io::Cursor::new(data), level)
+            .map_err(|e| KubeError::Compression(e.to_string())),
     }
 }
 
@@ -173,14 +173,13 @@ pub fn decompress(data: &[u8], method: CompressionMethod) -> Result<Vec<u8>> {
             use std::io::Read;
             let mut decoder = flate2::read::GzDecoder::new(data);
             let mut decompressed = Vec::new();
-            decoder.read_to_end(&mut decompressed)
+            decoder
+                .read_to_end(&mut decompressed)
                 .map_err(|e| KubeError::Compression(e.to_string()))?;
             Ok(decompressed)
         }
-        CompressionMethod::Zstd { .. } => {
-            zstd::decode_all(std::io::Cursor::new(data))
-                .map_err(|e| KubeError::Compression(e.to_string()))
-        }
+        CompressionMethod::Zstd { .. } => zstd::decode_all(std::io::Cursor::new(data))
+            .map_err(|e| KubeError::Compression(e.to_string())),
     }
 }
 
@@ -220,18 +219,27 @@ pub fn decode_from_storage(data: &str, compression: CompressionMethod) -> Result
 #[must_use = "labels should be applied to resources"]
 pub fn storage_labels(release: &StoredRelease) -> std::collections::BTreeMap<String, String> {
     let mut labels = std::collections::BTreeMap::new();
-    labels.insert("app.kubernetes.io/managed-by".to_string(), "sherpack".to_string());
+    labels.insert(
+        "app.kubernetes.io/managed-by".to_string(),
+        "sherpack".to_string(),
+    );
     labels.insert("sherpack.io/release-name".to_string(), release.name.clone());
-    labels.insert("sherpack.io/release-version".to_string(), release.version.to_string());
-    labels.insert("sherpack.io/release-namespace".to_string(), release.namespace.clone());
+    labels.insert(
+        "sherpack.io/release-version".to_string(),
+        release.version.to_string(),
+    );
+    labels.insert(
+        "sherpack.io/release-namespace".to_string(),
+        release.namespace.clone(),
+    );
     labels
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sherpack_core::{PackMetadata, Values};
     use crate::release::ReleaseState;
+    use sherpack_core::{PackMetadata, Values};
 
     fn test_release() -> StoredRelease {
         StoredRelease::for_install(
@@ -366,10 +374,22 @@ mod tests {
         let release = test_release();
         let labels = storage_labels(&release);
 
-        assert_eq!(labels.get("app.kubernetes.io/managed-by"), Some(&"sherpack".to_string()));
-        assert_eq!(labels.get("sherpack.io/release-name"), Some(&"test".to_string()));
-        assert_eq!(labels.get("sherpack.io/release-version"), Some(&"1".to_string()));
-        assert_eq!(labels.get("sherpack.io/release-namespace"), Some(&"default".to_string()));
+        assert_eq!(
+            labels.get("app.kubernetes.io/managed-by"),
+            Some(&"sherpack".to_string())
+        );
+        assert_eq!(
+            labels.get("sherpack.io/release-name"),
+            Some(&"test".to_string())
+        );
+        assert_eq!(
+            labels.get("sherpack.io/release-version"),
+            Some(&"1".to_string())
+        );
+        assert_eq!(
+            labels.get("sherpack.io/release-namespace"),
+            Some(&"default".to_string())
+        );
     }
 
     #[test]
@@ -401,8 +421,14 @@ mod tests {
     fn test_storage_config_default() {
         let config = StorageConfig::default();
 
-        assert!(matches!(config.compression, CompressionMethod::Zstd { level: 3 }));
-        assert!(matches!(config.large_release_strategy, LargeReleaseStrategy::ChunkedSecrets));
+        assert!(matches!(
+            config.compression,
+            CompressionMethod::Zstd { level: 3 }
+        ));
+        assert!(matches!(
+            config.large_release_strategy,
+            LargeReleaseStrategy::ChunkedSecrets
+        ));
         assert_eq!(config.max_history, 10);
     }
 
@@ -420,10 +446,8 @@ mod tests {
 
         // Compressed should be smaller than original JSON
         let json = serialize_release(&release).unwrap();
-        let base64_decoded = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            &encoded,
-        ).unwrap();
+        let base64_decoded =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &encoded).unwrap();
         assert!(
             base64_decoded.len() < json.len(),
             "Compressed {} should be smaller than JSON {}",
@@ -441,10 +465,8 @@ mod tests {
     #[test]
     fn test_decode_invalid_json() {
         // Valid base64 but not valid JSON
-        let invalid = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            b"not json",
-        );
+        let invalid =
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b"not json");
         let result = decode_from_storage(&invalid, CompressionMethod::None);
         assert!(result.is_err());
     }
@@ -461,6 +483,8 @@ mod tests {
         let serialized = serialize_release(&release).unwrap();
         let deserialized = deserialize_release(&serialized).unwrap();
 
-        assert!(matches!(deserialized.state, ReleaseState::Failed { reason, .. } if reason == "Test failure"));
+        assert!(
+            matches!(deserialized.state, ReleaseState::Failed { reason, .. } if reason == "Test failure")
+        );
     }
 }

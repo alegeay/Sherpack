@@ -232,7 +232,6 @@ enum Commands {
     },
 
     // ========== Phase 4: Kubernetes Deployment ==========
-
     /// Install a pack to Kubernetes
     Install {
         /// Release name
@@ -518,7 +517,6 @@ enum Commands {
     },
 
     // ========== Phase 5: Repository Management ==========
-
     /// Manage pack repositories
     #[command(subcommand)]
     Repo(RepoCommands),
@@ -795,7 +793,8 @@ fn run_command(cli: Cli) -> error::Result<()> {
             diff,
             skip_crds,
         } => {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
             rt.block_on(commands::install::run(
                 &name,
                 &pack,
@@ -809,7 +808,8 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 dry_run,
                 diff,
                 skip_crds,
-            ))}
+            ))
+        }
 
         Commands::Upgrade {
             name,
@@ -833,7 +833,8 @@ fn run_command(cli: Cli) -> error::Result<()> {
             force_crd_update,
             show_crd_diff,
         } => {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
             rt.block_on(commands::upgrade::run(
                 &name,
                 &pack,
@@ -855,7 +856,8 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 skip_crd_update,
                 force_crd_update,
                 show_crd_diff,
-            ))}
+            ))
+        }
 
         Commands::Uninstall {
             name,
@@ -868,7 +870,8 @@ fn run_command(cli: Cli) -> error::Result<()> {
             delete_crds,
             confirm_crd_deletion,
         } => {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
             rt.block_on(commands::uninstall::run(
                 &name,
                 &namespace,
@@ -879,7 +882,8 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 dry_run,
                 delete_crds,
                 confirm_crd_deletion,
-            ))}
+            ))
+        }
 
         Commands::Rollback {
             name,
@@ -894,7 +898,8 @@ fn run_command(cli: Cli) -> error::Result<()> {
             immutable_strategy,
             max_history,
         } => {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
             rt.block_on(commands::rollback::run(
                 &name,
                 revision,
@@ -907,19 +912,22 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 diff,
                 immutable_strategy.as_deref(),
                 max_history,
-            ))}
+            ))
+        }
 
         Commands::List {
             namespace,
             all_namespaces,
             json,
         } => {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
             rt.block_on(commands::list::run(
                 namespace.as_deref(),
                 all_namespaces,
                 json,
-            ))}
+            ))
+        }
 
         Commands::History {
             name,
@@ -927,8 +935,10 @@ fn run_command(cli: Cli) -> error::Result<()> {
             max,
             json,
         } => {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
-            rt.block_on(commands::history::run(&name, &namespace, max, json))}
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            rt.block_on(commands::history::run(&name, &namespace, max, json))
+        }
 
         Commands::Status {
             name,
@@ -938,7 +948,8 @@ fn run_command(cli: Cli) -> error::Result<()> {
             manifest,
             json,
         } => {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
             rt.block_on(commands::status::run(
                 &name,
                 &namespace,
@@ -946,15 +957,19 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 show_values,
                 manifest,
                 json,
-            ))}
+            ))
+        }
 
         Commands::Recover { name, namespace } => {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
-            rt.block_on(commands::recover::run(&name, &namespace))}
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            rt.block_on(commands::recover::run(&name, &namespace))
+        }
 
         // Phase 5: Repository management commands
         Commands::Repo(subcmd) => {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
             match subcmd {
                 RepoCommands::Add {
                     name,
@@ -983,8 +998,14 @@ fn run_command(cli: Cli) -> error::Result<()> {
             versions,
             json,
         } => {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
-            rt.block_on(commands::search::run(&query, repo.as_deref(), versions, json))
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            rt.block_on(commands::search::run(
+                &query,
+                repo.as_deref(),
+                versions,
+                json,
+            ))
         }
 
         Commands::Pull {
@@ -993,7 +1014,8 @@ fn run_command(cli: Cli) -> error::Result<()> {
             output,
             untar,
         } => {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
             rt.block_on(commands::pull::run(
                 &pack,
                 pack_version.as_deref(),
@@ -1006,12 +1028,14 @@ fn run_command(cli: Cli) -> error::Result<()> {
             archive,
             destination,
         } => {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
             rt.block_on(commands::push::run(&archive, &destination))
         }
 
         Commands::Dependency(subcmd) => {
-            let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
             match subcmd {
                 DependencyCommands::List { path } => rt.block_on(commands::dep::list(&path)),
                 DependencyCommands::Update { path } => rt.block_on(commands::dep::update(&path)),

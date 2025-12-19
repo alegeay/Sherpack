@@ -355,10 +355,7 @@ mod tests {
     #[test]
     fn test_parse_failure_policy() {
         let annotations = make_annotations(&[("sherpack.io/hook-failure-policy", "continue")]);
-        assert_eq!(
-            parse_failure_policy(&annotations),
-            FailurePolicy::Continue
-        );
+        assert_eq!(parse_failure_policy(&annotations), FailurePolicy::Continue);
 
         let annotations = make_annotations(&[("sherpack.io/hook-failure-policy", "retry(5)")]);
         assert_eq!(parse_failure_policy(&annotations), FailurePolicy::Retry(5));

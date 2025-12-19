@@ -5,13 +5,13 @@
 
 use indexmap::IndexMap;
 use minijinja::Environment;
-use sherpack_core::{LoadedPack, TemplateContext, SandboxedFileProvider};
+use sherpack_core::{LoadedPack, SandboxedFileProvider, TemplateContext};
 use std::collections::HashMap;
 
 use crate::error::{EngineError, RenderReport, RenderResultWithReport, Result, TemplateError};
+use crate::files_object::create_files_value_from_provider;
 use crate::filters;
 use crate::functions;
-use crate::files_object::create_files_value_from_provider;
 
 /// Prefix character for helper templates (skipped during rendering)
 const HELPER_TEMPLATE_PREFIX: char = '_';
@@ -67,7 +67,7 @@ impl Engine {
     ///
     /// # Arguments
     /// * `strict_mode` - If true, uses Chainable undefined behavior (Helm-compatible).
-    ///                   If false, uses Lenient mode (empty strings for undefined).
+    ///   If false, uses Lenient mode (empty strings for undefined).
     ///
     /// # Prefer using convenience methods
     /// For clearer code, prefer `Engine::strict()` or `Engine::lenient()`.
@@ -218,12 +218,20 @@ impl Engine {
         let mut env = env;
         env.add_template_owned(template_name.to_string(), template.to_string())
             .map_err(|e| {
-                EngineError::Template(Box::new(TemplateError::from_minijinja(e, template_name, template)))
+                EngineError::Template(Box::new(TemplateError::from_minijinja(
+                    e,
+                    template_name,
+                    template,
+                )))
             })?;
 
         // Get template and render
         let tmpl = env.get_template(template_name).map_err(|e| {
-            EngineError::Template(Box::new(TemplateError::from_minijinja(e, template_name, template)))
+            EngineError::Template(Box::new(TemplateError::from_minijinja(
+                e,
+                template_name,
+                template,
+            )))
         })?;
 
         // Build context
@@ -236,7 +244,11 @@ impl Engine {
         };
 
         tmpl.render(ctx).map_err(|e| {
-            EngineError::Template(Box::new(TemplateError::from_minijinja(e, template_name, template)))
+            EngineError::Template(Box::new(TemplateError::from_minijinja(
+                e,
+                template_name,
+                template,
+            )))
         })
     }
 
@@ -263,7 +275,9 @@ impl Engine {
 
             return Err(match first_error {
                 Some(err) => EngineError::Template(Box::new(err)),
-                None => EngineError::Template(Box::new(TemplateError::simple("Unknown template error"))),
+                None => {
+                    EngineError::Template(Box::new(TemplateError::simple("Unknown template error")))
+                }
             });
         }
 
@@ -344,10 +358,19 @@ impl Engine {
         // Add context as globals so imported macros can access them
         // This is necessary because MiniJinja macros don't automatically get the render context
         env.add_global("values", minijinja::Value::from_serialize(&context.values));
-        env.add_global("release", minijinja::Value::from_serialize(&context.release));
+        env.add_global(
+            "release",
+            minijinja::Value::from_serialize(&context.release),
+        );
         env.add_global("pack", minijinja::Value::from_serialize(&context.pack));
-        env.add_global("capabilities", minijinja::Value::from_serialize(&context.capabilities));
-        env.add_global("template", minijinja::Value::from_serialize(&context.template));
+        env.add_global(
+            "capabilities",
+            minijinja::Value::from_serialize(&context.capabilities),
+        );
+        env.add_global(
+            "template",
+            minijinja::Value::from_serialize(&context.template),
+        );
 
         // Add Files API - provides sandboxed access to pack files from templates
         // Usage: {{ files.get("config/app.conf") }}, files.exists(), files.glob(), files.lines()
@@ -403,7 +426,10 @@ impl Engine {
             match tmpl.render(&ctx) {
                 Ok(rendered) => {
                     // Process successful render
-                    if template_name.to_lowercase().contains(NOTES_TEMPLATE_PATTERN) {
+                    if template_name
+                        .to_lowercase()
+                        .contains(NOTES_TEMPLATE_PATTERN)
+                    {
                         notes = Some(rendered);
                     } else {
                         let trimmed = rendered.trim();
@@ -448,16 +474,18 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sherpack_core::{PackMetadata, ReleaseInfo, Values};
     use semver::Version;
+    use sherpack_core::{PackMetadata, ReleaseInfo, Values};
 
     fn create_test_context() -> TemplateContext {
-        let values = Values::from_yaml(r#"
+        let values = Values::from_yaml(
+            r#"
 image:
   repository: nginx
   tag: "1.25"
 replicas: 3
-"#)
+"#,
+        )
         .unwrap();
 
         let release = ReleaseInfo::for_install("myapp", "default");

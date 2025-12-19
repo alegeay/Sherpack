@@ -10,25 +10,23 @@ use sherpack_kube::{
 use crate::error::Result;
 
 /// Run the list command
-pub async fn run(
-    namespace: Option<&str>,
-    all_namespaces: bool,
-    output_json: bool,
-) -> Result<()> {
+pub async fn run(namespace: Option<&str>, all_namespaces: bool, output_json: bool) -> Result<()> {
     // Create storage driver
     let storage_path = dirs::data_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("sherpack")
         .join("releases");
 
-    let storage = FileDriver::new(storage_path, StorageConfig::default())
-        .into_diagnostic()?;
+    let storage = FileDriver::new(storage_path, StorageConfig::default()).into_diagnostic()?;
 
     // Create client
     let client = KubeClient::new(storage).await.into_diagnostic()?;
 
     // List releases
-    let releases = client.list(namespace, all_namespaces).await.into_diagnostic()?;
+    let releases = client
+        .list(namespace, all_namespaces)
+        .await
+        .into_diagnostic()?;
 
     if output_json {
         let json = serde_json::to_string_pretty(&releases).into_diagnostic()?;

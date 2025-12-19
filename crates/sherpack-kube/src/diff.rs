@@ -66,10 +66,7 @@ const IGNORED_ANNOTATIONS: &[&str] = &[
 ];
 
 /// Labels to optionally ignore when comparing
-const OPTIONALLY_IGNORED_LABELS: &[&str] = &[
-    "app.kubernetes.io/managed-by",
-    "helm.sh/chart",
-];
+const OPTIONALLY_IGNORED_LABELS: &[&str] = &["app.kubernetes.io/managed-by", "helm.sh/chart"];
 
 /// Diff engine for release comparison and drift detection
 pub struct DiffEngine {
@@ -222,10 +219,9 @@ impl DiffEngine {
                             name: key.name.clone(),
                             namespace: key.namespace.clone(),
                             change_type: ChangeType::Modified,
-                            diff: Some(self.compute_text_diff(
-                                &manifest_normalized,
-                                &live_normalized,
-                            )),
+                            diff: Some(
+                                self.compute_text_diff(&manifest_normalized, &live_normalized),
+                            ),
                             is_drift: true, // This is drift - cluster differs from release
                             source: DiffSource::ClusterDrift,
                         });
@@ -349,9 +345,12 @@ impl DiffEngine {
                 .then_with(|| a.name.cmp(&b.name))
         });
 
-        let has_pending_changes = changes
-            .iter()
-            .any(|c| matches!(c.change_type, ChangeType::Added | ChangeType::Modified | ChangeType::Removed));
+        let has_pending_changes = changes.iter().any(|c| {
+            matches!(
+                c.change_type,
+                ChangeType::Added | ChangeType::Modified | ChangeType::Removed
+            )
+        });
         let has_drift = changes.iter().any(|c| c.is_drift);
 
         Ok(ThreeWayDiffResult {
@@ -417,10 +416,12 @@ impl DiffEngine {
                             ChangeType::Unchanged
                         },
                         diff: if will_change {
-                            Some(self.compute_text_diff(
-                                &self.normalize_resource(diff_target),
-                                &d_norm,
-                            ))
+                            Some(
+                                self.compute_text_diff(
+                                    &self.normalize_resource(diff_target),
+                                    &d_norm,
+                                ),
+                            )
                         } else {
                             None
                         },
@@ -606,9 +607,10 @@ impl DiffEngine {
 
         // Remove status if configured
         if self.ignore_status
-            && let Some(obj) = value.as_object_mut() {
-                obj.remove("status");
-            }
+            && let Some(obj) = value.as_object_mut()
+        {
+            obj.remove("status");
+        }
 
         // Remove custom ignored paths
         for path in &self.ignore_paths {
@@ -629,35 +631,38 @@ impl DiffEngine {
     /// Strip ignored annotations
     fn strip_ignored_annotations(&self, value: &mut JsonValue) {
         if let Some(metadata) = value.get_mut("metadata").and_then(|m| m.as_object_mut())
-            && let Some(annotations) = metadata.get_mut("annotations").and_then(|a| a.as_object_mut())
-            {
-                for annotation in IGNORED_ANNOTATIONS {
-                    annotations.remove(*annotation);
-                }
-                // Remove annotations entirely if empty
-                if annotations.is_empty() {
-                    metadata.remove("annotations");
-                }
+            && let Some(annotations) = metadata
+                .get_mut("annotations")
+                .and_then(|a| a.as_object_mut())
+        {
+            for annotation in IGNORED_ANNOTATIONS {
+                annotations.remove(*annotation);
             }
+            // Remove annotations entirely if empty
+            if annotations.is_empty() {
+                metadata.remove("annotations");
+            }
+        }
     }
 
     /// Strip management labels if configured
     fn strip_management_labels(&self, value: &mut JsonValue) {
         if let Some(metadata) = value.get_mut("metadata").and_then(|m| m.as_object_mut())
-            && let Some(labels) = metadata.get_mut("labels").and_then(|l| l.as_object_mut()) {
-                for label in OPTIONALLY_IGNORED_LABELS {
-                    labels.remove(*label);
-                }
+            && let Some(labels) = metadata.get_mut("labels").and_then(|l| l.as_object_mut())
+        {
+            for label in OPTIONALLY_IGNORED_LABELS {
+                labels.remove(*label);
             }
+        }
     }
 
     /// Remove a JSON path from a value
     fn remove_json_path(&self, value: &mut JsonValue, path: &str) {
         let parts: Vec<&str> = path.split('.').collect();
-        self.remove_path_recursive(value, &parts);
+        Self::remove_path_recursive(value, &parts);
     }
 
-    fn remove_path_recursive(&self, value: &mut JsonValue, path: &[&str]) {
+    fn remove_path_recursive(value: &mut JsonValue, path: &[&str]) {
         if path.is_empty() {
             return;
         }
@@ -670,9 +675,10 @@ impl DiffEngine {
         }
 
         if let Some(obj) = value.as_object_mut()
-            && let Some(child) = obj.get_mut(path[0]) {
-                self.remove_path_recursive(child, &path[1..]);
-            }
+            && let Some(child) = obj.get_mut(path[0])
+        {
+            Self::remove_path_recursive(child, &path[1..]);
+        }
     }
 
     /// Compute a text diff between two strings
@@ -757,7 +763,7 @@ impl DiffEngine {
 
     /// Format diff result for terminal output with colors
     pub fn format_colored(&self, result: &DiffResult) -> String {
-        use console::{style, Style};
+        use console::{Style, style};
 
         let mut output = String::new();
 
@@ -1435,10 +1441,7 @@ status:
             parse_api_version("apps/v1"),
             ("apps".to_string(), "v1".to_string())
         );
-        assert_eq!(
-            parse_api_version("v1"),
-            (String::new(), "v1".to_string())
-        );
+        assert_eq!(parse_api_version("v1"), (String::new(), "v1".to_string()));
         assert_eq!(
             parse_api_version("networking.k8s.io/v1"),
             ("networking.k8s.io".to_string(), "v1".to_string())

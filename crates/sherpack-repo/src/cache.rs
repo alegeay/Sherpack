@@ -6,7 +6,7 @@
 //! - Auto-recovery on corruption
 
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection, OpenFlags};
+use rusqlite::{Connection, OpenFlags, params};
 use std::path::{Path, PathBuf};
 
 use crate::error::{RepoError, Result};
@@ -169,7 +169,9 @@ impl IndexCache {
 
     /// Get repository ID by name
     pub fn get_repository_id(&self, name: &str) -> Result<Option<i64>> {
-        let mut stmt = self.conn.prepare("SELECT id FROM repositories WHERE name = ?1")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id FROM repositories WHERE name = ?1")?;
         let id = stmt.query_row([name], |row| row.get(0)).ok();
         Ok(id)
     }
@@ -183,11 +185,11 @@ impl IndexCache {
 
     /// Add packs to cache for a repository
     pub fn add_packs(&mut self, repo_name: &str, packs: &[PackEntry]) -> Result<()> {
-        let repo_id = self
-            .get_repository_id(repo_name)?
-            .ok_or_else(|| RepoError::RepositoryNotFound {
-                name: repo_name.to_string(),
-            })?;
+        let repo_id =
+            self.get_repository_id(repo_name)?
+                .ok_or_else(|| RepoError::RepositoryNotFound {
+                    name: repo_name.to_string(),
+                })?;
 
         // Use a transaction for better performance
         let tx = self.conn.transaction()?;
@@ -275,11 +277,11 @@ impl IndexCache {
 
     /// Search within a specific repository
     pub fn search_in_repo(&self, repo_name: &str, query: &str) -> Result<Vec<CachedPack>> {
-        let repo_id = self
-            .get_repository_id(repo_name)?
-            .ok_or_else(|| RepoError::RepositoryNotFound {
-                name: repo_name.to_string(),
-            })?;
+        let repo_id =
+            self.get_repository_id(repo_name)?
+                .ok_or_else(|| RepoError::RepositoryNotFound {
+                    name: repo_name.to_string(),
+                })?;
 
         let mut stmt = self.conn.prepare(
             r#"
@@ -319,11 +321,11 @@ impl IndexCache {
 
     /// Get latest version of each pack in a repository
     pub fn list_latest(&self, repo_name: &str) -> Result<Vec<CachedPack>> {
-        let repo_id = self
-            .get_repository_id(repo_name)?
-            .ok_or_else(|| RepoError::RepositoryNotFound {
-                name: repo_name.to_string(),
-            })?;
+        let repo_id =
+            self.get_repository_id(repo_name)?
+                .ok_or_else(|| RepoError::RepositoryNotFound {
+                    name: repo_name.to_string(),
+                })?;
 
         // Get latest version of each pack
         let mut stmt = self.conn.prepare(
@@ -402,9 +404,9 @@ impl IndexCache {
 
     /// Get cache statistics
     pub fn stats(&self) -> Result<CacheStats> {
-        let repo_count: i64 = self
-            .conn
-            .query_row("SELECT COUNT(*) FROM repositories", [], |r| r.get(0))?;
+        let repo_count: i64 =
+            self.conn
+                .query_row("SELECT COUNT(*) FROM repositories", [], |r| r.get(0))?;
 
         let pack_count: i64 = self
             .conn
@@ -412,20 +414,16 @@ impl IndexCache {
 
         let oldest_update: Option<i64> = self
             .conn
-            .query_row(
-                "SELECT MIN(last_updated) FROM repositories",
-                [],
-                |r| r.get(0),
-            )
+            .query_row("SELECT MIN(last_updated) FROM repositories", [], |r| {
+                r.get(0)
+            })
             .ok();
 
         Ok(CacheStats {
             repository_count: repo_count as usize,
             pack_count: pack_count as usize,
-            oldest_update: oldest_update.map(|ts| {
-                DateTime::from_timestamp(ts, 0)
-                    .unwrap_or_default()
-            }),
+            oldest_update: oldest_update
+                .map(|ts| DateTime::from_timestamp(ts, 0).unwrap_or_default()),
         })
     }
 
@@ -498,30 +496,6 @@ mod tests {
                 ..Default::default()
             },
         ]
-    }
-
-    impl Default for PackEntry {
-        fn default() -> Self {
-            Self {
-                name: String::new(),
-                version: String::new(),
-                app_version: None,
-                description: None,
-                home: None,
-                icon: None,
-                sources: vec![],
-                keywords: vec![],
-                maintainers: vec![],
-                urls: vec![],
-                digest: None,
-                created: None,
-                deprecated: false,
-                dependencies: vec![],
-                annotations: std::collections::HashMap::new(),
-                api_version: None,
-                r#type: None,
-            }
-        }
     }
 
     #[test]

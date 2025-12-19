@@ -22,11 +22,15 @@ pub enum KubeError {
     ReleaseAlreadyExists { name: String, namespace: String },
 
     /// Another operation is in progress (with recovery hint)
-    #[error("another operation is in progress for release '{name}': {status}\nHint: Run `sherpack recover {name}` to recover from stuck state")]
+    #[error(
+        "another operation is in progress for release '{name}': {status}\nHint: Run `sherpack recover {name}` to recover from stuck state"
+    )]
     OperationInProgress { name: String, status: String },
 
     /// Release is in a stuck state (can be auto-recovered)
-    #[error("release '{name}' is stuck in state '{status}' (started {elapsed} ago)\nHint: Run `sherpack recover {name}` to mark as failed and retry")]
+    #[error(
+        "release '{name}' is stuck in state '{status}' (started {elapsed} ago)\nHint: Run `sherpack recover {name}` to mark as failed and retry"
+    )]
     StuckRelease {
         name: String,
         status: String,
@@ -54,7 +58,9 @@ pub enum KubeError {
     Storage(String),
 
     /// Release data too large
-    #[error("release data too large ({size} bytes, max {max} bytes)\nHint: Use --large-release-strategy=chunked or external storage")]
+    #[error(
+        "release data too large ({size} bytes, max {max} bytes)\nHint: Use --large-release-strategy=chunked or external storage"
+    )]
     ReleaseTooLarge { size: usize, max: usize },
 
     /// Serialization error
@@ -90,11 +96,15 @@ pub enum KubeError {
     Io(#[from] std::io::Error),
 
     /// Immutable field conflict during rollback/upgrade
-    #[error("cannot modify immutable field '{field}' in {resource}\nHint: Use --immutable-strategy=recreate to delete and recreate the resource")]
+    #[error(
+        "cannot modify immutable field '{field}' in {resource}\nHint: Use --immutable-strategy=recreate to delete and recreate the resource"
+    )]
     ImmutableFieldConflict { resource: String, field: String },
 
     /// Drift detected
-    #[error("drift detected in {count} resource(s)\nHint: Use `sherpack diff {name}` to see changes, or --force to override")]
+    #[error(
+        "drift detected in {count} resource(s)\nHint: Use `sherpack diff {name}` to see changes, or --force to override"
+    )]
     DriftDetected { name: String, count: usize },
 
     /// Invalid manifest

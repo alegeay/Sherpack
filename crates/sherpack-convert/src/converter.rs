@@ -9,10 +9,10 @@
 //! - Auto-detects all macros defined in helpers files
 //! - Generates minimal import statements with only used macros
 
+use regex::Regex;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use regex::Regex;
 use walkdir::WalkDir;
 
 use crate::chart::HelmChart;
@@ -21,8 +21,7 @@ use crate::parser;
 use crate::transformer::Transformer;
 
 /// Options for the converter
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct ConvertOptions {
     /// Overwrite existing output directory
     pub force: bool,
@@ -31,7 +30,6 @@ pub struct ConvertOptions {
     /// Verbose output
     pub verbose: bool,
 }
-
 
 /// Result of a conversion
 #[derive(Debug)]
@@ -106,9 +104,7 @@ impl Converter {
             fs::write(&pack_path, &pack_yaml)?;
             result.converted_files.push(pack_path);
         } else {
-            result
-                .converted_files
-                .push(output_path.join("Pack.yaml"));
+            result.converted_files.push(output_path.join("Pack.yaml"));
         }
 
         // Copy values.yaml
@@ -173,7 +169,8 @@ impl Converter {
 
         // Three-pass conversion for proper macro import handling
         // Pass 1: Convert helpers files and collect macro definitions per file
-        let mut macro_sources: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let mut macro_sources: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
         let mut defined_macros: HashSet<String> = HashSet::new();
         let mut helper_files: Vec<(PathBuf, String, String)> = Vec::new(); // (dest_path, dest_name, converted_content)
 
@@ -192,7 +189,11 @@ impl Converter {
                 let content = fs::read_to_string(path)?;
                 let rel_path = path.strip_prefix(src_dir).unwrap_or(path);
                 let dest_path = self.get_dest_path(dest_dir, rel_path);
-                let dest_name = dest_path.file_name().and_then(|n| n.to_str()).unwrap_or("_helpers.j2").to_string();
+                let dest_name = dest_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("_helpers.j2")
+                    .to_string();
 
                 match self.convert_helpers(&content, chart_name, &dest_path) {
                     Ok((converted, warnings)) => {
@@ -231,11 +232,15 @@ impl Converter {
             let used_macros = find_used_macros(converted, &defined_macros);
 
             // Group by source file, excluding macros from this file
-            let mut imports_by_file: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
+            let mut imports_by_file: std::collections::HashMap<&str, Vec<&str>> =
+                std::collections::HashMap::new();
             for macro_name in &used_macros {
                 if let Some(source_file) = macro_sources.get(macro_name) {
                     if source_file != this_file {
-                        imports_by_file.entry(source_file.as_str()).or_default().push(macro_name.as_str());
+                        imports_by_file
+                            .entry(source_file.as_str())
+                            .or_default()
+                            .push(macro_name.as_str());
                     }
                 }
             }
@@ -315,7 +320,13 @@ impl Converter {
 
             // Convert template files
             if content.contains("{{") {
-                match self.convert_template_with_macros(&content, chart_name, &dest_path, &defined_macros, &macro_sources) {
+                match self.convert_template_with_macros(
+                    &content,
+                    chart_name,
+                    &dest_path,
+                    &defined_macros,
+                    &macro_sources,
+                ) {
                     Ok((converted, warnings)) => {
                         if !self.options.dry_run {
                             fs::write(&dest_path, &converted)?;
@@ -370,10 +381,14 @@ impl Converter {
         // Generate import statements grouped by source file
         let final_content = if !used_macros.is_empty() && !macro_sources.is_empty() {
             // Group macros by their source file
-            let mut imports_by_file: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
+            let mut imports_by_file: std::collections::HashMap<&str, Vec<&str>> =
+                std::collections::HashMap::new();
             for macro_name in &used_macros {
                 if let Some(source_file) = macro_sources.get(macro_name) {
-                    imports_by_file.entry(source_file.as_str()).or_default().push(macro_name.as_str());
+                    imports_by_file
+                        .entry(source_file.as_str())
+                        .or_default()
+                        .push(macro_name.as_str());
                 }
             }
 
@@ -409,7 +424,13 @@ impl Converter {
         dest_path: &Path,
     ) -> Result<(String, Vec<ConversionWarning>)> {
         // For backwards compatibility, use empty macro set
-        self.convert_template_with_macros(content, chart_name, dest_path, &HashSet::new(), &std::collections::HashMap::new())
+        self.convert_template_with_macros(
+            content,
+            chart_name,
+            dest_path,
+            &HashSet::new(),
+            &std::collections::HashMap::new(),
+        )
     }
 
     /// Collect and convert transformer warnings
@@ -426,12 +447,16 @@ impl Converter {
                 let category = match w.severity {
                     crate::transformer::WarningSeverity::Info => WarningCategory::Syntax,
                     crate::transformer::WarningSeverity::Warning => WarningCategory::Syntax,
-                    crate::transformer::WarningSeverity::Unsupported => WarningCategory::UnsupportedFeature,
+                    crate::transformer::WarningSeverity::Unsupported => {
+                        WarningCategory::UnsupportedFeature
+                    }
                 };
                 let severity = match w.severity {
                     crate::transformer::WarningSeverity::Info => WarningSeverity::Info,
                     crate::transformer::WarningSeverity::Warning => WarningSeverity::Warning,
-                    crate::transformer::WarningSeverity::Unsupported => WarningSeverity::Unsupported,
+                    crate::transformer::WarningSeverity::Unsupported => {
+                        WarningSeverity::Unsupported
+                    }
                 };
                 ConversionWarning {
                     severity,
@@ -478,10 +503,7 @@ impl Converter {
     }
 
     fn get_dest_path(&self, dest_dir: &Path, rel_path: &Path) -> PathBuf {
-        let file_name = rel_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let file_name = rel_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
         // Rename _helpers.tpl -> _macros.j2
         let new_name = if file_name.starts_with('_') && file_name.ends_with(".tpl") {

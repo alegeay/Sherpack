@@ -1,12 +1,11 @@
 //! Lint command - validate a pack
 
 use console::style;
+use indexmap::IndexMap;
 use sherpack_core::{LoadedPack, ReleaseInfo, SchemaValidator, TemplateContext, Values};
 use sherpack_engine::Engine;
-use indexmap::IndexMap;
 use sherpack_kube::{
-    detect_crds_in_manifests, lint_crds, CrdLocation, DetectedCrd, LintSeverity,
-    TemplatedCrdFile,
+    CrdLocation, DetectedCrd, LintSeverity, TemplatedCrdFile, detect_crds_in_manifests, lint_crds,
 };
 use std::path::Path;
 
@@ -14,11 +13,7 @@ use crate::display::display_render_report;
 use crate::error::{CliError, Result};
 
 pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
-    println!(
-        "{} Linting pack at {}",
-        style("→").blue(),
-        path.display()
-    );
+    println!("{} Linting pack at {}", style("→").blue(), path.display());
 
     let mut errors = 0;
     let mut warnings = 0;
@@ -54,10 +49,7 @@ pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
             }
         }
     } else {
-        println!(
-            "  {} values.yaml not found (optional)",
-            style("⚠").yellow()
-        );
+        println!("  {} values.yaml not found (optional)", style("⚠").yellow());
         warnings += 1;
     }
 
@@ -69,10 +61,7 @@ pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
             .collect();
 
         if entries.is_empty() {
-            println!(
-                "  {} templates/ directory is empty",
-                style("⚠").yellow()
-            );
+            println!("  {} templates/ directory is empty", style("⚠").yellow());
             warnings += 1;
         } else {
             println!(
@@ -82,52 +71,47 @@ pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
             );
         }
     } else {
-        println!(
-            "  {} templates/ directory not found",
-            style("✗").red()
-        );
+        println!("  {} templates/ directory not found", style("✗").red());
         errors += 1;
     }
 
     // Check and validate schema if present
     let mut schema_validator = None;
     if let Some(pack) = &pack
-        && !skip_schema {
-            if let Some(schema_path) = &pack.schema_path {
-                match pack.load_schema() {
-                    Ok(Some(schema)) => {
-                        println!(
-                            "  {} {} is valid",
-                            style("✓").green(),
-                            schema_path
-                                .file_name()
-                                .map(|n| n.to_string_lossy())
-                                .unwrap_or_else(|| "schema".into())
-                        );
-                        match SchemaValidator::new(schema) {
-                            Ok(validator) => {
-                                schema_validator = Some(validator);
-                            }
-                            Err(e) => {
-                                println!("  {} Schema compilation failed: {}", style("✗").red(), e);
-                                errors += 1;
-                            }
+        && !skip_schema
+    {
+        if let Some(schema_path) = &pack.schema_path {
+            match pack.load_schema() {
+                Ok(Some(schema)) => {
+                    println!(
+                        "  {} {} is valid",
+                        style("✓").green(),
+                        schema_path
+                            .file_name()
+                            .map(|n| n.to_string_lossy())
+                            .unwrap_or_else(|| "schema".into())
+                    );
+                    match SchemaValidator::new(schema) {
+                        Ok(validator) => {
+                            schema_validator = Some(validator);
+                        }
+                        Err(e) => {
+                            println!("  {} Schema compilation failed: {}", style("✗").red(), e);
+                            errors += 1;
                         }
                     }
-                    Ok(None) => {}
-                    Err(e) => {
-                        println!("  {} Failed to load schema: {}", style("✗").red(), e);
-                        errors += 1;
-                    }
                 }
-            } else {
-                println!(
-                    "  {} No schema file found (optional)",
-                    style("⚠").yellow()
-                );
-                warnings += 1;
+                Ok(None) => {}
+                Err(e) => {
+                    println!("  {} Failed to load schema: {}", style("✗").red(), e);
+                    errors += 1;
+                }
             }
+        } else {
+            println!("  {} No schema file found (optional)", style("⚠").yellow());
+            warnings += 1;
         }
+    }
 
     // Try to render templates with values
     if let Some(pack) = &pack {
@@ -184,11 +168,7 @@ pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
             for (name, content) in &result.manifests {
                 match serde_yaml::from_str::<serde_yaml::Value>(content) {
                     Ok(_) => {
-                        println!(
-                            "    {} {} produces valid YAML",
-                            style("✓").green(),
-                            name
-                        );
+                        println!("    {} {} produces valid YAML", style("✓").green(), name);
                     }
                     Err(e) => {
                         println!(
@@ -232,10 +212,7 @@ pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
             warnings
         );
     } else {
-        println!(
-            "{} Linting passed!",
-            style("✓").green().bold()
-        );
+        println!("{} Linting passed!", style("✓").green().bold());
     }
 
     Ok(())
@@ -285,11 +262,7 @@ fn lint_crds_in_pack(pack: &LoadedPack, manifests: &IndexMap<String, String>) ->
     // Show CRDs found
     let total_crds = crds_dir_crds.len() + templates_crds.len();
     if total_crds > 0 {
-        println!(
-            "  {} Found {} CRD(s)",
-            style("✓").green(),
-            total_crds
-        );
+        println!("  {} Found {} CRD(s)", style("✓").green(), total_crds);
 
         for crd in &crds_dir_crds {
             println!(
@@ -351,11 +324,7 @@ fn lint_crds_in_pack(pack: &LoadedPack, manifests: &IndexMap<String, String>) ->
         }
         println!("    {}", warning.message);
         if let Some(suggestion) = &warning.suggestion {
-            println!(
-                "    {} {}",
-                style("Tip:").dim(),
-                suggestion
-            );
+            println!("    {} {}", style("Tip:").dim(), suggestion);
         }
     }
 

@@ -1,7 +1,7 @@
 //! Snapshot tests for error display formatting
 
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 use tempfile::TempDir;
 
 /// Helper to run sherpack command and capture output
@@ -72,8 +72,7 @@ fn normalize_output(output: &str) -> String {
         .map(|line| {
             // Remove absolute paths
             if line.contains("/tmp/") || line.contains("/var/") {
-                line.split("/tmp/").next().unwrap_or(line).to_string()
-                    + "[TEMP_PATH]"
+                line.split("/tmp/").next().unwrap_or(line).to_string() + "[TEMP_PATH]"
             } else {
                 line.to_string()
             }
@@ -89,33 +88,27 @@ mod error_display_snapshots {
     fn test_undefined_variable_error_display() {
         // With chainable mode, undefined variables return empty (Helm compatibility)
         // This test verifies the new behavior
-        let pack = create_test_pack(&[
-            ("deployment.yaml", "name: {{ values.undefined_key }}")
-        ]);
+        let pack = create_test_pack(&[("deployment.yaml", "name: {{ values.undefined_key }}")]);
 
-        let (stdout, _stderr, success) = sherpack_output(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let (stdout, _stderr, success) =
+            sherpack_output(&["template", "test", pack.path().to_str().unwrap()]);
 
         // Should succeed - chainable mode returns empty for undefined keys
-        assert!(success, "Should succeed with chainable mode. Output: {}", stdout);
+        assert!(
+            success,
+            "Should succeed with chainable mode. Output: {}",
+            stdout
+        );
     }
 
     #[test]
     fn test_typo_value_error_has_suggestion() {
         // With chainable mode, typos in variable names don't error - they return empty
         // This test verifies the new behavior
-        let pack = create_test_pack(&[
-            ("deployment.yaml", "name: {{ value.app.name }}")
-        ]);
+        let pack = create_test_pack(&[("deployment.yaml", "name: {{ value.app.name }}")]);
 
-        let (stdout, _stderr, success) = sherpack_output(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let (stdout, _stderr, success) =
+            sherpack_output(&["template", "test", pack.path().to_str().unwrap()]);
 
         // Should succeed - chainable mode allows undefined variables
         assert!(
@@ -127,15 +120,10 @@ mod error_display_snapshots {
 
     #[test]
     fn test_unknown_filter_error_has_suggestion() {
-        let pack = create_test_pack(&[
-            ("deployment.yaml", "name: {{ values.app.name | toyml }}")
-        ]);
+        let pack = create_test_pack(&[("deployment.yaml", "name: {{ values.app.name | toyml }}")]);
 
-        let (stdout, _stderr, _success) = sherpack_output(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let (stdout, _stderr, _success) =
+            sherpack_output(&["template", "test", pack.path().to_str().unwrap()]);
 
         // Should suggest "toyaml" for "toyml" typo (filter errors still detected)
         assert!(
@@ -148,15 +136,10 @@ mod error_display_snapshots {
     #[test]
     fn test_missing_key_shows_available_keys() {
         // With chainable mode, missing keys return empty instead of error
-        let pack = create_test_pack(&[
-            ("deployment.yaml", "repo: {{ values.image.repo }}")
-        ]);
+        let pack = create_test_pack(&[("deployment.yaml", "repo: {{ values.image.repo }}")]);
 
-        let (stdout, _stderr, success) = sherpack_output(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let (stdout, _stderr, success) =
+            sherpack_output(&["template", "test", pack.path().to_str().unwrap()]);
 
         // Should succeed - chainable mode returns empty for missing keys
         assert!(
@@ -171,15 +154,15 @@ mod error_display_snapshots {
         // With chainable mode, undefined variables succeed
         // Test that good templates render successfully
         let pack = create_test_pack(&[
-            ("good.yaml", "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {{ release.name }}"),
+            (
+                "good.yaml",
+                "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {{ release.name }}",
+            ),
             ("bad1.yaml", "error: {{ value.missing }}"),
             ("bad2.yaml", "error: {{ values.nonexistent }}"),
         ]);
 
-        let (stdout, _stderr, _success) = sherpack_output(&[
-            "lint",
-            pack.path().to_str().unwrap(),
-        ]);
+        let (stdout, _stderr, _success) = sherpack_output(&["lint", pack.path().to_str().unwrap()]);
 
         // With chainable mode, these should all succeed (no errors)
         assert!(
@@ -254,10 +237,8 @@ properties:
     fn test_validation_success_display() {
         let pack = create_pack_with_schema();
 
-        let (stdout, _stderr, success) = sherpack_output(&[
-            "validate",
-            pack.path().to_str().unwrap(),
-        ]);
+        let (stdout, _stderr, success) =
+            sherpack_output(&["validate", pack.path().to_str().unwrap()]);
 
         assert!(success, "Validation should succeed");
         assert!(
@@ -299,11 +280,10 @@ properties:
         ]);
 
         // Parse as JSON and verify structure
-        let json: serde_json::Value = serde_json::from_str(&stdout)
-            .expect("Should be valid JSON");
+        let json: serde_json::Value = serde_json::from_str(&stdout).expect("Should be valid JSON");
 
         assert_eq!(json["valid"], false);
-        assert!(json["errors"].as_array().unwrap().len() > 0);
+        assert!(!json["errors"].as_array().unwrap().is_empty());
         assert!(json["pack"]["name"].as_str().is_some());
     }
 }
@@ -313,14 +293,12 @@ mod lint_display_snapshots {
 
     #[test]
     fn test_lint_success_display() {
-        let pack = create_test_pack(&[
-            ("deployment.yaml", "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {{ release.name }}")
-        ]);
+        let pack = create_test_pack(&[(
+            "deployment.yaml",
+            "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {{ release.name }}",
+        )]);
 
-        let (stdout, _stderr, success) = sherpack_output(&[
-            "lint",
-            pack.path().to_str().unwrap(),
-        ]);
+        let (stdout, _stderr, success) = sherpack_output(&["lint", pack.path().to_str().unwrap()]);
 
         assert!(success, "Lint should succeed for valid pack");
         assert!(
@@ -354,10 +332,7 @@ metadata:
         )
         .unwrap();
 
-        let (stdout, _stderr, _success) = sherpack_output(&[
-            "lint",
-            pack_path.to_str().unwrap(),
-        ]);
+        let (stdout, _stderr, _success) = sherpack_output(&["lint", pack_path.to_str().unwrap()]);
 
         // Should show warning about missing values.yaml
         assert!(

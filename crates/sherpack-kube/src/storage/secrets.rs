@@ -9,14 +9,14 @@
 use async_trait::async_trait;
 use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
-use kube::api::{Api, DeleteParams, ListParams, PostParams};
 use kube::Client;
+use kube::api::{Api, DeleteParams, ListParams, PostParams};
 use std::collections::BTreeMap;
 
 use super::chunked::{self, ChunkedStorage};
 use super::{
-    decode_from_storage, encode_for_storage, storage_labels, CompressionMethod,
-    LargeReleaseStrategy, StorageConfig, StorageDriver, MAX_RESOURCE_SIZE,
+    CompressionMethod, LargeReleaseStrategy, MAX_RESOURCE_SIZE, StorageConfig, StorageDriver,
+    decode_from_storage, encode_for_storage, storage_labels,
 };
 use crate::error::{KubeError, Result};
 use crate::release::StoredRelease;
@@ -79,7 +79,10 @@ impl SecretsDriver {
     /// Build a Secret from a release (for non-chunked storage)
     fn build_secret(&self, release: &StoredRelease, encoded: &str) -> Secret {
         let mut labels = storage_labels(release);
-        labels.insert("sherpack.io/storage-driver".to_string(), "secrets".to_string());
+        labels.insert(
+            "sherpack.io/storage-driver".to_string(),
+            "secrets".to_string(),
+        );
 
         // Add compression type for decoding
         let compression_type = match self.config.compression {
@@ -87,10 +90,16 @@ impl SecretsDriver {
             CompressionMethod::Gzip { .. } => "gzip",
             CompressionMethod::Zstd { .. } => "zstd",
         };
-        labels.insert("sherpack.io/compression".to_string(), compression_type.to_string());
+        labels.insert(
+            "sherpack.io/compression".to_string(),
+            compression_type.to_string(),
+        );
 
         let mut data = BTreeMap::new();
-        data.insert("release".to_string(), k8s_openapi::ByteString(encoded.as_bytes().to_vec()));
+        data.insert(
+            "release".to_string(),
+            k8s_openapi::ByteString(encoded.as_bytes().to_vec()),
+        );
 
         Secret {
             metadata: ObjectMeta {
@@ -145,7 +154,10 @@ impl SecretsDriver {
             .ok_or_else(|| KubeError::Storage("Secret has no namespace".to_string()))?;
 
         // Read all chunks
-        let encoded = self.chunked_storage().read_chunked(namespace, secret).await?;
+        let encoded = self
+            .chunked_storage()
+            .read_chunked(namespace, secret)
+            .await?;
 
         // Decode using the compression method from the index
         decode_from_storage(&encoded, index.compression_method())
@@ -193,10 +205,13 @@ impl StorageDriver for SecretsDriver {
 
     async fn get_latest(&self, namespace: &str, name: &str) -> Result<StoredRelease> {
         let history = self.history(namespace, name).await?;
-        history.into_iter().next().ok_or_else(|| KubeError::ReleaseNotFound {
-            name: name.to_string(),
-            namespace: namespace.to_string(),
-        })
+        history
+            .into_iter()
+            .next()
+            .ok_or_else(|| KubeError::ReleaseNotFound {
+                name: name.to_string(),
+                namespace: namespace.to_string(),
+            })
     }
 
     async fn list(
@@ -387,7 +402,9 @@ impl StorageDriver for SecretsDriver {
         match api.get(&key).await {
             Ok(secret) if chunked::is_chunked_index(&secret) => {
                 // Delete chunked release (index + chunks)
-                self.chunked_storage().delete_chunked(namespace, &key).await?;
+                self.chunked_storage()
+                    .delete_chunked(namespace, &key)
+                    .await?;
             }
             Ok(_) => {
                 // Delete single secret

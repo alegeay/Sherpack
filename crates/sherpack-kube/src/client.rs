@@ -3,13 +3,13 @@
 //! This module provides a unified interface for all Sherpack Kubernetes operations,
 //! combining storage, rendering, hooks, health checks, and resource management.
 
-use sherpack_core::{LoadedPack, TemplateContext, Values, ReleaseInfo};
+use sherpack_core::{LoadedPack, ReleaseInfo, TemplateContext, Values};
 use sherpack_engine::Engine;
 
 use crate::actions::{InstallOptions, RollbackOptions, UninstallOptions, UpgradeOptions};
 use crate::diff::{DiffEngine, DiffResult};
 use crate::error::{KubeError, Result};
-use crate::health::{HealthChecker, HealthCheckConfig, HealthStatus};
+use crate::health::{HealthCheckConfig, HealthChecker, HealthStatus};
 use crate::hooks::{HookExecutor, HookPhase, parse_hooks_from_manifest};
 use crate::release::{ReleaseState, StoredRelease};
 use crate::resources::ResourceManager;
@@ -78,7 +78,11 @@ impl<S: StorageDriver> KubeClient<S> {
         options: &InstallOptions,
     ) -> Result<StoredRelease> {
         // Check if release already exists
-        if self.storage.exists(&options.namespace, &options.name).await? {
+        if self
+            .storage
+            .exists(&options.namespace, &options.name)
+            .await?
+        {
             return Err(KubeError::ReleaseAlreadyExists {
                 name: options.name.clone(),
                 namespace: options.namespace.clone(),
@@ -90,7 +94,9 @@ impl<S: StorageDriver> KubeClient<S> {
         let context = TemplateContext::new(values.clone(), release_info, &pack.pack.metadata);
 
         // Render templates
-        let render_result = self.engine.render_pack(pack, &context)
+        let render_result = self
+            .engine
+            .render_pack(pack, &context)
             .map_err(|e| KubeError::Template(e.to_string()))?;
 
         // Create release
@@ -99,7 +105,12 @@ impl<S: StorageDriver> KubeClient<S> {
             options.namespace.clone(),
             pack.pack.metadata.clone(),
             values,
-            render_result.manifests.values().cloned().collect::<Vec<_>>().join("\n---\n"),
+            render_result
+                .manifests
+                .values()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("\n---\n"),
         );
         release.notes = render_result.notes;
         release.hooks = parse_hooks_from_manifest(&release.manifest);
@@ -129,7 +140,13 @@ impl<S: StorageDriver> KubeClient<S> {
         // Execute pre-install hooks
         let mut hook_executor = HookExecutor::new();
         if let Err(e) = hook_executor
-            .execute_phase(&release.hooks, HookPhase::PreInstall, &release.name, release.version, &self.client)
+            .execute_phase(
+                &release.hooks,
+                HookPhase::PreInstall,
+                &release.name,
+                release.version,
+                &self.client,
+            )
             .await
         {
             release.mark_failed(e.to_string(), true);
@@ -138,7 +155,10 @@ impl<S: StorageDriver> KubeClient<S> {
         }
 
         // Apply manifests to cluster
-        if let Err(e) = self.apply_manifest(&release.namespace, &release.manifest).await {
+        if let Err(e) = self
+            .apply_manifest(&release.namespace, &release.manifest)
+            .await
+        {
             release.mark_failed(e.to_string(), true);
             self.storage.update(&release).await?;
 
@@ -152,7 +172,13 @@ impl<S: StorageDriver> KubeClient<S> {
 
         // Execute during-install hooks
         let _ = hook_executor
-            .execute_phase(&release.hooks, HookPhase::DuringInstall, &release.name, release.version, &self.client)
+            .execute_phase(
+                &release.hooks,
+                HookPhase::DuringInstall,
+                &release.name,
+                release.version,
+                &self.client,
+            )
             .await;
 
         // Wait for resources if requested
@@ -181,7 +207,13 @@ impl<S: StorageDriver> KubeClient<S> {
 
         // Execute post-install hooks
         let _ = hook_executor
-            .execute_phase(&release.hooks, HookPhase::PostInstall, &release.name, release.version, &self.client)
+            .execute_phase(
+                &release.hooks,
+                HookPhase::PostInstall,
+                &release.name,
+                release.version,
+                &self.client,
+            )
             .await;
 
         // Mark as deployed
@@ -201,7 +233,11 @@ impl<S: StorageDriver> KubeClient<S> {
         options: &UpgradeOptions,
     ) -> Result<StoredRelease> {
         // Get existing release
-        let existing = match self.storage.get_latest(&options.namespace, &options.name).await {
+        let existing = match self
+            .storage
+            .get_latest(&options.namespace, &options.name)
+            .await
+        {
             Ok(r) => Some(r),
             Err(KubeError::ReleaseNotFound { .. }) if options.install => None,
             Err(e) => return Err(e),
@@ -233,7 +269,9 @@ impl<S: StorageDriver> KubeClient<S> {
                 return Err(KubeError::StuckRelease {
                     name: existing.name.clone(),
                     status: existing.state.status_name().to_string(),
-                    elapsed: existing.state.elapsed()
+                    elapsed: existing
+                        .state
+                        .elapsed()
                         .map(|d| format!("{} seconds", d.num_seconds()))
                         .unwrap_or_else(|| "unknown".to_string()),
                 });
@@ -257,15 +295,23 @@ impl<S: StorageDriver> KubeClient<S> {
         };
 
         // Create template context
-        let release_info = ReleaseInfo::for_upgrade(&options.name, &options.namespace, existing.version + 1);
+        let release_info =
+            ReleaseInfo::for_upgrade(&options.name, &options.namespace, existing.version + 1);
         let context = TemplateContext::new(final_values.clone(), release_info, &pack.pack.metadata);
 
         // Render templates
-        let render_result = self.engine.render_pack(pack, &context)
+        let render_result = self
+            .engine
+            .render_pack(pack, &context)
             .map_err(|e| KubeError::Template(e.to_string()))?;
 
         // Create new release
-        let manifest = render_result.manifests.values().cloned().collect::<Vec<_>>().join("\n---\n");
+        let manifest = render_result
+            .manifests
+            .values()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n---\n");
         let mut release = StoredRelease::for_upgrade(&existing, final_values, manifest);
         release.notes = render_result.notes;
         release.hooks = parse_hooks_from_manifest(&release.manifest);
@@ -299,20 +345,29 @@ impl<S: StorageDriver> KubeClient<S> {
         let mut hook_executor = HookExecutor::new();
         if !options.no_hooks
             && let Err(e) = hook_executor
-                .execute_phase(&release.hooks, HookPhase::PreUpgrade, &release.name, release.version, &self.client)
+                .execute_phase(
+                    &release.hooks,
+                    HookPhase::PreUpgrade,
+                    &release.name,
+                    release.version,
+                    &self.client,
+                )
                 .await
-            {
-                release.mark_failed(e.to_string(), true);
-                self.storage.update(&release).await?;
+        {
+            release.mark_failed(e.to_string(), true);
+            self.storage.update(&release).await?;
 
-                if options.atomic {
-                    return self.rollback_to(&release, prev.version).await;
-                }
-                return Err(e);
+            if options.atomic {
+                return self.rollback_to(&release, prev.version).await;
             }
+            return Err(e);
+        }
 
         // Apply manifests
-        if let Err(e) = self.apply_manifest(&release.namespace, &release.manifest).await {
+        if let Err(e) = self
+            .apply_manifest(&release.namespace, &release.manifest)
+            .await
+        {
             release.mark_failed(e.to_string(), true);
             self.storage.update(&release).await?;
 
@@ -325,7 +380,13 @@ impl<S: StorageDriver> KubeClient<S> {
         // Execute during-upgrade hooks
         if !options.no_hooks {
             let _ = hook_executor
-                .execute_phase(&release.hooks, HookPhase::DuringUpgrade, &release.name, release.version, &self.client)
+                .execute_phase(
+                    &release.hooks,
+                    HookPhase::DuringUpgrade,
+                    &release.name,
+                    release.version,
+                    &self.client,
+                )
                 .await;
         }
 
@@ -354,7 +415,13 @@ impl<S: StorageDriver> KubeClient<S> {
         // Execute post-upgrade hooks
         if !options.no_hooks {
             let _ = hook_executor
-                .execute_phase(&release.hooks, HookPhase::PostUpgrade, &release.name, release.version, &self.client)
+                .execute_phase(
+                    &release.hooks,
+                    HookPhase::PostUpgrade,
+                    &release.name,
+                    release.version,
+                    &self.client,
+                )
                 .await;
         }
 
@@ -364,7 +431,8 @@ impl<S: StorageDriver> KubeClient<S> {
 
         // Cleanup old releases
         if let Some(max_history) = options.max_history {
-            self.cleanup_history(&release.namespace, &release.name, max_history).await?;
+            self.cleanup_history(&release.namespace, &release.name, max_history)
+                .await?;
         }
 
         Ok(release)
@@ -375,7 +443,10 @@ impl<S: StorageDriver> KubeClient<S> {
     /// Uninstall a release
     pub async fn uninstall(&self, options: &UninstallOptions) -> Result<StoredRelease> {
         // Get existing release
-        let mut release = self.storage.get_latest(&options.namespace, &options.name).await?;
+        let mut release = self
+            .storage
+            .get_latest(&options.namespace, &options.name)
+            .await?;
 
         // Update state
         release.state = ReleaseState::PendingUninstall {
@@ -393,12 +464,21 @@ impl<S: StorageDriver> KubeClient<S> {
         let mut hook_executor = HookExecutor::new();
         if !options.no_hooks {
             let _ = hook_executor
-                .execute_phase(&release.hooks, HookPhase::PreDelete, &release.name, release.version, &self.client)
+                .execute_phase(
+                    &release.hooks,
+                    HookPhase::PreDelete,
+                    &release.name,
+                    release.version,
+                    &self.client,
+                )
                 .await;
         }
 
         // Delete resources
-        if let Err(e) = self.delete_manifest(&release.namespace, &release.manifest).await {
+        if let Err(e) = self
+            .delete_manifest(&release.namespace, &release.manifest)
+            .await
+        {
             release.mark_failed(e.to_string(), true);
             self.storage.update(&release).await?;
             return Err(e);
@@ -407,7 +487,13 @@ impl<S: StorageDriver> KubeClient<S> {
         // Execute post-delete hooks
         if !options.no_hooks {
             let _ = hook_executor
-                .execute_phase(&release.hooks, HookPhase::PostDelete, &release.name, release.version, &self.client)
+                .execute_phase(
+                    &release.hooks,
+                    HookPhase::PostDelete,
+                    &release.name,
+                    release.version,
+                    &self.client,
+                )
                 .await;
         }
 
@@ -417,7 +503,9 @@ impl<S: StorageDriver> KubeClient<S> {
 
         // Delete history unless keep_history
         if !options.keep_history {
-            self.storage.delete_all(&options.namespace, &options.name).await?;
+            self.storage
+                .delete_all(&options.namespace, &options.name)
+                .await?;
         }
 
         Ok(release)
@@ -428,7 +516,10 @@ impl<S: StorageDriver> KubeClient<S> {
     /// Rollback to a previous revision
     pub async fn rollback(&self, options: &RollbackOptions) -> Result<StoredRelease> {
         // Get history
-        let history = self.storage.history(&options.namespace, &options.name).await?;
+        let history = self
+            .storage
+            .history(&options.namespace, &options.name)
+            .await?;
 
         if history.is_empty() {
             return Err(KubeError::ReleaseNotFound {
@@ -474,7 +565,8 @@ impl<S: StorageDriver> KubeClient<S> {
         }
 
         // Create new release based on target
-        let mut release = StoredRelease::for_upgrade(current, target.values.clone(), target.manifest.clone());
+        let mut release =
+            StoredRelease::for_upgrade(current, target.values.clone(), target.manifest.clone());
         release.state = ReleaseState::PendingRollback {
             started_at: chrono::Utc::now(),
             timeout: options.timeout.unwrap_or(chrono::Duration::minutes(5)),
@@ -493,16 +585,25 @@ impl<S: StorageDriver> KubeClient<S> {
         let mut hook_executor = HookExecutor::new();
         if !options.no_hooks
             && let Err(e) = hook_executor
-                .execute_phase(&release.hooks, HookPhase::PreRollback, &release.name, release.version, &self.client)
+                .execute_phase(
+                    &release.hooks,
+                    HookPhase::PreRollback,
+                    &release.name,
+                    release.version,
+                    &self.client,
+                )
                 .await
-            {
-                release.mark_failed(e.to_string(), true);
-                self.storage.update(&release).await?;
-                return Err(e);
-            }
+        {
+            release.mark_failed(e.to_string(), true);
+            self.storage.update(&release).await?;
+            return Err(e);
+        }
 
         // Apply target manifest
-        if let Err(e) = self.apply_manifest(&release.namespace, &release.manifest).await {
+        if let Err(e) = self
+            .apply_manifest(&release.namespace, &release.manifest)
+            .await
+        {
             release.mark_failed(e.to_string(), true);
             self.storage.update(&release).await?;
             return Err(e);
@@ -528,7 +629,13 @@ impl<S: StorageDriver> KubeClient<S> {
         // Execute post-rollback hooks
         if !options.no_hooks {
             let _ = hook_executor
-                .execute_phase(&release.hooks, HookPhase::PostRollback, &release.name, release.version, &self.client)
+                .execute_phase(
+                    &release.hooks,
+                    HookPhase::PostRollback,
+                    &release.name,
+                    release.version,
+                    &self.client,
+                )
                 .await;
         }
 
@@ -538,7 +645,8 @@ impl<S: StorageDriver> KubeClient<S> {
 
         // Cleanup old releases
         if let Some(max_history) = options.max_history {
-            self.cleanup_history(&release.namespace, &release.name, max_history).await?;
+            self.cleanup_history(&release.namespace, &release.name, max_history)
+                .await?;
         }
 
         Ok(release)
@@ -637,7 +745,11 @@ impl<S: StorageDriver> KubeClient<S> {
 
     /// Apply a manifest in dry-run mode (validate without applying)
     #[allow(dead_code)]
-    async fn apply_manifest_dry_run(&self, namespace: &str, manifest: &str) -> Result<crate::resources::OperationSummary> {
+    async fn apply_manifest_dry_run(
+        &self,
+        namespace: &str,
+        manifest: &str,
+    ) -> Result<crate::resources::OperationSummary> {
         let manager = self.resource_manager().await?;
         manager.apply_manifest(namespace, manifest, true).await
     }
@@ -665,13 +777,21 @@ impl<S: StorageDriver> KubeClient<S> {
     /// Cleanup failed release resources
     async fn cleanup_release(&self, release: &StoredRelease) -> Result<()> {
         // Delete all resources from the manifest
-        self.delete_manifest(&release.namespace, &release.manifest).await
+        self.delete_manifest(&release.namespace, &release.manifest)
+            .await
     }
 
     /// Rollback to a specific version (internal, used for atomic operations)
-    async fn rollback_to(&self, current: &StoredRelease, target_version: u32) -> Result<StoredRelease> {
+    async fn rollback_to(
+        &self,
+        current: &StoredRelease,
+        target_version: u32,
+    ) -> Result<StoredRelease> {
         // Verify the target release exists
-        let _target = self.storage.get(&current.namespace, &current.name, target_version).await?;
+        let _target = self
+            .storage
+            .get(&current.namespace, &current.name, target_version)
+            .await?;
 
         // Create rollback options
         let options = RollbackOptions {
@@ -697,7 +817,9 @@ impl<S: StorageDriver> KubeClient<S> {
 
         // Delete oldest releases beyond max_history
         for release in history.iter().skip(max_history as usize) {
-            self.storage.delete(namespace, name, release.version).await?;
+            self.storage
+                .delete(namespace, name, release.version)
+                .await?;
         }
 
         Ok(())

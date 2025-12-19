@@ -36,7 +36,10 @@ mod validate_command {
             "app.replicas=999",
         ]);
 
-        assert!(!output.status.success(), "Expected failure for invalid values");
+        assert!(
+            !output.status.success(),
+            "Expected failure for invalid values"
+        );
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(stdout.contains("greater than") || stdout.contains("maximum"));
     }
@@ -51,8 +54,8 @@ mod validate_command {
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         // Should be valid JSON
-        let json: serde_json::Value = serde_json::from_str(&stdout)
-            .expect("Output should be valid JSON");
+        let json: serde_json::Value =
+            serde_json::from_str(&stdout).expect("Output should be valid JSON");
 
         assert!(json.get("valid").is_some());
         assert!(json.get("pack").is_some());
@@ -69,20 +72,16 @@ mod validate_command {
         ]);
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let json: serde_json::Value = serde_json::from_str(&stdout)
-            .expect("Output should be valid JSON");
+        let json: serde_json::Value =
+            serde_json::from_str(&stdout).expect("Output should be valid JSON");
 
         assert_eq!(json["valid"], false);
-        assert!(json["errors"].as_array().unwrap().len() > 0);
+        assert!(!json["errors"].as_array().unwrap().is_empty());
     }
 
     #[test]
     fn test_validate_verbose() {
-        let output = sherpack(&[
-            "validate",
-            &format!("{}/demo-pack", fixtures_path()),
-            "-v",
-        ]);
+        let output = sherpack(&["validate", &format!("{}/demo-pack", fixtures_path()), "-v"]);
 
         assert!(output.status.success());
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -209,7 +208,9 @@ mod template_command {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let combined = format!("{}{}", stdout, stderr);
         assert!(
-            combined.contains("validation") || combined.contains("maximum") || combined.contains("greater"),
+            combined.contains("validation")
+                || combined.contains("maximum")
+                || combined.contains("greater"),
             "Expected validation error message"
         );
     }
@@ -245,11 +246,7 @@ mod show_command {
 
     #[test]
     fn test_show_all() {
-        let output = sherpack(&[
-            "show",
-            &format!("{}/demo-pack", fixtures_path()),
-            "--all",
-        ]);
+        let output = sherpack(&["show", &format!("{}/demo-pack", fixtures_path()), "--all"]);
 
         assert!(output.status.success());
     }
@@ -292,13 +289,15 @@ mod package_command {
         fs::copy(
             format!("{}/demo-pack/Pack.yaml", fixtures_path()),
             pack_dir.join("Pack.yaml"),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Copy values.yaml
         fs::copy(
             format!("{}/demo-pack/values.yaml", fixtures_path()),
             pack_dir.join("values.yaml"),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Copy templates
         let templates_src = format!("{}/demo-pack/templates", fixtures_path());
@@ -315,7 +314,10 @@ mod package_command {
 
         // Default name should be {name}-{version}.tar.gz
         let expected_archive = pack_dir.join("demo-pack-1.0.0.tar.gz");
-        assert!(expected_archive.exists(), "Archive with default name should exist");
+        assert!(
+            expected_archive.exists(),
+            "Archive with default name should exist"
+        );
     }
 
     #[test]
@@ -491,12 +493,7 @@ mod keygen_command {
         let temp = TempDir::new().unwrap();
         let key_dir = temp.path();
 
-        let output = sherpack(&[
-            "keygen",
-            "-o",
-            key_dir.to_str().unwrap(),
-            "--no-password",
-        ]);
+        let output = sherpack(&["keygen", "-o", key_dir.to_str().unwrap(), "--no-password"]);
 
         assert!(output.status.success(), "Keygen should succeed");
 
@@ -510,8 +507,14 @@ mod keygen_command {
         let sk_content = fs::read_to_string(&secret_key).unwrap();
         let pk_content = fs::read_to_string(&public_key).unwrap();
 
-        assert!(sk_content.contains("secret key"), "Secret key should have 'secret key' comment");
-        assert!(pk_content.contains("public key"), "Public key should have 'public key' comment");
+        assert!(
+            sk_content.contains("secret key"),
+            "Secret key should have 'secret key' comment"
+        );
+        assert!(
+            pk_content.contains("public key"),
+            "Public key should have 'public key' comment"
+        );
     }
 
     #[test]
@@ -676,7 +679,10 @@ mod sign_and_verify_command {
             key_dir2.join("sherpack.pub").to_str().unwrap(),
         ]);
 
-        assert!(!output.status.success(), "Verify should fail with wrong key");
+        assert!(
+            !output.status.success(),
+            "Verify should fail with wrong key"
+        );
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(stdout.contains("[FAIL]") || stdout.contains("failed"));
     }
@@ -718,7 +724,8 @@ mod repo_command {
         let combined = format!("{}{}", stdout, stderr);
         assert!(
             combined.contains("Invalid") || combined.contains("URL") || combined.contains("http"),
-            "Expected URL validation error. Got: {}", combined
+            "Expected URL validation error. Got: {}",
+            combined
         );
     }
 
@@ -755,7 +762,8 @@ mod search_command {
         // Should not crash, either shows no results or repo error
         assert!(
             combined.contains("No") || combined.contains("repository") || output.status.success(),
-            "Search should handle no repos gracefully. Got: {}", combined
+            "Search should handle no repos gracefully. Got: {}",
+            combined
         );
     }
 
@@ -768,7 +776,8 @@ mod search_command {
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
             stdout.contains("No") || stdout.contains("repository") || stdout.is_empty(),
-            "Should handle no repos gracefully. Got: {}", stdout
+            "Should handle no repos gracefully. Got: {}",
+            stdout
         );
     }
 
@@ -794,8 +803,11 @@ mod pull_command {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let combined = format!("{}{}", stdout, stderr);
         assert!(
-            combined.contains("Invalid") || combined.contains("format") || combined.contains("reference"),
-            "Expected format error. Got: {}", combined
+            combined.contains("Invalid")
+                || combined.contains("format")
+                || combined.contains("reference"),
+            "Expected format error. Got: {}",
+            combined
         );
     }
 
@@ -822,7 +834,11 @@ mod push_command {
 
     #[test]
     fn test_push_missing_archive() {
-        let output = sherpack(&["push", "/nonexistent/archive.tar.gz", "oci://registry/repo:tag"]);
+        let output = sherpack(&[
+            "push",
+            "/nonexistent/archive.tar.gz",
+            "oci://registry/repo:tag",
+        ]);
 
         // Should fail - file doesn't exist
         assert!(!output.status.success());
@@ -842,11 +858,7 @@ mod push_command {
         ]);
 
         // Push with invalid destination
-        let output = sherpack(&[
-            "push",
-            archive_path.to_str().unwrap(),
-            "not-oci-format",
-        ]);
+        let output = sherpack(&["push", archive_path.to_str().unwrap(), "not-oci-format"]);
 
         // Should fail - invalid destination format
         assert!(!output.status.success());
@@ -854,8 +866,11 @@ mod push_command {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let combined = format!("{}{}", stdout, stderr);
         assert!(
-            combined.contains("oci://") || combined.contains("Invalid") || combined.contains("format"),
-            "Expected OCI format error. Got: {}", combined
+            combined.contains("oci://")
+                || combined.contains("Invalid")
+                || combined.contains("format"),
+            "Expected OCI format error. Got: {}",
+            combined
         );
     }
 }
@@ -877,16 +892,29 @@ mod convert_command {
         ]);
 
         // Conversion should succeed
-        assert!(output.status.success(), "Convert failed: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "Convert failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Pack.yaml should exist
-        assert!(output_path.join("Pack.yaml").exists(), "Pack.yaml should be created");
+        assert!(
+            output_path.join("Pack.yaml").exists(),
+            "Pack.yaml should be created"
+        );
 
         // values.yaml should exist
-        assert!(output_path.join("values.yaml").exists(), "values.yaml should be copied");
+        assert!(
+            output_path.join("values.yaml").exists(),
+            "values.yaml should be copied"
+        );
 
         // templates should exist
-        assert!(output_path.join("templates").exists(), "templates/ should exist");
+        assert!(
+            output_path.join("templates").exists(),
+            "templates/ should exist"
+        );
     }
 
     #[test]
@@ -902,13 +930,14 @@ mod convert_command {
             "--output",
             output_path.to_str().unwrap(),
         ]);
-        assert!(convert_output.status.success(), "Convert failed: {}", String::from_utf8_lossy(&convert_output.stderr));
+        assert!(
+            convert_output.status.success(),
+            "Convert failed: {}",
+            String::from_utf8_lossy(&convert_output.stderr)
+        );
 
         // Step 2: Lint the converted pack
-        let lint_output = sherpack(&[
-            "lint",
-            output_path.to_str().unwrap(),
-        ]);
+        let lint_output = sherpack(&["lint", output_path.to_str().unwrap()]);
         let lint_stdout = String::from_utf8_lossy(&lint_output.stdout);
 
         // Lint should pass (Pack.yaml valid, values.yaml valid)
@@ -919,14 +948,12 @@ mod convert_command {
         );
 
         // Step 3: Template the converted pack
-        let template_output = sherpack(&[
-            "template",
-            "test-release",
-            output_path.to_str().unwrap(),
-        ]);
+        let template_output =
+            sherpack(&["template", "test-release", output_path.to_str().unwrap()]);
 
         // Template should succeed (Chainable mode handles optional values)
-        assert!(template_output.status.success(),
+        assert!(
+            template_output.status.success(),
             "Template failed: {}",
             String::from_utf8_lossy(&template_output.stderr)
         );
@@ -957,7 +984,10 @@ mod convert_command {
         assert!(output.status.success());
 
         // No files should be created
-        assert!(!output_path.exists(), "Dry run should not create output directory");
+        assert!(
+            !output_path.exists(),
+            "Dry run should not create output directory"
+        );
     }
 
     #[test]
@@ -976,7 +1006,10 @@ mod convert_command {
             "--output",
             output_path.to_str().unwrap(),
         ]);
-        assert!(!first_output.status.success(), "Should fail without --force");
+        assert!(
+            !first_output.status.success(),
+            "Should fail without --force"
+        );
 
         // Convert with --force should succeed
         let force_output = sherpack(&[
@@ -1009,7 +1042,8 @@ mod dependency_command {
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
             stdout.contains("No dependencies") || stdout.contains("dependencies"),
-            "Should mention dependencies. Got: {}", stdout
+            "Should mention dependencies. Got: {}",
+            stdout
         );
     }
 
@@ -1026,17 +1060,14 @@ mod dependency_command {
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
             stdout.contains("demo-pack") || stdout.contains("Dependencies"),
-            "Should show pack name. Got: {}", stdout
+            "Should show pack name. Got: {}",
+            stdout
         );
     }
 
     #[test]
     fn test_dependency_list_nonexistent() {
-        let output = sherpack(&[
-            "dependency",
-            "list",
-            "/nonexistent/pack",
-        ]);
+        let output = sherpack(&["dependency", "list", "/nonexistent/pack"]);
 
         // Should fail - pack doesn't exist
         assert!(!output.status.success());
@@ -1069,7 +1100,8 @@ mod dependency_command {
         let combined = format!("{}{}", stdout, stderr);
         assert!(
             combined.contains("Pack.lock") || combined.contains("update"),
-            "Should mention lock file requirement. Got: {}", combined
+            "Should mention lock file requirement. Got: {}",
+            combined
         );
     }
 }
@@ -1106,16 +1138,8 @@ metadata:
 
         // Create config directory with files
         fs::create_dir(pack_path.join("config")).unwrap();
-        fs::write(
-            pack_path.join("config/nginx.conf"),
-            "server { listen 80; }",
-        )
-        .unwrap();
-        fs::write(
-            pack_path.join("config/app.yaml"),
-            "debug: true\nport: 8080",
-        )
-        .unwrap();
+        fs::write(pack_path.join("config/nginx.conf"), "server { listen 80; }").unwrap();
+        fs::write(pack_path.join("config/app.yaml"), "debug: true\nport: 8080").unwrap();
 
         // Create templates directory
         fs::create_dir(pack_path.join("templates")).unwrap();
@@ -1141,15 +1165,19 @@ data:
         )
         .unwrap();
 
-        let output = sherpack(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let output = sherpack(&["template", "test", pack.path().to_str().unwrap()]);
 
-        assert!(output.status.success(), "Template should succeed. Got: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "Template should succeed. Got: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.contains("server { listen 80; }"), "Should contain nginx config. Got: {}", stdout);
+        assert!(
+            stdout.contains("server { listen 80; }"),
+            "Should contain nginx config. Got: {}",
+            stdout
+        );
     }
 
     #[test]
@@ -1166,16 +1194,20 @@ has_missing: "{{ files.exists("config/missing.conf") }}"
         )
         .unwrap();
 
-        let output = sherpack(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let output = sherpack(&["template", "test", pack.path().to_str().unwrap()]);
 
         assert!(output.status.success());
         let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.contains("has_nginx: \"true\""), "Should detect existing file. Got: {}", stdout);
-        assert!(stdout.contains("has_missing: \"false\""), "Should detect missing file. Got: {}", stdout);
+        assert!(
+            stdout.contains("has_nginx: \"true\""),
+            "Should detect existing file. Got: {}",
+            stdout
+        );
+        assert!(
+            stdout.contains("has_missing: \"false\""),
+            "Should detect missing file. Got: {}",
+            stdout
+        );
     }
 
     #[test]
@@ -1194,16 +1226,15 @@ has_missing: "{{ files.exists("config/missing.conf") }}"
         )
         .unwrap();
 
-        let output = sherpack(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let output = sherpack(&["template", "test", pack.path().to_str().unwrap()]);
 
         assert!(output.status.success());
         let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.contains("name: nginx.conf") || stdout.contains("name: app.yaml"),
-            "Should list config files. Got: {}", stdout);
+        assert!(
+            stdout.contains("name: nginx.conf") || stdout.contains("name: app.yaml"),
+            "Should list config files. Got: {}",
+            stdout
+        );
     }
 
     #[test]
@@ -1221,16 +1252,20 @@ has_missing: "{{ files.exists("config/missing.conf") }}"
         )
         .unwrap();
 
-        let output = sherpack(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let output = sherpack(&["template", "test", pack.path().to_str().unwrap()]);
 
         assert!(output.status.success());
         let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.contains("debug: true"), "Should contain first line. Got: {}", stdout);
-        assert!(stdout.contains("port: 8080"), "Should contain second line. Got: {}", stdout);
+        assert!(
+            stdout.contains("debug: true"),
+            "Should contain first line. Got: {}",
+            stdout
+        );
+        assert!(
+            stdout.contains("port: 8080"),
+            "Should contain second line. Got: {}",
+            stdout
+        );
     }
 
     #[test]
@@ -1251,16 +1286,20 @@ missing_config: present
         )
         .unwrap();
 
-        let output = sherpack(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let output = sherpack(&["template", "test", pack.path().to_str().unwrap()]);
 
         assert!(output.status.success());
         let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(stdout.contains("nginx_config: present"), "Should include existing file. Got: {}", stdout);
-        assert!(!stdout.contains("missing_config: present"), "Should not include missing file. Got: {}", stdout);
+        assert!(
+            stdout.contains("nginx_config: present"),
+            "Should include existing file. Got: {}",
+            stdout
+        );
+        assert!(
+            !stdout.contains("missing_config: present"),
+            "Should not include missing file. Got: {}",
+            stdout
+        );
     }
 
     #[test]
@@ -1280,17 +1319,16 @@ data:
         )
         .unwrap();
 
-        let output = sherpack(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let output = sherpack(&["template", "test", pack.path().to_str().unwrap()]);
 
         assert!(output.status.success());
         let stdout = String::from_utf8_lossy(&output.stdout);
         // "server { listen 80; }" base64 encoded
-        assert!(stdout.contains("c2VydmVyIHsgbGlzdGVuIDgwOyB9"),
-            "Should contain base64 encoded content. Got: {}", stdout);
+        assert!(
+            stdout.contains("c2VydmVyIHsgbGlzdGVuIDgwOyB9"),
+            "Should contain base64 encoded content. Got: {}",
+            stdout
+        );
     }
 
     #[test]
@@ -1306,11 +1344,7 @@ content: {{ files.get("../../../etc/passwd") }}
         )
         .unwrap();
 
-        let output = sherpack(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let output = sherpack(&["template", "test", pack.path().to_str().unwrap()]);
 
         // Should fail with security error
         assert!(!output.status.success(), "Sandbox escape should be blocked");
@@ -1318,8 +1352,11 @@ content: {{ files.get("../../../etc/passwd") }}
         let stderr = String::from_utf8_lossy(&output.stderr);
         let combined = format!("{}{}", stdout, stderr);
         assert!(
-            combined.contains("sandbox") || combined.contains("access") || combined.contains("path"),
-            "Should mention sandbox/access error. Got: {}", combined
+            combined.contains("sandbox")
+                || combined.contains("access")
+                || combined.contains("path"),
+            "Should mention sandbox/access error. Got: {}",
+            combined
         );
     }
 }
@@ -1369,15 +1406,9 @@ image:
     fn test_chainable_mode_ignores_undefined_vars() {
         // With chainable mode, undefined variables return empty (Helm compatibility)
         // This test verifies that undefined vars don't cause errors
-        let pack = create_test_pack_with_error(
-            "name: {{ value.app.name }}"
-        );
+        let pack = create_test_pack_with_error("name: {{ value.app.name }}");
 
-        let output = sherpack(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let output = sherpack(&["template", "test", pack.path().to_str().unwrap()]);
 
         // Should succeed - chainable mode allows undefined variables
         assert!(
@@ -1389,15 +1420,9 @@ image:
 
     #[test]
     fn test_error_message_unknown_filter() {
-        let pack = create_test_pack_with_error(
-            "name: {{ values.app.name | toyml }}"
-        );
+        let pack = create_test_pack_with_error("name: {{ values.app.name | toyml }}");
 
-        let output = sherpack(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let output = sherpack(&["template", "test", pack.path().to_str().unwrap()]);
 
         assert!(!output.status.success());
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1413,15 +1438,9 @@ image:
     fn test_chainable_mode_allows_undefined_vars() {
         // With chainable mode, undefined variables return empty instead of erroring
         // This is required for Helm chart compatibility
-        let pack = create_test_pack_with_error(
-            "name: {{ undefined_variable }}"
-        );
+        let pack = create_test_pack_with_error("name: {{ undefined_variable }}");
 
-        let output = sherpack(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let output = sherpack(&["template", "test", pack.path().to_str().unwrap()]);
 
         // Should succeed - chainable mode returns empty for undefined
         assert!(
@@ -1434,15 +1453,10 @@ image:
     #[test]
     fn test_chainable_mode_allows_optional_values() {
         // Test that optional nested values don't cause errors (Helm compatibility)
-        let pack = create_test_pack_with_error(
-            "# Optional value test\nrepo: {{ values.image.repo }}"
-        );
+        let pack =
+            create_test_pack_with_error("# Optional value test\nrepo: {{ values.image.repo }}");
 
-        let output = sherpack(&[
-            "template",
-            "test",
-            pack.path().to_str().unwrap(),
-        ]);
+        let output = sherpack(&["template", "test", pack.path().to_str().unwrap()]);
 
         // Should succeed - chainable mode allows accessing undefined nested keys
         assert!(output.status.success());
@@ -1455,13 +1469,10 @@ image:
         let pack = create_test_pack_with_error(
             r#"# Filter error test
 error1: {{ values.app.name | unknownfilter }}
-"#
+"#,
         );
 
-        let output = sherpack(&[
-            "lint",
-            pack.path().to_str().unwrap(),
-        ]);
+        let output = sherpack(&["lint", pack.path().to_str().unwrap()]);
 
         // lint should show errors for unknown filters
         let stdout = String::from_utf8_lossy(&output.stdout);

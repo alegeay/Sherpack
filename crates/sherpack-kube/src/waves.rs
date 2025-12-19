@@ -214,10 +214,7 @@ impl ExecutionPlan {
                 }
             } else {
                 // Group non-hooks by wave
-                waves_map
-                    .entry(resource.wave)
-                    .or_default()
-                    .push(resource);
+                waves_map.entry(resource.wave).or_default().push(resource);
             }
         }
 
@@ -250,10 +247,7 @@ impl ExecutionPlan {
 
     /// Get all resources (non-hooks) in order
     pub fn all_resources(&self) -> Vec<&Resource> {
-        self.waves
-            .iter()
-            .flat_map(|w| w.resources.iter())
-            .collect()
+        self.waves.iter().flat_map(|w| w.resources.iter()).collect()
     }
 
     /// Get hooks for a specific phase
@@ -272,7 +266,9 @@ impl ExecutionPlan {
     /// Check if all dependencies for a resource are satisfied
     pub fn dependencies_satisfied(&self, key: &str, ready_resources: &HashSet<String>) -> bool {
         match self.dependencies.get(key) {
-            Some(deps) => deps.iter().all(|dep| ready_resources.contains(&dep.to_string())),
+            Some(deps) => deps
+                .iter()
+                .all(|dep| ready_resources.contains(&dep.to_string())),
             None => true,
         }
     }
@@ -337,7 +333,10 @@ impl ExecutionPlanSummary {
         )];
 
         for wave in &self.waves {
-            lines.push(format!("  Wave {}: {} resources", wave.number, wave.resource_count));
+            lines.push(format!(
+                "  Wave {}: {} resources",
+                wave.number, wave.resource_count
+            ));
             for resource in &wave.resources {
                 lines.push(format!("    - {}", resource));
             }

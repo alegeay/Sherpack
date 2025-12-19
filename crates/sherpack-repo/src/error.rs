@@ -78,7 +78,9 @@ pub enum RepoError {
     #[error("Circular dependency detected: {cycle}")]
     CircularDependency { cycle: String },
 
-    #[error("Version constraint unsatisfiable: {name} requires {constraint}, available: {available}")]
+    #[error(
+        "Version constraint unsatisfiable: {name} requires {constraint}, available: {available}"
+    )]
     UnsatisfiableConstraint {
         name: String,
         constraint: String,

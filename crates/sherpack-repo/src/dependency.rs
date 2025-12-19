@@ -86,10 +86,7 @@ impl FilterResult {
 ///
 /// # Returns
 /// A `FilterResult` containing dependencies to resolve and those that were skipped
-pub fn filter_dependencies(
-    deps: &[Dependency],
-    values: &serde_json::Value,
-) -> FilterResult {
+pub fn filter_dependencies(deps: &[Dependency], values: &serde_json::Value) -> FilterResult {
     let mut result = FilterResult::default();
 
     for dep in deps {
@@ -195,10 +192,13 @@ impl ResolvedDependency {
     }
 }
 
+/// Type alias for the pack fetcher function
+type PackFetcher<'a> = Box<dyn Fn(&str, &str, &str) -> Result<PackEntry> + 'a>;
+
 /// Dependency resolver
 pub struct DependencyResolver<'a> {
     /// Function to fetch pack entry from repository
-    fetch_pack: Box<dyn Fn(&str, &str, &str) -> Result<PackEntry> + 'a>,
+    fetch_pack: PackFetcher<'a>,
 }
 
 impl<'a> DependencyResolver<'a> {
@@ -261,9 +261,10 @@ impl<'a> DependencyResolver<'a> {
             // Fetch pack from repository
             let entry = (self.fetch_pack)(&dep.repository, &dep.name, &dep.version)?;
 
-            let version = Version::parse(&entry.version).map_err(|e| RepoError::ResolutionFailed {
-                message: format!("Invalid version '{}': {}", entry.version, e),
-            })?;
+            let version =
+                Version::parse(&entry.version).map_err(|e| RepoError::ResolutionFailed {
+                    message: format!("Invalid version '{}': {}", entry.version, e),
+                })?;
 
             // Collect transitive dependencies
             let transitive: Vec<String> = entry
@@ -346,7 +347,8 @@ impl DependencyGraph {
 
     /// Add a resolved dependency
     pub fn add(&mut self, dep: ResolvedDependency) {
-        self.dependencies.insert(dep.effective_name().to_string(), dep);
+        self.dependencies
+            .insert(dep.effective_name().to_string(), dep);
     }
 
     /// Add a requirer to existing dependency
@@ -790,11 +792,10 @@ mod tests {
 
     #[test]
     fn test_alias_allows_multiple_versions() {
-        let packs: HashMap<(&str, &str), PackEntry> = [
-            (("repo", "redis"), mock_pack("redis", "17.0.0", vec![])),
-        ]
-        .into_iter()
-        .collect();
+        let packs: HashMap<(&str, &str), PackEntry> =
+            [(("repo", "redis"), mock_pack("redis", "17.0.0", vec![]))]
+                .into_iter()
+                .collect();
 
         let resolver = DependencyResolver::new(|repo, name, _version| {
             packs
@@ -917,7 +918,12 @@ mod tests {
     // Filtering tests
     // =========================================================================
 
-    fn make_dep(name: &str, enabled: bool, resolve: ResolvePolicy, condition: Option<&str>) -> Dependency {
+    fn make_dep(
+        name: &str,
+        enabled: bool,
+        resolve: ResolvePolicy,
+        condition: Option<&str>,
+    ) -> Dependency {
         Dependency {
             name: name.to_string(),
             version: "1.0.0".to_string(),
@@ -982,9 +988,12 @@ mod tests {
 
     #[test]
     fn test_filter_policy_always_ignores_condition() {
-        let deps = vec![
-            make_dep("redis", true, ResolvePolicy::Always, Some("redis.enabled")),
-        ];
+        let deps = vec![make_dep(
+            "redis",
+            true,
+            ResolvePolicy::Always,
+            Some("redis.enabled"),
+        )];
         // redis.enabled is false, but resolve: always ignores condition
         let values = serde_json::json!({
             "redis": { "enabled": false }
@@ -998,9 +1007,12 @@ mod tests {
 
     #[test]
     fn test_filter_condition_true() {
-        let deps = vec![
-            make_dep("redis", true, ResolvePolicy::WhenEnabled, Some("redis.enabled")),
-        ];
+        let deps = vec![make_dep(
+            "redis",
+            true,
+            ResolvePolicy::WhenEnabled,
+            Some("redis.enabled"),
+        )];
         let values = serde_json::json!({
             "redis": { "enabled": true }
         });
@@ -1013,9 +1025,12 @@ mod tests {
 
     #[test]
     fn test_filter_condition_false() {
-        let deps = vec![
-            make_dep("redis", true, ResolvePolicy::WhenEnabled, Some("redis.enabled")),
-        ];
+        let deps = vec![make_dep(
+            "redis",
+            true,
+            ResolvePolicy::WhenEnabled,
+            Some("redis.enabled"),
+        )];
         let values = serde_json::json!({
             "redis": { "enabled": false }
         });
@@ -1033,9 +1048,12 @@ mod tests {
 
     #[test]
     fn test_filter_condition_missing_is_falsy() {
-        let deps = vec![
-            make_dep("redis", true, ResolvePolicy::WhenEnabled, Some("redis.enabled")),
-        ];
+        let deps = vec![make_dep(
+            "redis",
+            true,
+            ResolvePolicy::WhenEnabled,
+            Some("redis.enabled"),
+        )];
         // redis.enabled not set at all → path doesn't exist → falsy → skip
         let values = serde_json::json!({});
 
@@ -1053,12 +1071,27 @@ mod tests {
     #[test]
     fn test_filter_complex_scenario() {
         let deps = vec![
-            make_dep("nginx", true, ResolvePolicy::WhenEnabled, None),           // enabled, no condition
-            make_dep("redis", true, ResolvePolicy::WhenEnabled, Some("redis.enabled")), // condition true
-            make_dep("postgres", true, ResolvePolicy::WhenEnabled, Some("db.enabled")), // condition false
-            make_dep("mongodb", false, ResolvePolicy::WhenEnabled, None),         // static disabled
-            make_dep("vault", true, ResolvePolicy::Never, None),                  // never resolve
-            make_dep("consul", true, ResolvePolicy::Always, Some("consul.enabled")), // always (ignore condition)
+            make_dep("nginx", true, ResolvePolicy::WhenEnabled, None), // enabled, no condition
+            make_dep(
+                "redis",
+                true,
+                ResolvePolicy::WhenEnabled,
+                Some("redis.enabled"),
+            ), // condition true
+            make_dep(
+                "postgres",
+                true,
+                ResolvePolicy::WhenEnabled,
+                Some("db.enabled"),
+            ), // condition false
+            make_dep("mongodb", false, ResolvePolicy::WhenEnabled, None), // static disabled
+            make_dep("vault", true, ResolvePolicy::Never, None),       // never resolve
+            make_dep(
+                "consul",
+                true,
+                ResolvePolicy::Always,
+                Some("consul.enabled"),
+            ), // always (ignore condition)
         ];
         let values = serde_json::json!({
             "redis": { "enabled": true },
@@ -1084,7 +1117,10 @@ mod tests {
         assert_eq!(SkipReason::StaticDisabled.to_string(), "enabled: false");
         assert_eq!(SkipReason::PolicyNever.to_string(), "resolve: never");
         assert_eq!(
-            SkipReason::ConditionFalse { condition: "redis.enabled".to_string() }.to_string(),
+            SkipReason::ConditionFalse {
+                condition: "redis.enabled".to_string()
+            }
+            .to_string(),
             "condition 'redis.enabled' is false"
         );
     }

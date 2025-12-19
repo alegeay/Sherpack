@@ -87,10 +87,7 @@ pub fn run(
     if !defaults.is_empty() {
         values.merge(&defaults);
         if verbose && !json_output {
-            println!(
-                "  {} Applied defaults from schema",
-                style("→").blue()
-            );
+            println!("  {} Applied defaults from schema", style("→").blue());
         }
     }
 
@@ -128,7 +125,11 @@ pub fn run(
         values.merge(&file_values);
 
         if verbose && !json_output {
-            println!("  {} Merged values from {}", style("→").blue(), vf.display());
+            println!(
+                "  {} Merged values from {}",
+                style("→").blue(),
+                vf.display()
+            );
         }
     }
 
@@ -186,10 +187,7 @@ pub fn run(
             )));
         }
     } else if result.is_valid {
-        println!(
-            "  {} Values are valid against schema",
-            style("✓").green()
-        );
+        println!("  {} Values are valid against schema", style("✓").green());
         println!();
         println!("{} Validation passed!", style("✓").green().bold());
     } else {

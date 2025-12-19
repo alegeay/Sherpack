@@ -3,9 +3,9 @@
 //! Provides functionality to create and extract `.tar.gz` archives
 //! with the standard Sherpack archive structure.
 
+use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
-use flate2::Compression;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -51,13 +51,14 @@ pub fn create_archive(pack: &LoadedPack, output: &Path) -> Result<PathBuf> {
 
     // Add schema file if present
     if let Some(schema_path) = &pack.schema_path
-        && schema_path.exists() {
-            let schema_name = schema_path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| "values.schema.yaml".to_string());
-            add_file_to_archive(&mut builder, schema_path, &schema_name)?;
-        }
+        && schema_path.exists()
+    {
+        let schema_name = schema_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "values.schema.yaml".to_string());
+        add_file_to_archive(&mut builder, schema_path, &schema_name)?;
+    }
 
     // Add template files
     let template_files = pack.template_files()?;
@@ -105,11 +106,7 @@ pub fn list_archive(archive_path: &Path) -> Result<Vec<ArchiveEntry>> {
         let size = entry.header().size()?;
         let is_dir = entry.header().entry_type().is_dir();
 
-        entries.push(ArchiveEntry {
-            path,
-            size,
-            is_dir,
-        });
+        entries.push(ArchiveEntry { path, size, is_dir });
     }
 
     Ok(entries)
