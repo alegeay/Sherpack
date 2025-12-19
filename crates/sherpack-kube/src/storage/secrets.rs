@@ -4,7 +4,7 @@
 //! Similar to Helm's default behavior but with improvements:
 //! - Zstd compression instead of gzip
 //! - JSON format instead of protobuf
-//! - Automatic chunking for large releases
+//! - Automatic chunking for large releases (>1MB)
 
 use async_trait::async_trait;
 use k8s_openapi::api::core::v1::Secret;
@@ -13,12 +13,21 @@ use kube::api::{Api, DeleteParams, ListParams, PostParams};
 use kube::Client;
 use std::collections::BTreeMap;
 
+use super::chunked::{self, ChunkedStorage};
 use super::{
     decode_from_storage, encode_for_storage, storage_labels, CompressionMethod,
     LargeReleaseStrategy, StorageConfig, StorageDriver, MAX_RESOURCE_SIZE,
 };
 use crate::error::{KubeError, Result};
 use crate::release::StoredRelease;
+
+/// Storage strategy based on size
+enum StorageStrategy {
+    /// Data fits in a single Secret
+    Single(String),
+    /// Data needs to be chunked across multiple Secrets
+    Chunked(String),
+}
 
 /// Kubernetes Secrets storage driver
 pub struct SecretsDriver {
@@ -43,39 +52,32 @@ impl SecretsDriver {
         Api::namespaced(self.client.clone(), namespace)
     }
 
-    /// Build a Secret from a release
-    fn build_secret(&self, release: &StoredRelease) -> Result<Secret> {
-        let encoded = encode_for_storage(release, &self.config)?;
-
-        // Check size
-        if encoded.len() > MAX_RESOURCE_SIZE {
-            match &self.config.large_release_strategy {
-                LargeReleaseStrategy::Fail => {
-                    return Err(KubeError::ReleaseTooLarge {
-                        size: encoded.len(),
-                        max: MAX_RESOURCE_SIZE,
-                    });
-                }
-                LargeReleaseStrategy::ChunkedSecrets => {
-                    // TODO: Implement chunking
-                    return Err(KubeError::Storage(
-                        "Chunked secrets not yet implemented".to_string(),
-                    ));
-                }
-                LargeReleaseStrategy::SeparateManifest => {
-                    // TODO: Implement separate manifest storage
-                    return Err(KubeError::Storage(
-                        "Separate manifest storage not yet implemented".to_string(),
-                    ));
-                }
-                LargeReleaseStrategy::ExternalReference { .. } => {
-                    return Err(KubeError::Storage(
-                        "External reference storage not yet implemented".to_string(),
-                    ));
-                }
-            }
+    /// Check if encoded data needs chunking and return strategy
+    fn check_size(&self, encoded: &str) -> Result<StorageStrategy> {
+        if encoded.len() <= MAX_RESOURCE_SIZE {
+            return Ok(StorageStrategy::Single(encoded.to_string()));
         }
 
+        match &self.config.large_release_strategy {
+            LargeReleaseStrategy::Fail => Err(KubeError::ReleaseTooLarge {
+                size: encoded.len(),
+                max: MAX_RESOURCE_SIZE,
+            }),
+            LargeReleaseStrategy::ChunkedSecrets => {
+                Ok(StorageStrategy::Chunked(encoded.to_string()))
+            }
+            LargeReleaseStrategy::SeparateManifest => {
+                // For now, fall back to chunking
+                Ok(StorageStrategy::Chunked(encoded.to_string()))
+            }
+            LargeReleaseStrategy::ExternalReference { .. } => Err(KubeError::Storage(
+                "External reference storage not yet implemented".to_string(),
+            )),
+        }
+    }
+
+    /// Build a Secret from a release (for non-chunked storage)
+    fn build_secret(&self, release: &StoredRelease, encoded: &str) -> Secret {
         let mut labels = storage_labels(release);
         labels.insert("sherpack.io/storage-driver".to_string(), "secrets".to_string());
 
@@ -88,9 +90,9 @@ impl SecretsDriver {
         labels.insert("sherpack.io/compression".to_string(), compression_type.to_string());
 
         let mut data = BTreeMap::new();
-        data.insert("release".to_string(), k8s_openapi::ByteString(encoded.into_bytes()));
+        data.insert("release".to_string(), k8s_openapi::ByteString(encoded.as_bytes().to_vec()));
 
-        Ok(Secret {
+        Secret {
             metadata: ObjectMeta {
                 name: Some(release.storage_key()),
                 namespace: Some(release.namespace.clone()),
@@ -100,11 +102,24 @@ impl SecretsDriver {
             type_: Some("sherpack.io/release.v1".to_string()),
             data: Some(data),
             ..Default::default()
-        })
+        }
     }
 
-    /// Parse a release from a Secret
+    /// Get chunked storage helper
+    fn chunked_storage(&self) -> ChunkedStorage {
+        ChunkedStorage::new(self.client.clone())
+    }
+
+    /// Parse a release from a Secret (handles both regular and chunked)
     fn parse_secret(&self, secret: &Secret) -> Result<StoredRelease> {
+        // Check if this is a chunked index
+        if chunked::is_chunked_index(secret) {
+            // This is handled separately in get() method
+            return Err(KubeError::Storage(
+                "Chunked release - use async parse".to_string(),
+            ));
+        }
+
         let data = secret
             .data
             .as_ref()
@@ -115,7 +130,30 @@ impl SecretsDriver {
             .map_err(|e| KubeError::Storage(format!("Invalid UTF-8 in secret: {}", e)))?;
 
         // Determine compression from labels
-        let compression = secret
+        let compression = self.get_compression_from_labels(secret);
+
+        decode_from_storage(&encoded, compression)
+    }
+
+    /// Parse a chunked release (requires async to fetch chunks)
+    async fn parse_chunked_secret(&self, secret: &Secret) -> Result<StoredRelease> {
+        let index = chunked::parse_chunked_index(secret)?;
+        let namespace = secret
+            .metadata
+            .namespace
+            .as_ref()
+            .ok_or_else(|| KubeError::Storage("Secret has no namespace".to_string()))?;
+
+        // Read all chunks
+        let encoded = self.chunked_storage().read_chunked(namespace, secret).await?;
+
+        // Decode using the compression method from the index
+        decode_from_storage(&encoded, index.compression_method())
+    }
+
+    /// Get compression method from Secret labels
+    fn get_compression_from_labels(&self, secret: &Secret) -> CompressionMethod {
+        secret
             .metadata
             .labels
             .as_ref()
@@ -126,9 +164,7 @@ impl SecretsDriver {
                 "zstd" => CompressionMethod::Zstd { level: 3 },
                 _ => self.config.compression,
             })
-            .unwrap_or(self.config.compression);
-
-        decode_from_storage(&encoded, compression)
+            .unwrap_or(self.config.compression)
     }
 }
 
@@ -139,7 +175,14 @@ impl StorageDriver for SecretsDriver {
         let key = format!("sh.sherpack.release.v1.{}.v{}", name, version);
 
         match api.get(&key).await {
-            Ok(secret) => self.parse_secret(&secret),
+            Ok(secret) => {
+                // Check if this is a chunked release
+                if chunked::is_chunked_index(&secret) {
+                    self.parse_chunked_secret(&secret).await
+                } else {
+                    self.parse_secret(&secret)
+                }
+            }
             Err(kube::Error::Api(e)) if e.code == 404 => Err(KubeError::ReleaseNotFound {
                 name: name.to_string(),
                 namespace: namespace.to_string(),
@@ -162,6 +205,7 @@ impl StorageDriver for SecretsDriver {
         name: Option<&str>,
         include_superseded: bool,
     ) -> Result<Vec<StoredRelease>> {
+        // Exclude chunk secrets from listing
         let mut label_selector = "app.kubernetes.io/managed-by=sherpack".to_string();
         if let Some(n) = name {
             label_selector.push_str(&format!(",sherpack.io/release-name={}", n));
@@ -177,11 +221,29 @@ impl StorageDriver for SecretsDriver {
             api.list(&lp).await?
         };
 
-        let mut releases: Vec<StoredRelease> = secrets
-            .items
-            .iter()
-            .filter_map(|s| self.parse_secret(s).ok())
-            .collect();
+        // Filter out chunk secrets and parse releases
+        let mut releases: Vec<StoredRelease> = Vec::new();
+        for secret in &secrets.items {
+            // Skip chunk secrets (they have chunk-parent label)
+            if secret
+                .metadata
+                .labels
+                .as_ref()
+                .map(|l| l.contains_key("sherpack.io/chunk-parent"))
+                .unwrap_or(false)
+            {
+                continue;
+            }
+
+            // Parse the release (handle chunked)
+            if chunked::is_chunked_index(secret) {
+                if let Ok(release) = self.parse_chunked_secret(secret).await {
+                    releases.push(release);
+                }
+            } else if let Ok(release) = self.parse_secret(secret) {
+                releases.push(release);
+            }
+        }
 
         // Sort by version descending (newest first)
         releases.sort_by(|a, b| b.version.cmp(&a.version));
@@ -207,11 +269,29 @@ impl StorageDriver for SecretsDriver {
 
         let secrets = self.secrets_api(namespace).list(&lp).await?;
 
-        let mut releases: Vec<StoredRelease> = secrets
-            .items
-            .iter()
-            .filter_map(|s| self.parse_secret(s).ok())
-            .collect();
+        // Filter out chunk secrets and parse releases
+        let mut releases: Vec<StoredRelease> = Vec::new();
+        for secret in &secrets.items {
+            // Skip chunk secrets
+            if secret
+                .metadata
+                .labels
+                .as_ref()
+                .map(|l| l.contains_key("sherpack.io/chunk-parent"))
+                .unwrap_or(false)
+            {
+                continue;
+            }
+
+            // Parse the release (handle chunked)
+            if chunked::is_chunked_index(secret) {
+                if let Ok(release) = self.parse_chunked_secret(secret).await {
+                    releases.push(release);
+                }
+            } else if let Ok(release) = self.parse_secret(secret) {
+                releases.push(release);
+            }
+        }
 
         // Sort by version descending (newest first)
         releases.sort_by(|a, b| b.version.cmp(&a.version));
@@ -228,7 +308,6 @@ impl StorageDriver for SecretsDriver {
 
     async fn create(&self, release: &StoredRelease) -> Result<()> {
         let api = self.secrets_api(&release.namespace);
-        let secret = self.build_secret(release)?;
 
         // Check if it already exists
         match api.get(&release.storage_key()).await {
@@ -244,17 +323,58 @@ impl StorageDriver for SecretsDriver {
             Err(e) => return Err(e.into()),
         }
 
-        api.create(&PostParams::default(), &secret).await?;
+        // Encode the release
+        let encoded = encode_for_storage(release, &self.config)?;
+
+        // Check size and determine strategy
+        match self.check_size(&encoded)? {
+            StorageStrategy::Single(data) => {
+                let secret = self.build_secret(release, &data);
+                api.create(&PostParams::default(), &secret).await?;
+            }
+            StorageStrategy::Chunked(data) => {
+                self.chunked_storage()
+                    .create_chunked(release, &data, self.config.compression)
+                    .await?;
+            }
+        }
+
         Ok(())
     }
 
     async fn update(&self, release: &StoredRelease) -> Result<()> {
         let api = self.secrets_api(&release.namespace);
-        let secret = self.build_secret(release)?;
+        let key = release.storage_key();
 
-        // Use replace to update
-        api.replace(&release.storage_key(), &PostParams::default(), &secret)
-            .await?;
+        // First, check if the existing release is chunked
+        let is_currently_chunked = match api.get(&key).await {
+            Ok(secret) => chunked::is_chunked_index(&secret),
+            Err(kube::Error::Api(e)) if e.code == 404 => false,
+            Err(e) => return Err(e.into()),
+        };
+
+        // Encode the new release
+        let encoded = encode_for_storage(release, &self.config)?;
+
+        match self.check_size(&encoded)? {
+            StorageStrategy::Single(data) => {
+                // If it was chunked before, delete chunks first
+                if is_currently_chunked {
+                    self.chunked_storage()
+                        .delete_chunked(&release.namespace, &key)
+                        .await?;
+                }
+                let secret = self.build_secret(release, &data);
+                api.replace(&key, &PostParams::default(), &secret).await?;
+            }
+            StorageStrategy::Chunked(data) => {
+                // Update chunked (handles cleanup of old chunks)
+                self.chunked_storage()
+                    .update_chunked(release, &data, self.config.compression)
+                    .await?;
+            }
+        }
+
         Ok(())
     }
 
@@ -263,18 +383,42 @@ impl StorageDriver for SecretsDriver {
         let api = self.secrets_api(namespace);
         let key = format!("sh.sherpack.release.v1.{}.v{}", name, version);
 
-        api.delete(&key, &DeleteParams::default()).await?;
+        // Check if it's chunked
+        match api.get(&key).await {
+            Ok(secret) if chunked::is_chunked_index(&secret) => {
+                // Delete chunked release (index + chunks)
+                self.chunked_storage().delete_chunked(namespace, &key).await?;
+            }
+            Ok(_) => {
+                // Delete single secret
+                api.delete(&key, &DeleteParams::default()).await?;
+            }
+            Err(kube::Error::Api(e)) if e.code == 404 => {
+                // Already deleted
+            }
+            Err(e) => return Err(e.into()),
+        }
+
         Ok(release)
     }
 
     async fn delete_all(&self, namespace: &str, name: &str) -> Result<Vec<StoredRelease>> {
         let releases = self.history(namespace, name).await?;
-        let api = self.secrets_api(namespace);
 
         for release in &releases {
-            let _ = api
-                .delete(&release.storage_key(), &DeleteParams::default())
-                .await;
+            let key = release.storage_key();
+            let api = self.secrets_api(namespace);
+
+            // Check if chunked
+            match api.get(&key).await {
+                Ok(secret) if chunked::is_chunked_index(&secret) => {
+                    let _ = self.chunked_storage().delete_chunked(namespace, &key).await;
+                }
+                Ok(_) => {
+                    let _ = api.delete(&key, &DeleteParams::default()).await;
+                }
+                Err(_) => {}
+            }
         }
 
         Ok(releases)

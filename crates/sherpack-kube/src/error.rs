@@ -96,6 +96,14 @@ pub enum KubeError {
     /// Drift detected
     #[error("drift detected in {count} resource(s)\nHint: Use `sherpack diff {name}` to see changes, or --force to override")]
     DriftDetected { name: String, count: usize },
+
+    /// Invalid manifest
+    #[error("invalid manifest: {0}")]
+    InvalidManifest(String),
+
+    /// Wrapped kube error (for direct use without From trait)
+    #[error("Kubernetes API error: {0}")]
+    KubeApi(#[source] kube::Error),
 }
 
 impl From<serde_json::Error> for KubeError {

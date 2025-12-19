@@ -15,12 +15,13 @@ cargo build --workspace
 # Build (release)
 cargo build --release
 
-# Run tests (282 tests)
+# Run tests (410 tests)
 cargo test --workspace
 
 # Run tests for specific crate
 cargo test -p sherpack-core
 cargo test -p sherpack-engine
+cargo test -p sherpack-convert
 cargo test -p sherpack-kube
 cargo test -p sherpack-repo
 cargo test -p sherpack
@@ -46,7 +47,7 @@ cargo run -p sherpack -- package fixtures/demo-pack
 
 ## Architecture
 
-The project is a Cargo workspace with five crates:
+The project is a Cargo workspace with six crates (~32k lines of Rust):
 
 ### `sherpack-core`
 Core types and data structures (19 tests):
@@ -59,14 +60,22 @@ Core types and data structures (19 tests):
 - `Schema` - JSON Schema validation and default extraction
 
 ### `sherpack-engine`
-MiniJinja-based template engine (43 tests):
+MiniJinja-based template engine (58 tests):
 - `Engine` / `EngineBuilder` - Template compilation and rendering
-- `filters.rs` - 25+ Helm-compatible filters: `toyaml`, `tojson`, `b64encode`, `indent`, `nindent`, `quote`, `kebabcase`, `sha256`, etc.
+- `filters.rs` - 25+ Helm-compatible filters: `toyaml`, `tojson`, `b64encode`, `indent`, `nindent`, `quote`, `kebabcase`, `sha256`, `int`, `float`, etc.
 - `functions.rs` - Template functions: `get()`, `ternary()`, `now()`, `uuidv4()`, `fail()`, `tostring()`, `toint()`, `tofloat()`
 - `suggestions.rs` - Contextual error suggestions with fuzzy matching
 
+### `sherpack-convert`
+Helm chart to Sherpack converter (63 tests):
+- `go_template.pest` - PEG grammar for Go template parsing
+- `parser.rs` - Go template parser using pest
+- `transformer.rs` - AST transformer from Go templates to Jinja2
+- `converter.rs` - Full chart conversion with three-pass macro handling
+- Supports: `define`, `include`, `if/else`, `range`, `with`, variable pipelines
+
 ### `sherpack-kube`
-Kubernetes integration (107 tests):
+Kubernetes integration (151 tests):
 - `client.rs` - `KubeClient<S>` with install/upgrade/uninstall/rollback/list/history/status/recover
 - `resources.rs` - `ResourceManager` with Server-Side Apply, Discovery, creation ordering
 - `storage/` - `StorageDriver` trait with Secrets, ConfigMap, File, Mock backends
@@ -77,7 +86,7 @@ Kubernetes integration (107 tests):
 - `release.rs` - `StoredRelease`, `ReleaseState`, auto-recovery
 
 ### `sherpack-repo`
-Repository and dependency management (42 tests):
+Repository and dependency management (43 tests):
 - `backend.rs` - `RepositoryBackend` trait with HTTP, OCI, File backends
 - `http.rs` - HTTP repository with ETag caching
 - `oci.rs` - OCI registry client using `oci-distribution`
@@ -89,7 +98,7 @@ Repository and dependency management (42 tests):
 - `index.rs` - Repository index parsing and semver matching
 
 ### `sherpack-cli`
-CLI application using Clap (71 tests):
+CLI application using Clap (75 tests):
 
 **Templating:**
 - `template` - Render templates to stdout or files
@@ -97,6 +106,7 @@ CLI application using Clap (71 tests):
 - `validate` - Validate values against JSON Schema
 - `show` - Display pack information
 - `create` - Scaffold new pack
+- `convert` - Convert Helm chart to Sherpack pack
 
 **Packaging:**
 - `package` - Create tar.gz archive with manifest
@@ -172,9 +182,10 @@ Templates receive these variables:
 Test fixtures are in `fixtures/`:
 - `fixtures/simple-pack/` - Basic test fixture
 - `fixtures/demo-pack/` - Comprehensive demo with schema
+- `fixtures/helm-nginx/` - Helm chart for conversion testing
 
 ```bash
-# Run all tests (282 total)
+# Run all tests (410 total)
 cargo test --workspace
 
 # Run specific crate tests
@@ -191,6 +202,7 @@ cargo test --workspace -- --nocapture
 
 Key dependencies:
 - `minijinja` - Jinja2 template engine
+- `pest` - PEG parser for Go template conversion
 - `kube` / `k8s-openapi` - Kubernetes client
 - `oci-distribution` - OCI registry client
 - `rusqlite` - SQLite with FTS5 for search

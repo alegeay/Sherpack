@@ -93,6 +93,32 @@ sherpack create <NAME> [OPTIONS]
 |--------|-------------|
 | `-o, --output <DIR>` | Output directory |
 
+### convert
+
+Convert Helm chart to Sherpack pack.
+
+```bash
+sherpack convert <CHART> [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `-o, --output <DIR>` | Output directory (default: `<chartname>-sherpack`) |
+| `--force` | Overwrite existing output |
+| `--dry-run` | Preview without writing |
+| `-v, --verbose` | Detailed output |
+
+**Conversion Examples:**
+
+| Go Template | Jinja2 |
+|-------------|--------|
+| `{{ .Values.name }}` | `{{ values.name }}` |
+| `{{ include "helper" . }}` | `{{ helper() }}` |
+| `{{- if .Values.enabled }}` | `{% if values.enabled %}` |
+| `{{ range .Values.items }}` | `{% for item in values.items %}` |
+| `{{ .Release.Name }}` | `{{ release.name }}` |
+| `{{ default "foo" .Values.x }}` | `{{ values.x \| default("foo") }}` |
+
 ---
 
 ## Packaging Commands

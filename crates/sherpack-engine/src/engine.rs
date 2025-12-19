@@ -62,12 +62,38 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Create a new engine with default settings
+    /// Create a new engine
+    ///
+    /// # Arguments
+    /// * `strict_mode` - If true, uses Chainable undefined behavior (Helm-compatible).
+    ///                   If false, uses Lenient mode (empty strings for undefined).
+    ///
+    /// # Prefer using convenience methods
+    /// For clearer code, prefer `Engine::strict()` or `Engine::lenient()`.
     pub fn new(strict_mode: bool) -> Self {
         Self { strict_mode }
     }
 
-    /// Create a builder
+    /// Create a strict mode engine (Helm-compatible, recommended)
+    ///
+    /// Uses `UndefinedBehavior::Chainable` which allows accessing properties
+    /// on undefined values, returning undefined instead of error.
+    #[must_use]
+    pub fn strict() -> Self {
+        Self { strict_mode: true }
+    }
+
+    /// Create a lenient mode engine
+    ///
+    /// Uses `UndefinedBehavior::Lenient` which returns empty strings
+    /// for undefined values.
+    #[must_use]
+    pub fn lenient() -> Self {
+        Self { strict_mode: false }
+    }
+
+    /// Create a builder for more configuration options
+    #[must_use]
     pub fn builder() -> EngineBuilder {
         EngineBuilder::new()
     }
@@ -77,8 +103,11 @@ impl Engine {
         let mut env = Environment::new();
 
         // Configure behavior
+        // Use Chainable mode by default - allows accessing properties on undefined values
+        // (returns undefined instead of error), matching Helm's Go template behavior.
+        // This is essential for converted charts where values may be optional.
         if self.strict_mode {
-            env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
+            env.set_undefined_behavior(minijinja::UndefinedBehavior::Chainable);
         } else {
             env.set_undefined_behavior(minijinja::UndefinedBehavior::Lenient);
         }
@@ -104,6 +133,10 @@ impl Engine {
         env.add_filter("trimsuffix", filters::trimsuffix);
         env.add_filter("snakecase", filters::snakecase);
         env.add_filter("kebabcase", filters::kebabcase);
+        env.add_filter("tostrings", filters::tostrings);
+        env.add_filter("semver_match", filters::semver_match);
+        env.add_filter("int", filters::int);
+        env.add_filter("float", filters::float);
 
         // Register global functions
         env.add_function("fail", functions::fail);
@@ -118,6 +151,9 @@ impl Engine {
         env.add_function("tofloat", functions::tofloat);
         env.add_function("now", functions::now);
         env.add_function("printf", functions::printf);
+        env.add_function("tpl", functions::tpl);
+        env.add_function("tpl_ctx", functions::tpl_ctx);
+        env.add_function("lookup", functions::lookup);
 
         env
     }
@@ -258,7 +294,15 @@ impl Engine {
             template_sources.insert(template_name, content);
         }
 
-        // Build render context
+        // Add context as globals so imported macros can access them
+        // This is necessary because MiniJinja macros don't automatically get the render context
+        env.add_global("values", minijinja::Value::from_serialize(&context.values));
+        env.add_global("release", minijinja::Value::from_serialize(&context.release));
+        env.add_global("pack", minijinja::Value::from_serialize(&context.pack));
+        env.add_global("capabilities", minijinja::Value::from_serialize(&context.capabilities));
+        env.add_global("template", minijinja::Value::from_serialize(&context.template));
+
+        // Build render context (still needed for direct template rendering)
         let ctx = minijinja::context! {
             values => &context.values,
             release => &context.release,
@@ -407,18 +451,25 @@ replicas: 3
     }
 
     #[test]
-    fn test_undefined_error() {
+    fn test_chainable_undefined_returns_empty() {
+        // With UndefinedBehavior::Chainable, undefined keys return empty string
+        // This matches Helm's behavior for optional values
         let engine = Engine::new(true);
         let ctx = create_test_context();
 
         let template = "value: {{ values.undefined_key }}";
         let result = engine.render_string(template, &ctx, "test.yaml");
 
-        assert!(result.is_err());
+        // Chainable mode: undefined attributes return empty, not error
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert_eq!(output.trim(), "value:");
     }
 
     #[test]
-    fn test_render_string_with_typo_value() {
+    fn test_chainable_typo_returns_empty() {
+        // With UndefinedBehavior::Chainable, even top-level undefined vars return empty
+        // This is intentional for Helm compatibility (optional values pattern)
         let engine = Engine::new(true);
         let ctx = create_test_context();
 
@@ -426,19 +477,11 @@ replicas: 3
         let template = "name: {{ value.app.name }}";
         let result = engine.render_string(template, &ctx, "test.yaml");
 
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        // The error is wrapped in EngineError::Template
-        match err {
-            EngineError::Template(te) => {
-                assert!(
-                    te.message.contains("undefined") || te.message.contains("value"),
-                    "Expected error about undefined value, got: {}",
-                    te.message
-                );
-            }
-            other => panic!("Expected Template error, got: {:?}", other),
-        }
+        // Chainable mode allows this - returns empty
+        // Users should rely on linting and unknown filter errors to catch typos
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert_eq!(output.trim(), "name:");
     }
 
     #[test]

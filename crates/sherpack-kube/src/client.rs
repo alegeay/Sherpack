@@ -297,8 +297,8 @@ impl<S: StorageDriver> KubeClient<S> {
 
         // Execute pre-upgrade hooks
         let mut hook_executor = HookExecutor::new();
-        if !options.no_hooks {
-            if let Err(e) = hook_executor
+        if !options.no_hooks
+            && let Err(e) = hook_executor
                 .execute_phase(&release.hooks, HookPhase::PreUpgrade, &release.name, release.version, &self.client)
                 .await
             {
@@ -310,7 +310,6 @@ impl<S: StorageDriver> KubeClient<S> {
                 }
                 return Err(e);
             }
-        }
 
         // Apply manifests
         if let Err(e) = self.apply_manifest(&release.namespace, &release.manifest).await {
@@ -492,8 +491,8 @@ impl<S: StorageDriver> KubeClient<S> {
 
         // Execute pre-rollback hooks
         let mut hook_executor = HookExecutor::new();
-        if !options.no_hooks {
-            if let Err(e) = hook_executor
+        if !options.no_hooks
+            && let Err(e) = hook_executor
                 .execute_phase(&release.hooks, HookPhase::PreRollback, &release.name, release.version, &self.client)
                 .await
             {
@@ -501,7 +500,6 @@ impl<S: StorageDriver> KubeClient<S> {
                 self.storage.update(&release).await?;
                 return Err(e);
             }
-        }
 
         // Apply target manifest
         if let Err(e) = self.apply_manifest(&release.namespace, &release.manifest).await {

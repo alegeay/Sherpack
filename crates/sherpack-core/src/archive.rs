@@ -50,15 +50,14 @@ pub fn create_archive(pack: &LoadedPack, output: &Path) -> Result<PathBuf> {
     }
 
     // Add schema file if present
-    if let Some(schema_path) = &pack.schema_path {
-        if schema_path.exists() {
+    if let Some(schema_path) = &pack.schema_path
+        && schema_path.exists() {
             let schema_name = schema_path
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| "values.schema.yaml".to_string());
             add_file_to_archive(&mut builder, schema_path, &schema_name)?;
         }
-    }
 
     // Add template files
     let template_files = pack.template_files()?;

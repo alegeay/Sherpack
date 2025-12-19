@@ -10,7 +10,7 @@ sidebar_position: 1
 
 ```bash
 # Clone the repository
-git clone https://github.com/music-soul1-1/sherpack.git
+git clone https://github.com/alegeay/sherpack.git
 cd sherpack
 
 # Build release binary

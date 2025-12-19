@@ -32,6 +32,7 @@ pub const AVAILABLE_FILTERS: &[&str] = &[
     "trimsuffix",
     "snakecase",
     "kebabcase",
+    "tostrings", // Convert list elements to strings
     // Built-in MiniJinja filters
     "default",
     "upper",
@@ -85,6 +86,9 @@ pub const AVAILABLE_FUNCTIONS: &[&str] = &[
     "tofloat",
     "now",
     "printf",
+    "tpl",      // Dynamic template evaluation
+    "tpl_ctx",  // Dynamic template with full context
+    "lookup",   // K8s resource lookup (returns empty in template mode)
     // Built-in MiniJinja globals
     "range",
     "lipsum",

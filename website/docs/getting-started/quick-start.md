@@ -108,6 +108,8 @@ sherpack uninstall myrelease
 
 ## Next Steps
 
+- Follow the [Complete Tutorial](/docs/getting-started/tutorial) for a hands-on guide
 - Learn about [Pack Structure](/docs/concepts/pack-structure)
 - Explore [Templating](/docs/templating/context-variables)
 - Read the [CLI Reference](/docs/cli-reference)
+- [Convert from Helm](/docs/cli-reference#convert) if migrating existing charts

@@ -3,7 +3,7 @@
 use thiserror::Error;
 
 /// Information about a single validation error
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ValidationErrorInfo {
     /// JSON path where the error occurred (e.g., "/image/tag")
     pub path: String,
@@ -59,6 +59,7 @@ pub enum CoreError {
 
 impl CoreError {
     /// Format validation errors for display
+    #[must_use]
     pub fn format_validation_errors(errors: &[ValidationErrorInfo]) -> String {
         errors
             .iter()

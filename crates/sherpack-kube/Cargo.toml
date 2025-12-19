@@ -30,6 +30,8 @@ thiserror = { workspace = true }
 chrono = { workspace = true }
 base64 = { workspace = true }
 semver = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
 
 # Compression
 zstd = { workspace = true }
@@ -37,6 +39,12 @@ flate2 = { workspace = true }
 
 # Diffing
 similar = { workspace = true }
+
+# HTTP (for health checks)
+reqwest = { workspace = true }
+
+# Terminal (for progress reporting)
+console = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }

@@ -1,0 +1,39 @@
+[package]
+name = "sherpack-convert"
+version = "0.1.0"
+edition = "2021"
+description = "Helm chart to Sherpack pack converter"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/alegeay/sherpack"
+
+[dependencies]
+sherpack-core = { path = "../sherpack-core" }
+
+# Parser
+pest = "2.7"
+pest_derive = "2.7"
+
+# Static maps for filter/function mapping
+phf = { version = "0.11", features = ["macros"] }
+
+# File system
+walkdir = "2.5"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+
+# Error handling
+thiserror = "1.0"
+miette = { version = "7.0", features = ["fancy"] }
+
+# Regex for macro detection
+regex = "1.10"
+
+# Logging
+tracing = "0.1"
+
+[dev-dependencies]
+insta = { version = "1.40", features = ["yaml"] }
+tempfile = "3.10"

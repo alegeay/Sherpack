@@ -6,7 +6,7 @@ sidebar_position: 101
 
 # Architecture
 
-Sherpack is built as a modular Rust workspace with 5 crates.
+Sherpack is built as a modular Rust workspace with 6 crates (~32k lines of code).
 
 ## Crate Overview
 
@@ -15,6 +15,7 @@ sherpack/
 ├── crates/
 │   ├── sherpack-core/     # Core types
 │   ├── sherpack-engine/   # Template engine
+│   ├── sherpack-convert/  # Helm chart converter
 │   ├── sherpack-kube/     # Kubernetes integration
 │   ├── sherpack-repo/     # Repository management
 │   └── sherpack-cli/      # CLI application
@@ -26,6 +27,7 @@ sherpack/
 sherpack-cli
     ├── sherpack-core
     ├── sherpack-engine ─── sherpack-core
+    ├── sherpack-convert ── sherpack-core, sherpack-engine
     ├── sherpack-kube ───── sherpack-core
     └── sherpack-repo ───── sherpack-core
 ```
@@ -77,6 +79,37 @@ MiniJinja-based template engine.
 - **Indentation**: `indent`, `nindent`
 - **Collections**: `keys`, `haskey`, `merge`, `dictsort`
 - **Validation**: `required`, `empty`, `default`
+- **Type Conversion**: `int`, `float`, `string`
+
+## sherpack-convert
+
+Helm chart to Sherpack converter.
+
+### Components
+
+| Component | Description |
+|-----------|-------------|
+| `GoTemplateParser` | PEG-based Go template parser |
+| `Transformer` | Go template → Jinja2 AST transform |
+| `HelmConverter` | Full chart conversion orchestration |
+
+### Supported Conversions
+
+| Go Template | Jinja2 |
+|-------------|--------|
+| `{{ .Values.x }}` | `{{ values.x }}` |
+| `{{ include "name" . }}` | `{{ name() }}` |
+| `{{- define "name" }}` | `{% macro name() %}` |
+| `{{ if }}...{{ end }}` | `{% if %}...{% endif %}` |
+| `{{ range }}...{{ end }}` | `{% for %}...{% endfor %}` |
+| `{{ with }}...{{ end }}` | Inlined or `{% with %}` |
+
+### Features
+
+- Three-pass conversion for cross-helper imports
+- Automatic macro extraction from `_helpers.tpl`
+- NOTES.txt template conversion
+- Full variable pipeline support
 
 ## sherpack-kube
 
@@ -192,11 +225,12 @@ Repository and dependency management.
 | Crate | Tests | Type |
 |-------|-------|------|
 | sherpack-core | 19 | Unit |
-| sherpack-engine | 43 | Unit |
-| sherpack-kube | 107 | Unit + Mock |
-| sherpack-repo | 42 | Unit |
-| sherpack-cli | 71 | Integration |
-| **Total** | **282** | |
+| sherpack-engine | 58 | Unit |
+| sherpack-convert | 63 | Unit + Parser |
+| sherpack-kube | 151 | Unit + Mock |
+| sherpack-repo | 43 | Unit |
+| sherpack-cli | 75 | Integration |
+| **Total** | **410** | |
 
 ### Test Patterns
 

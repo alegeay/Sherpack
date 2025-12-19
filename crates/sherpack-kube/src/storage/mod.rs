@@ -15,11 +15,13 @@ mod secrets;
 mod configmap;
 mod file;
 mod mock;
+mod chunked;
 
 pub use secrets::SecretsDriver;
 pub use configmap::ConfigMapDriver;
 pub use file::FileDriver;
 pub use mock::{MockStorageDriver, OperationCounts};
+pub use chunked::{ChunkedIndex, ChunkedStorage, CHUNK_SIZE};
 
 use async_trait::async_trait;
 use crate::error::{KubeError, Result};
@@ -142,6 +144,7 @@ impl Default for LargeReleaseStrategy {
 }
 
 /// Compress data using the configured method
+#[must_use = "compression result should be used"]
 pub fn compress(data: &[u8], method: CompressionMethod) -> Result<Vec<u8>> {
     match method {
         CompressionMethod::None => Ok(data.to_vec()),
@@ -162,6 +165,7 @@ pub fn compress(data: &[u8], method: CompressionMethod) -> Result<Vec<u8>> {
 }
 
 /// Decompress data
+#[must_use = "decompression result should be used"]
 pub fn decompress(data: &[u8], method: CompressionMethod) -> Result<Vec<u8>> {
     match method {
         CompressionMethod::None => Ok(data.to_vec()),
@@ -181,16 +185,19 @@ pub fn decompress(data: &[u8], method: CompressionMethod) -> Result<Vec<u8>> {
 }
 
 /// Serialize a release to JSON bytes
+#[must_use = "serialization result should be used"]
 pub fn serialize_release(release: &StoredRelease) -> Result<Vec<u8>> {
     serde_json::to_vec(release).map_err(|e| KubeError::Serialization(e.to_string()))
 }
 
 /// Deserialize a release from JSON bytes
+#[must_use = "deserialization result should be used"]
 pub fn deserialize_release(data: &[u8]) -> Result<StoredRelease> {
     serde_json::from_slice(data).map_err(|e| KubeError::Serialization(e.to_string()))
 }
 
 /// Encode data for storage (serialize + compress + base64)
+#[must_use = "encoded data should be used for storage"]
 pub fn encode_for_storage(release: &StoredRelease, config: &StorageConfig) -> Result<String> {
     let json = serialize_release(release)?;
     let compressed = compress(&json, config.compression)?;
@@ -201,6 +208,7 @@ pub fn encode_for_storage(release: &StoredRelease, config: &StorageConfig) -> Re
 }
 
 /// Decode data from storage (base64 + decompress + deserialize)
+#[must_use = "decoded release should be used"]
 pub fn decode_from_storage(data: &str, compression: CompressionMethod) -> Result<StoredRelease> {
     let decoded = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data)
         .map_err(|e| KubeError::Serialization(format!("base64 decode error: {}", e)))?;
@@ -209,6 +217,7 @@ pub fn decode_from_storage(data: &str, compression: CompressionMethod) -> Result
 }
 
 /// Labels applied to all storage resources
+#[must_use = "labels should be applied to resources"]
 pub fn storage_labels(release: &StoredRelease) -> std::collections::BTreeMap<String, String> {
     let mut labels = std::collections::BTreeMap::new();
     labels.insert("app.kubernetes.io/managed-by".to_string(), "sherpack".to_string());

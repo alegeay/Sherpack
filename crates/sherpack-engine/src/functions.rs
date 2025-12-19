@@ -1,6 +1,36 @@
 //! Template functions (global functions available in templates)
 
-use minijinja::{Error, ErrorKind, Value};
+use minijinja::{Error, ErrorKind, State, Value};
+use minijinja::value::Object;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+/// Maximum recursion depth for tpl function (prevents infinite loops)
+const MAX_TPL_DEPTH: usize = 10;
+
+/// Key for storing tpl recursion depth in State's temp storage
+const TPL_DEPTH_KEY: &str = "__sherpack_tpl_depth";
+
+/// Counter object for tracking tpl recursion depth
+/// Implements Object trait so it can be stored in State's temp storage
+#[derive(Debug, Default)]
+struct TplDepthCounter(AtomicUsize);
+
+impl Object for TplDepthCounter {
+    fn repr(self: &Arc<Self>) -> minijinja::value::ObjectRepr {
+        minijinja::value::ObjectRepr::Plain
+    }
+}
+
+impl TplDepthCounter {
+    fn increment(&self) -> usize {
+        self.0.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    fn decrement(&self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 
 /// Fail with a custom error message
 ///
@@ -31,7 +61,7 @@ pub fn dict(args: Vec<Value>) -> Result<Value, Error> {
         map.insert(key.to_string(), value);
     }
 
-    Ok(Value::from_serialize(&serde_json::Value::Object(map)))
+    Ok(Value::from_serialize(serde_json::Value::Object(map)))
 }
 
 /// Create a list from values
@@ -225,6 +255,215 @@ pub fn printf(format: String, args: Vec<Value>) -> Result<String, Error> {
     Ok(result)
 }
 
+/// Evaluate a string as a template (Helm's tpl function)
+///
+/// Usage: {{ tpl(values.dynamicTemplate, ctx) }}
+///
+/// This allows template strings stored in values to contain Jinja expressions.
+/// The context parameter provides the variables available to the nested template.
+///
+/// ## Security Features (Sherpack improvements over Helm)
+///
+/// - **Recursion limit**: Maximum depth of 10 to prevent infinite loops
+/// - **Source tracking**: Better error messages showing template origin
+///
+/// ## Example
+///
+/// In values.yaml:
+/// ```yaml
+/// host: "{{ release.name }}.example.com"
+/// ```
+///
+/// Then in template:
+/// ```jinja
+/// host: {{ tpl(values.host, {"release": release}) }}
+/// ```
+/// Result: `host: myrelease.example.com`
+pub fn tpl(state: &State, template: String, context: Value) -> Result<String, Error> {
+    // Skip if no template markers present (optimization)
+    if !template.contains("{{") && !template.contains("{%") {
+        return Ok(template);
+    }
+
+    // Check recursion depth to prevent infinite loops
+    let depth = increment_tpl_depth(state)?;
+
+    // Render the template string using the current environment
+    let result = state
+        .env()
+        .render_str(&template, context)
+        .map_err(|e| {
+            // Enhance error message with tpl context
+            Error::new(
+                ErrorKind::InvalidOperation,
+                format!(
+                    "tpl error (depth {}): {}\n  Template: \"{}\"",
+                    depth,
+                    e,
+                    truncate_for_error(&template, 60)
+                ),
+            )
+        });
+
+    // Decrement depth after rendering (for sibling tpl calls)
+    decrement_tpl_depth(state);
+
+    result
+}
+
+/// Increment tpl recursion depth, returning error if limit exceeded
+fn increment_tpl_depth(state: &State) -> Result<usize, Error> {
+    let counter = state.get_or_set_temp_object(TPL_DEPTH_KEY, TplDepthCounter::default);
+    let depth = counter.increment();
+
+    if depth > MAX_TPL_DEPTH {
+        Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!(
+                "tpl recursion depth {} exceeded maximum {} - possible infinite loop in values. \
+                 Check for circular references in template strings.",
+                depth, MAX_TPL_DEPTH
+            ),
+        ))
+    } else {
+        Ok(depth)
+    }
+}
+
+/// Decrement tpl recursion depth
+fn decrement_tpl_depth(state: &State) {
+    let counter = state.get_or_set_temp_object(TPL_DEPTH_KEY, TplDepthCounter::default);
+    counter.decrement();
+}
+
+/// Truncate string for error messages
+fn truncate_for_error(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len])
+    }
+}
+
+/// Kubernetes resource lookup (Helm-compatible)
+///
+/// Usage: {{ lookup("v1", "Secret", "default", "my-secret") }}
+///
+/// **IMPORTANT:** In template-only mode (sherpack template), this function
+/// always returns an empty object, matching Helm's behavior.
+///
+/// Parameters:
+/// - apiVersion: API version (e.g., "v1", "apps/v1")
+/// - kind: Resource kind (e.g., "Secret", "ConfigMap", "Deployment")
+/// - namespace: Namespace (empty string "" for cluster-scoped resources)
+/// - name: Resource name (empty string "" to list all resources)
+///
+/// Return values:
+/// - Single resource: Returns the resource as a dict
+/// - List (name=""): Returns {"items": [...]} dict
+/// - Not found / template mode: Returns empty dict {}
+///
+/// ## Why lookup returns empty in template mode
+///
+/// Like Helm, Sherpack separates template rendering from cluster operations:
+/// - `sherpack template`: Pure rendering, no cluster access → lookup returns {}
+/// - `sherpack install/upgrade`: Cluster access for apply, but lookup still empty
+///
+/// ## Alternatives to lookup
+///
+/// Instead of using lookup, consider these Sherpack patterns:
+///
+/// 1. **Check if resource exists**: Use sync-waves to create dependencies
+///    ```yaml
+///    sherpack.io/sync-wave: "0"  # Create first
+///    ---
+///    sherpack.io/sync-wave: "1"  # Created after wave 0 is ready
+///    ```
+///
+/// 2. **Reuse existing secrets**: Use external-secrets or hooks
+///    ```yaml
+///    sherpack.io/hook: pre-install
+///    sherpack.io/hook-weight: "-5"
+///    ```
+///
+/// 3. **Conditional resources**: Use values-based conditions
+///    ```jinja
+///    {%- if values.existingSecret %}
+///    secretName: {{ values.existingSecret }}
+///    {%- else %}
+///    secretName: {{ release.name }}-secret
+///    {%- endif %}
+///    ```
+pub fn lookup(
+    api_version: String,
+    kind: String,
+    namespace: String,
+    name: String,
+) -> Value {
+    // Log what was requested (useful for debugging/migration from Helm)
+    // In template mode, this always returns empty - matching Helm behavior
+    let _ = (api_version, kind, namespace, name); // Acknowledge params
+
+    // Return empty dict - same as Helm's `helm template` behavior
+    // This ensures charts work in GitOps workflows and CI/CD pipelines
+    Value::from_serialize(serde_json::json!({}))
+}
+
+/// Evaluate a string as a template with full context (convenience version)
+///
+/// Usage: {{ tpl_ctx(values.dynamicTemplate) }}
+///
+/// This version automatically passes the full template context (values, release, pack, etc.)
+/// to the nested template, similar to Helm's `tpl $str .` pattern.
+///
+/// ## Security Features
+///
+/// - **Recursion limit**: Shares depth counter with `tpl()`, max depth 10
+/// - **Full context**: Passes values, release, pack, capabilities, template
+pub fn tpl_ctx(state: &State, template: String) -> Result<String, Error> {
+    // Skip if no template markers present (optimization)
+    if !template.contains("{{") && !template.contains("{%") {
+        return Ok(template);
+    }
+
+    // Check recursion depth to prevent infinite loops
+    let depth = increment_tpl_depth(state)?;
+
+    // Build context from all available variables
+    let mut ctx = serde_json::Map::new();
+
+    // Try to lookup and add standard context variables
+    for var in ["values", "release", "pack", "capabilities", "template"] {
+        if let Some(v) = state.lookup(var)
+            && !v.is_undefined()
+                && let Ok(json_val) = serde_json::to_value(&v) {
+                    ctx.insert(var.to_string(), json_val);
+                }
+    }
+
+    let context = Value::from_serialize(serde_json::Value::Object(ctx));
+
+    let result = state
+        .env()
+        .render_str(&template, context)
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidOperation,
+                format!(
+                    "tpl_ctx error (depth {}): {}\n  Template: \"{}\"",
+                    depth,
+                    e,
+                    truncate_for_error(&template, 60)
+                ),
+            )
+        });
+
+    // Decrement depth after rendering
+    decrement_tpl_depth(state);
+
+    result
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -269,5 +508,145 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result, "Hello Alice, you have 5 messages");
+    }
+
+    #[test]
+    fn test_tpl_integration() {
+        use minijinja::Environment;
+
+        // Test tpl via full environment (since it needs State)
+        let mut env = Environment::new();
+        env.add_function("tpl", super::tpl);
+
+        let template = r#"{{ tpl("Hello {{ name }}!", {"name": "World"}) }}"#;
+        let result = env.render_str(template, ()).unwrap();
+        assert_eq!(result, "Hello World!");
+    }
+
+    #[test]
+    fn test_tpl_no_markers() {
+        use minijinja::Environment;
+
+        // Plain string without template markers should be returned as-is
+        let mut env = Environment::new();
+        env.add_function("tpl", super::tpl);
+
+        let template = r#"{{ tpl("plain text", {}) }}"#;
+        let result = env.render_str(template, ()).unwrap();
+        assert_eq!(result, "plain text");
+    }
+
+    #[test]
+    fn test_tpl_complex() {
+        use minijinja::Environment;
+
+        let mut env = Environment::new();
+        env.add_function("tpl", super::tpl);
+
+        // Test with conditional
+        let template = r#"{{ tpl("{% if enabled %}yes{% else %}no{% endif %}", {"enabled": true}) }}"#;
+        let result = env.render_str(template, ()).unwrap();
+        assert_eq!(result, "yes");
+    }
+
+    #[test]
+    fn test_tpl_recursion_limit() {
+        use minijinja::Environment;
+
+        let mut env = Environment::new();
+        env.add_function("tpl", super::tpl);
+
+        // Create a deeply nested tpl call that would exceed MAX_TPL_DEPTH
+        // Each nested tpl increases depth by 1
+        let template = r#"{{ tpl("{{ tpl(\"{{ tpl(\\\"{{ tpl(\\\\\\\"{{ tpl(\\\\\\\\\\\\\\\"{{ tpl(\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"{{ tpl(\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"{{ tpl(\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"{{ tpl(\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"done\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\", {}) }}\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\", {}) }}\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\", {}) }}\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\", {}) }}\\\\\\\\\\\\\\\", {}) }}\\\\\\\"  , {}) }}\\\\\\\", {}) }}\\\", {}) }}\", {}) }}", {}) }}"#;
+
+        let result = env.render_str(template, ());
+
+        // Should fail with recursion limit error
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("recursion") || err.to_string().contains("depth"),
+            "Expected recursion error, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_tpl_nested_valid() {
+        use minijinja::Environment;
+
+        let mut env = Environment::new();
+        env.add_function("tpl", super::tpl);
+
+        // 3 levels of nesting should work fine
+        let template = r#"{{ tpl("{{ tpl(\"{{ tpl(\\\"level3\\\", {}) }}\", {}) }}", {}) }}"#;
+        let result = env.render_str(template, ()).unwrap();
+        assert_eq!(result, "level3");
+    }
+
+    #[test]
+    fn test_truncate_for_error() {
+        assert_eq!(truncate_for_error("short", 10), "short");
+        assert_eq!(truncate_for_error("this is a longer string", 10), "this is a ...");
+    }
+
+    #[test]
+    fn test_lookup_returns_empty() {
+        // lookup should return empty dict in template mode
+        let result = lookup(
+            "v1".to_string(),
+            "Secret".to_string(),
+            "default".to_string(),
+            "my-secret".to_string(),
+        );
+
+        // Should be an empty object, not undefined
+        assert!(!result.is_undefined());
+        // Should be iterable (dict)
+        assert!(result.try_iter().is_ok());
+    }
+
+    #[test]
+    fn test_lookup_in_template() {
+        use minijinja::Environment;
+
+        let mut env = Environment::new();
+        env.add_function("lookup", super::lookup);
+
+        // Common Helm pattern: check if secret exists
+        let template = r#"{% set secret = lookup("v1", "Secret", "default", "my-secret") %}{% if secret %}secret exists{% else %}no secret{% endif %}"#;
+        let result = env.render_str(template, ()).unwrap();
+        // Empty dict is falsy, so we get "no secret"
+        assert_eq!(result, "no secret");
+    }
+
+    #[test]
+    fn test_lookup_conditional_pattern() {
+        use minijinja::Environment;
+
+        let mut env = Environment::new();
+        env.add_function("lookup", super::lookup);
+
+        // Recommended pattern: check if lookup result exists before accessing properties
+        let template = r#"{% set secret = lookup("v1", "Secret", "ns", "s") %}{% if secret.data is defined %}{{ secret.data.password }}{% else %}generated{% endif %}"#;
+        let result = env.render_str(template, ()).unwrap();
+        assert_eq!(result, "generated");
+    }
+
+    #[test]
+    fn test_lookup_safe_pattern() {
+        use minijinja::Environment;
+        use crate::filters::tojson;
+
+        let mut env = Environment::new();
+        env.add_function("lookup", super::lookup);
+        env.add_function("get", super::get);
+        env.add_filter("tojson", tojson);
+
+        // Safe pattern for strict mode: use get() with default
+        let template = r#"{% set secret = lookup("v1", "Secret", "ns", "s") %}{{ get(secret, "data", {}) | tojson }}"#;
+        let result = env.render_str(template, ()).unwrap();
+        assert_eq!(result, "{}");
     }
 }

@@ -85,7 +85,7 @@ impl HttpRepository {
 
         self.cached_index
             .as_ref()
-            .ok_or_else(|| RepoError::IndexNotFound {
+            .ok_or(RepoError::IndexNotFound {
                 url: index_url,
             })
     }

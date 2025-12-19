@@ -62,12 +62,23 @@ pub struct Capabilities {
 }
 
 /// Kubernetes version info
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KubeVersion {
     pub version: String,
     pub major: String,
     pub minor: String,
+}
+
+impl Default for KubeVersion {
+    fn default() -> Self {
+        // Default to a recent stable Kubernetes version for lint/template modes
+        Self {
+            version: "v1.28.0".to_string(),
+            major: "1".to_string(),
+            minor: "28".to_string(),
+        }
+    }
 }
 
 impl KubeVersion {

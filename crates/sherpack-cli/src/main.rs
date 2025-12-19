@@ -209,6 +209,28 @@ enum Commands {
         require_signature: bool,
     },
 
+    /// Convert a Helm chart to a Sherpack pack
+    Convert {
+        /// Path to Helm chart
+        chart: PathBuf,
+
+        /// Output directory (default: <chartname>-sherpack)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Overwrite existing output directory
+        #[arg(long)]
+        force: bool,
+
+        /// Show what would be converted without writing files
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Show detailed output
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
     // ========== Phase 4: Kubernetes Deployment ==========
 
     /// Install a pack to Kubernetes
@@ -725,6 +747,15 @@ fn run_command(cli: Cli) -> error::Result<()> {
         } => commands::verify::run(&archive, key.as_deref(), require_signature)
             .map_err(CliError::from),
 
+        Commands::Convert {
+            chart,
+            output,
+            force,
+            dry_run,
+            verbose,
+        } => commands::convert::run(&chart, output.as_deref(), force, dry_run, verbose)
+            .map_err(CliError::from),
+
         // Phase 4: Kubernetes deployment commands (async)
         Commands::Install {
             name,
@@ -752,9 +783,7 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 create_namespace,
                 dry_run,
                 diff,
-            ))
-            .map_err(CliError::from)
-        }
+            ))}
 
         Commands::Upgrade {
             name,
@@ -794,9 +823,7 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 diff,
                 immutable_strategy.as_deref(),
                 max_history,
-            ))
-            .map_err(CliError::from)
-        }
+            ))}
 
         Commands::Uninstall {
             name,
@@ -816,9 +843,7 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 keep_history,
                 no_hooks,
                 dry_run,
-            ))
-            .map_err(CliError::from)
-        }
+            ))}
 
         Commands::Rollback {
             name,
@@ -846,9 +871,7 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 diff,
                 immutable_strategy.as_deref(),
                 max_history,
-            ))
-            .map_err(CliError::from)
-        }
+            ))}
 
         Commands::List {
             namespace,
@@ -860,9 +883,7 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 namespace.as_deref(),
                 all_namespaces,
                 json,
-            ))
-            .map_err(CliError::from)
-        }
+            ))}
 
         Commands::History {
             name,
@@ -871,9 +892,7 @@ fn run_command(cli: Cli) -> error::Result<()> {
             json,
         } => {
             let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
-            rt.block_on(commands::history::run(&name, &namespace, max, json))
-                .map_err(CliError::from)
-        }
+            rt.block_on(commands::history::run(&name, &namespace, max, json))}
 
         Commands::Status {
             name,
@@ -891,15 +910,11 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 show_values,
                 manifest,
                 json,
-            ))
-            .map_err(CliError::from)
-        }
+            ))}
 
         Commands::Recover { name, namespace } => {
             let rt = tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
-            rt.block_on(commands::recover::run(&name, &namespace))
-                .map_err(CliError::from)
-        }
+            rt.block_on(commands::recover::run(&name, &namespace))}
 
         // Phase 5: Repository management commands
         Commands::Repo(subcmd) => {

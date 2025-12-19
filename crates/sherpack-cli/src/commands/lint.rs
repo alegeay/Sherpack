@@ -86,8 +86,8 @@ pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
 
     // Check and validate schema if present
     let mut schema_validator = None;
-    if let Some(pack) = &pack {
-        if !skip_schema {
+    if let Some(pack) = &pack
+        && !skip_schema {
             if let Some(schema_path) = &pack.schema_path {
                 match pack.load_schema() {
                     Ok(Some(schema)) => {
@@ -123,7 +123,6 @@ pub fn run(path: &Path, strict: bool, skip_schema: bool) -> Result<()> {
                 warnings += 1;
             }
         }
-    }
 
     // Try to render templates with values
     if let Some(pack) = &pack {

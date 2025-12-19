@@ -227,7 +227,7 @@ impl CredentialStore {
             let mut options = std::fs::OpenOptions::new();
             options.write(true).create(true).truncate(true).mode(0o600);
             std::io::Write::write_all(&mut options.open(path)?, content.as_bytes())?;
-            return Ok(());
+            Ok(())
         }
 
         #[cfg(not(unix))]

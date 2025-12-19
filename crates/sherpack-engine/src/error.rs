@@ -250,8 +250,8 @@ fn extract_expression_from_display(display: &str) -> Option<String> {
         let trimmed = line.trim_start();
         if trimmed.contains(" > ") || trimmed.starts_with("> ") {
             // This is the error line - extract expression
-            if let Some(start) = line.find("{{") {
-                if let Some(end) = line[start..].find("}}") {
+            if let Some(start) = line.find("{{")
+                && let Some(end) = line[start..].find("}}") {
                     let expr = line[start + 2..start + end].trim();
                     // Get the first part before any filter (for undefined var)
                     let expr_part = expr.split('|').next().unwrap_or(expr).trim();
@@ -259,7 +259,6 @@ fn extract_expression_from_display(display: &str) -> Option<String> {
                         return Some(expr_part.to_string());
                     }
                 }
-            }
         }
 
         // Also check the line after a ^^^^^ marker for the error line
@@ -267,15 +266,14 @@ fn extract_expression_from_display(display: &str) -> Option<String> {
             // The line with ^^^^^ follows the error line, so check i-1
             if i > 0 {
                 let prev_line = lines[i - 1];
-                if let Some(start) = prev_line.find("{{") {
-                    if let Some(end) = prev_line[start..].find("}}") {
+                if let Some(start) = prev_line.find("{{")
+                    && let Some(end) = prev_line[start..].find("}}") {
                         let expr = prev_line[start + 2..start + end].trim();
                         let expr_part = expr.split('|').next().unwrap_or(expr).trim();
                         if !expr_part.is_empty() {
                             return Some(expr_part.to_string());
                         }
                     }
-                }
             }
         }
     }
@@ -297,22 +295,20 @@ fn extract_filter_from_display(display: &str) -> Option<String> {
         let trimmed = line.trim_start();
         if trimmed.contains(" > ") || trimmed.starts_with("> ") {
             // Look for {{ ... | filter }} pattern
-            if let Some(start) = line.find("{{") {
-                if let Some(end) = line[start..].find("}}") {
+            if let Some(start) = line.find("{{")
+                && let Some(end) = line[start..].find("}}") {
                     let expr = &line[start + 2..start + end];
                     // Find the pipe and get the filter name
                     if let Some(pipe_pos) = expr.rfind('|') {
                         let filter_part = expr[pipe_pos + 1..].trim();
                         // Filter name is the first word
                         let filter_name = filter_part.split_whitespace().next();
-                        if let Some(name) = filter_name {
-                            if !name.is_empty() {
+                        if let Some(name) = filter_name
+                            && !name.is_empty() {
                                 return Some(name.to_string());
                             }
-                        }
                     }
                 }
-            }
         }
     }
 
@@ -335,7 +331,7 @@ fn calculate_span(source: &str, line_num: usize) -> Option<SourceSpan> {
     for line in source.lines() {
         if current_line == line_num {
             // Return span for the entire line
-            return Some(SourceSpan::new(offset.into(), line.len().into()));
+            return Some(SourceSpan::new(offset.into(), line.len()));
         }
         offset += line.len() + 1; // +1 for newline
         current_line += 1;

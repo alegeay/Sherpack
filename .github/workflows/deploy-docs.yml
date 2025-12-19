@@ -5,7 +5,10 @@ on:
     branches: [main]
     paths:
       - 'website/**'
+      - 'docs/**'
       - '.github/workflows/deploy-docs.yml'
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -18,7 +21,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ============================================================================
+  # Build Documentation (all locales)
+  # ============================================================================
   build:
+    name: Build Documentation
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -36,15 +43,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build website
+      - name: Build website (English)
         run: npm run build
+        env:
+          # Ensure baseUrl matches GitHub Pages path
+          DOCUSAURUS_BASE_URL: /sherpack/
+
+      - name: Build website (French)
+        run: npm run build -- --locale fr
+        env:
+          DOCUSAURUS_BASE_URL: /sherpack/
+
+      - name: List build output
+        run: |
+          echo "Build directory contents:"
+          ls -la build/
+          echo ""
+          echo "Locales available:"
+          ls -la build/ | grep -E "^d" || echo "No subdirectories"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: website/build
 
+  # ============================================================================
+  # Deploy to GitHub Pages
+  # ============================================================================
   deploy:
+    name: Deploy to GitHub Pages
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

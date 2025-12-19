@@ -7,7 +7,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg?style=flat-square)](LICENSE)
 [![Build](https://img.shields.io/badge/build-passing-brightgreen.svg?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/tests-282%20passed-brightgreen.svg?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/tests-410%20passed-brightgreen.svg?style=flat-square)]()
 
 *A modern Helm alternative written in Rust, featuring familiar Jinja2 templating syntax*
 
@@ -27,11 +27,12 @@
 |---------|----------|------|
 | **Templating** | Jinja2 (familiar syntax) | Go templates (complex) |
 | **Performance** | Native Rust binary | Go runtime |
-| **Binary Size** | ~5 MB | ~50 MB |
+| **Binary Size** | ~19 MB | ~50 MB |
 | **Learning Curve** | Minimal (if you know Jinja2) | Steep |
 | **Dependencies** | None | None |
 | **Schema Validation** | Built-in JSON Schema | External tools |
 | **Error Messages** | Contextual suggestions | Generic errors |
+| **Helm Migration** | Automatic chart converter | N/A |
 
 ---
 
@@ -61,6 +62,12 @@
 - **Release Storage** - Secrets, ConfigMap, or file-based storage
 - **Diff Preview** - See changes before applying
 
+### Helm Migration
+- **Automatic Conversion** - Convert Helm charts to Sherpack packs
+- **Template Translation** - Go templates → Jinja2 syntax
+- **Helper Function Support** - Converts `include`, `define`, `range`, `with`, etc.
+- **Full Chart Compatibility** - Tested with ingress-nginx (43 templates)
+
 ### Repository & Dependencies
 - **Repository Management** - HTTP, OCI, and file-based repositories
 - **Dependency Resolution** - Lock file with version policies
@@ -75,7 +82,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/sherpack/sherpack.git
+git clone https://github.com/alegeay/sherpack.git
 cd sherpack
 
 # Build release binary
@@ -196,6 +203,7 @@ sherpack uninstall myrelease
 | `sherpack validate <pack>` | Validate values against schema |
 | `sherpack show <pack>` | Display pack information |
 | `sherpack create <name>` | Scaffold a new pack |
+| `sherpack convert <chart>` | Convert Helm chart to Sherpack pack |
 
 ### Packaging Commands
 
@@ -303,6 +311,13 @@ sherpack uninstall myrelease
 |--------|-------------|
 | `required` | Fail if undefined/empty |
 | `empty` | Check if empty |
+
+### Type Conversion
+| Filter | Description |
+|--------|-------------|
+| `int` | Convert to integer |
+| `float` | Convert to float |
+| `string` | Convert to string |
 
 ### Functions
 
@@ -416,6 +431,51 @@ spec:
 
 ---
 
+## Helm Chart Conversion
+
+Sherpack can automatically convert Helm charts to Sherpack packs:
+
+```bash
+# Convert a Helm chart
+sherpack convert ./my-helm-chart
+
+# Specify output directory
+sherpack convert ./my-helm-chart -o ./my-sherpack-pack
+
+# Preview without writing
+sherpack convert ./my-helm-chart --dry-run
+
+# Force overwrite existing
+sherpack convert ./my-helm-chart --force
+```
+
+### Conversion Examples
+
+Go templates are automatically translated to Jinja2:
+
+| Go Template | Jinja2 |
+|-------------|--------|
+| `{{ .Values.name }}` | `{{ values.name }}` |
+| `{{ include "helper" . }}` | `{{ helper() }}` |
+| `{{- if .Values.enabled }}` | `{% if values.enabled %}` |
+| `{{ range .Values.items }}` | `{% for item in values.items %}` |
+| `{{ .Release.Name }}` | `{{ release.name }}` |
+| `{{ default "foo" .Values.x }}` | `{{ values.x \| default("foo") }}` |
+| `{{ .Values.x \| quote }}` | `{{ values.x \| quote }}` |
+| `{{ toYaml .Values \| nindent 2 }}` | `{{ values \| toyaml \| nindent(2) }}` |
+
+### Supported Features
+
+- `{{- define "name" }}` → `{% macro name() %}`
+- `{{ include "name" . }}` → `{{ name() }}`
+- `{{ if }}/{{ else }}/{{ end }}` → `{% if %}/{% else %}/{% endif %}`
+- `{{ range }}/{{ end }}` → `{% for %}/{% endfor %}`
+- `{{ with }}/{{ end }}` → `{% with %}/{% endwith %}` or inline
+- Variable declarations: `$var := value`
+- All common Helm functions and pipelines
+
+---
+
 ## Repository Configuration
 
 ### Add Repositories
@@ -461,12 +521,14 @@ sherpack/
 ├── crates/
 │   ├── sherpack-core/     # Core types: Pack, Values, Context, Archive
 │   ├── sherpack-engine/   # Template engine, filters, functions
+│   ├── sherpack-convert/  # Helm chart to Sherpack converter
 │   ├── sherpack-kube/     # Kubernetes client, storage, hooks, health
 │   ├── sherpack-repo/     # Repository, OCI, dependencies, search
 │   └── sherpack-cli/      # CLI commands
 ├── fixtures/
 │   ├── simple-pack/       # Basic test fixture
-│   └── demo-pack/         # Comprehensive demo
+│   ├── demo-pack/         # Comprehensive demo
+│   └── helm-nginx/        # Helm conversion test
 └── docs/                  # Documentation
 ```
 
@@ -475,11 +537,12 @@ sherpack/
 | Crate | Purpose | Tests |
 |-------|---------|-------|
 | `sherpack-core` | Pack, Values, Archive, Manifest | 19 |
-| `sherpack-engine` | MiniJinja templating, filters, functions | 43 |
-| `sherpack-kube` | Kubernetes operations, storage, hooks | 107 |
-| `sherpack-repo` | Repository backends, dependencies, search | 42 |
-| `sherpack-cli` | CLI application | 71 |
-| **Total** | | **282** |
+| `sherpack-engine` | MiniJinja templating, filters, functions | 58 |
+| `sherpack-convert` | Helm Go templates → Jinja2 converter | 63 |
+| `sherpack-kube` | Kubernetes operations, storage, hooks | 151 |
+| `sherpack-repo` | Repository backends, dependencies, search | 43 |
+| `sherpack-cli` | CLI application | 75 |
+| **Total** | ~32k lines of Rust | **410** |
 
 ---
 

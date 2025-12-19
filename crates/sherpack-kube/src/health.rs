@@ -1,16 +1,25 @@
 //! Health check system for validating deployments
 //!
 //! Key features:
-//! - Check deployment/statefulset readiness
+//! - Check deployment/statefulset readiness with REAL Kubernetes API calls
 //! - Custom HTTP health checks
-//! - Command-based health checks
+//! - Command-based health checks (exec into pods)
 //! - Automatic rollback on failure
+//!
+//! Unlike Helm's broken `--wait` flag, Sherpack properly verifies:
+//! - All replicas are updated (new version)
+//! - All replicas are ready (passing readiness probe)
+//! - All replicas are available (not being terminated)
 
 use chrono::{DateTime, Duration, Utc};
+use k8s_openapi::api::apps::v1::{DaemonSet, Deployment, StatefulSet};
+use k8s_openapi::api::batch::v1::Job;
+use k8s_openapi::api::core::v1::Pod;
+use kube::api::{Api, ListParams};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::error::Result;
+use crate::error::{KubeError, Result};
 use crate::release::StoredRelease;
 
 /// Health check configuration
@@ -416,21 +425,298 @@ impl HealthChecker {
     /// Check a single Kubernetes resource
     async fn check_resource(
         &self,
-        _client: &kube::Client,
+        client: &kube::Client,
         namespace: &str,
         kind: &str,
         name: &str,
     ) -> Result<ResourceHealth> {
-        // TODO: Actually query Kubernetes API
-        // For now, return healthy
+        match kind {
+            "Deployment" => self.check_deployment(client, namespace, name).await,
+            "StatefulSet" => self.check_statefulset(client, namespace, name).await,
+            "DaemonSet" => self.check_daemonset(client, namespace, name).await,
+            "Job" => self.check_job(client, namespace, name).await,
+            _ => {
+                // Unknown resource types are considered ready
+                Ok(ResourceHealth {
+                    kind: kind.to_string(),
+                    name: name.to_string(),
+                    namespace: namespace.to_string(),
+                    healthy: true,
+                    ready: None,
+                    desired: None,
+                    message: Some("Unknown resource type, skipping check".to_string()),
+                })
+            }
+        }
+    }
+
+    /// Check Deployment readiness
+    ///
+    /// A Deployment is healthy when:
+    /// - All replicas are updated (running new version)
+    /// - All replicas are ready (passing readiness probe)
+    /// - All replicas are available (not being terminated)
+    async fn check_deployment(
+        &self,
+        client: &kube::Client,
+        namespace: &str,
+        name: &str,
+    ) -> Result<ResourceHealth> {
+        let api: Api<Deployment> = Api::namespaced(client.clone(), namespace);
+
+        let deployment = match api.get(name).await {
+            Ok(d) => d,
+            Err(kube::Error::Api(ae)) if ae.code == 404 => {
+                return Ok(ResourceHealth {
+                    kind: "Deployment".to_string(),
+                    name: name.to_string(),
+                    namespace: namespace.to_string(),
+                    healthy: false,
+                    ready: Some(0),
+                    desired: Some(0),
+                    message: Some("Deployment not found".to_string()),
+                });
+            }
+            Err(e) => return Err(KubeError::KubeApi(e)),
+        };
+
+        let spec = deployment.spec.as_ref();
+        let status = deployment.status.as_ref();
+
+        let desired = spec.and_then(|s| s.replicas).unwrap_or(1);
+        let ready = status.and_then(|s| s.ready_replicas).unwrap_or(0);
+        let updated = status.and_then(|s| s.updated_replicas).unwrap_or(0);
+        let available = status.and_then(|s| s.available_replicas).unwrap_or(0);
+
+        // CORRECT readiness check (unlike Helm):
+        // - All replicas must be updated (new version)
+        // - All replicas must be ready (passing readiness probe)
+        // - All replicas must be available (not being terminated)
+        let healthy = ready == desired && updated == desired && available == desired;
+
+        let message = if !healthy {
+            // Extract condition messages for better debugging
+            let conditions = status
+                .and_then(|s| s.conditions.as_ref())
+                .map(|c| {
+                    c.iter()
+                        .filter(|cond| cond.status == "False")
+                        .filter_map(|cond| {
+                            cond.message.as_ref().map(|m| format!("{}: {}", cond.type_, m))
+                        })
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                })
+                .filter(|s| !s.is_empty());
+
+            Some(conditions.unwrap_or_else(|| {
+                format!(
+                    "Waiting: {}/{} ready, {}/{} updated, {}/{} available",
+                    ready, desired, updated, desired, available, desired
+                )
+            }))
+        } else {
+            None
+        };
+
         Ok(ResourceHealth {
-            kind: kind.to_string(),
+            kind: "Deployment".to_string(),
             name: name.to_string(),
             namespace: namespace.to_string(),
-            healthy: true,
-            ready: Some(1),
+            healthy,
+            ready: Some(ready),
+            desired: Some(desired),
+            message,
+        })
+    }
+
+    /// Check StatefulSet readiness
+    ///
+    /// A StatefulSet is healthy when:
+    /// - All replicas are ready
+    /// - Current revision matches update revision (rollout complete)
+    async fn check_statefulset(
+        &self,
+        client: &kube::Client,
+        namespace: &str,
+        name: &str,
+    ) -> Result<ResourceHealth> {
+        let api: Api<StatefulSet> = Api::namespaced(client.clone(), namespace);
+
+        let sts = match api.get(name).await {
+            Ok(s) => s,
+            Err(kube::Error::Api(ae)) if ae.code == 404 => {
+                return Ok(ResourceHealth {
+                    kind: "StatefulSet".to_string(),
+                    name: name.to_string(),
+                    namespace: namespace.to_string(),
+                    healthy: false,
+                    ready: Some(0),
+                    desired: Some(0),
+                    message: Some("StatefulSet not found".to_string()),
+                });
+            }
+            Err(e) => return Err(KubeError::KubeApi(e)),
+        };
+
+        let spec = sts.spec.as_ref();
+        let status = sts.status.as_ref();
+
+        let desired = spec.and_then(|s| s.replicas).unwrap_or(1);
+        let ready = status.and_then(|s| s.ready_replicas).unwrap_or(0);
+        let current = status.and_then(|s| s.current_replicas).unwrap_or(0);
+
+        // StatefulSets: also check currentRevision == updateRevision
+        let current_rev = status.and_then(|s| s.current_revision.as_ref());
+        let update_rev = status.and_then(|s| s.update_revision.as_ref());
+        let revision_match = current_rev == update_rev;
+
+        let healthy = ready == desired && current == desired && revision_match;
+
+        let message = if !healthy {
+            Some(format!(
+                "Waiting: {}/{} ready, {}/{} current, revision match: {}",
+                ready, desired, current, desired, revision_match
+            ))
+        } else {
+            None
+        };
+
+        Ok(ResourceHealth {
+            kind: "StatefulSet".to_string(),
+            name: name.to_string(),
+            namespace: namespace.to_string(),
+            healthy,
+            ready: Some(ready),
+            desired: Some(desired),
+            message,
+        })
+    }
+
+    /// Check DaemonSet readiness
+    ///
+    /// A DaemonSet is healthy when:
+    /// - Number of ready pods equals desired number scheduled
+    /// - All pods are updated to current version
+    async fn check_daemonset(
+        &self,
+        client: &kube::Client,
+        namespace: &str,
+        name: &str,
+    ) -> Result<ResourceHealth> {
+        let api: Api<DaemonSet> = Api::namespaced(client.clone(), namespace);
+
+        let ds = match api.get(name).await {
+            Ok(d) => d,
+            Err(kube::Error::Api(ae)) if ae.code == 404 => {
+                return Ok(ResourceHealth {
+                    kind: "DaemonSet".to_string(),
+                    name: name.to_string(),
+                    namespace: namespace.to_string(),
+                    healthy: false,
+                    ready: Some(0),
+                    desired: Some(0),
+                    message: Some("DaemonSet not found".to_string()),
+                });
+            }
+            Err(e) => return Err(KubeError::KubeApi(e)),
+        };
+
+        let status = ds.status.as_ref();
+
+        let desired = status.map(|s| s.desired_number_scheduled).unwrap_or(0);
+        let ready = status.map(|s| s.number_ready).unwrap_or(0);
+        let updated = status.and_then(|s| s.updated_number_scheduled).unwrap_or(0);
+
+        let healthy = ready == desired && updated == desired && desired > 0;
+
+        let message = if !healthy {
+            Some(format!(
+                "Waiting: {}/{} ready, {}/{} updated",
+                ready, desired, updated, desired
+            ))
+        } else {
+            None
+        };
+
+        Ok(ResourceHealth {
+            kind: "DaemonSet".to_string(),
+            name: name.to_string(),
+            namespace: namespace.to_string(),
+            healthy,
+            ready: Some(ready),
+            desired: Some(desired),
+            message,
+        })
+    }
+
+    /// Check Job completion
+    ///
+    /// A Job is healthy when it has completed successfully.
+    /// A Job is unhealthy if it has failed permanently.
+    async fn check_job(
+        &self,
+        client: &kube::Client,
+        namespace: &str,
+        name: &str,
+    ) -> Result<ResourceHealth> {
+        let api: Api<Job> = Api::namespaced(client.clone(), namespace);
+
+        let job = match api.get(name).await {
+            Ok(j) => j,
+            Err(kube::Error::Api(ae)) if ae.code == 404 => {
+                return Ok(ResourceHealth {
+                    kind: "Job".to_string(),
+                    name: name.to_string(),
+                    namespace: namespace.to_string(),
+                    healthy: false,
+                    ready: Some(0),
+                    desired: Some(1),
+                    message: Some("Job not found".to_string()),
+                });
+            }
+            Err(e) => return Err(KubeError::KubeApi(e)),
+        };
+
+        let status = job.status.as_ref();
+        let succeeded = status.and_then(|s| s.succeeded).unwrap_or(0);
+        let failed = status.and_then(|s| s.failed).unwrap_or(0);
+        let active = status.and_then(|s| s.active).unwrap_or(0);
+
+        // Check job conditions for failure
+        let has_failed_condition = status
+            .and_then(|s| s.conditions.as_ref())
+            .map(|c| c.iter().any(|cond| cond.type_ == "Failed" && cond.status == "True"))
+            .unwrap_or(false);
+
+        let healthy = succeeded > 0;
+        let failed_permanently = has_failed_condition || (failed > 0 && active == 0);
+
+        let message = if failed_permanently {
+            // Get failure reason
+            let reason = status
+                .and_then(|s| s.conditions.as_ref())
+                .and_then(|c| {
+                    c.iter()
+                        .find(|cond| cond.type_ == "Failed")
+                        .and_then(|cond| cond.message.clone())
+                })
+                .unwrap_or_else(|| format!("Job failed with {} failures", failed));
+            Some(reason)
+        } else if !healthy {
+            Some(format!("Running: {} active, {} succeeded", active, succeeded))
+        } else {
+            None
+        };
+
+        Ok(ResourceHealth {
+            kind: "Job".to_string(),
+            name: name.to_string(),
+            namespace: namespace.to_string(),
+            healthy,
+            ready: Some(succeeded),
             desired: Some(1),
-            message: None,
+            message,
         })
     }
 
@@ -438,32 +724,163 @@ impl HealthChecker {
     async fn check_http(&self, check: &HttpHealthCheck) -> CheckResult {
         let start = std::time::Instant::now();
 
-        // TODO: Actually perform HTTP request
-        // For now, return success
-        CheckResult {
-            name: check.name.clone(),
-            success: true,
-            error: None,
-            response_time: Duration::milliseconds(start.elapsed().as_millis() as i64),
+        // Build request with timeout
+        let client = match reqwest::Client::builder()
+            .timeout(check.timeout.to_std().unwrap_or(std::time::Duration::from_secs(30)))
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                return CheckResult {
+                    name: check.name.clone(),
+                    success: false,
+                    error: Some(format!("Failed to create HTTP client: {}", e)),
+                    response_time: Duration::milliseconds(start.elapsed().as_millis() as i64),
+                };
+            }
+        };
+
+        let mut request = client.get(&check.url);
+
+        // Add custom headers
+        for (key, value) in &check.headers {
+            request = request.header(key.as_str(), value.as_str());
+        }
+
+        match request.send().await {
+            Ok(response) => {
+                let status = response.status().as_u16();
+                let success = status == check.expected_status;
+
+                CheckResult {
+                    name: check.name.clone(),
+                    success,
+                    error: if success {
+                        None
+                    } else {
+                        Some(format!(
+                            "Expected status {}, got {}",
+                            check.expected_status, status
+                        ))
+                    },
+                    response_time: Duration::milliseconds(start.elapsed().as_millis() as i64),
+                }
+            }
+            Err(e) => CheckResult {
+                name: check.name.clone(),
+                success: false,
+                error: Some(format!("HTTP request failed: {}", e)),
+                response_time: Duration::milliseconds(start.elapsed().as_millis() as i64),
+            },
         }
     }
 
-    /// Execute a command health check
+    /// Execute a command health check by exec'ing into a pod
     async fn check_command(
         &self,
-        _client: &kube::Client,
-        _namespace: &str,
+        client: &kube::Client,
+        namespace: &str,
         check: &CommandHealthCheck,
     ) -> CheckResult {
         let start = std::time::Instant::now();
 
-        // TODO: Actually exec into pod and run command
-        // For now, return success
-        CheckResult {
-            name: check.name.clone(),
-            success: true,
-            error: None,
-            response_time: Duration::milliseconds(start.elapsed().as_millis() as i64),
+        // Find pods matching the selector
+        let pods: Api<Pod> = Api::namespaced(client.clone(), namespace);
+        let lp = ListParams::default().labels(&check.pod_selector);
+
+        let pod_list = match pods.list(&lp).await {
+            Ok(list) => list,
+            Err(e) => {
+                return CheckResult {
+                    name: check.name.clone(),
+                    success: false,
+                    error: Some(format!("Failed to list pods: {}", e)),
+                    response_time: Duration::milliseconds(start.elapsed().as_millis() as i64),
+                };
+            }
+        };
+
+        // Find a running pod
+        let running_pod = pod_list.items.iter().find(|p| {
+            p.status
+                .as_ref()
+                .and_then(|s| s.phase.as_ref())
+                .map(|phase| phase == "Running")
+                .unwrap_or(false)
+        });
+
+        let pod = match running_pod {
+            Some(p) => p,
+            None => {
+                return CheckResult {
+                    name: check.name.clone(),
+                    success: false,
+                    error: Some(format!(
+                        "No running pods found matching selector: {}",
+                        check.pod_selector
+                    )),
+                    response_time: Duration::milliseconds(start.elapsed().as_millis() as i64),
+                };
+            }
+        };
+
+        let pod_name = pod.metadata.name.as_deref().unwrap_or("unknown");
+
+        // Get container name (first container if not specified)
+        let container = check.container.clone().or_else(|| {
+            pod.spec
+                .as_ref()
+                .and_then(|s| s.containers.first())
+                .map(|c| c.name.clone())
+        });
+
+        // Note: Actual exec requires websocket support which is complex
+        // For now, we'll use kubectl exec as a fallback
+        // In production, this should use kube-rs's attach/exec API
+        let container_arg = container.map(|c| format!("-c {}", c)).unwrap_or_default();
+        let cmd = check.command.join(" ");
+
+        let output = tokio::process::Command::new("kubectl")
+            .args([
+                "exec",
+                "-n",
+                namespace,
+                pod_name,
+                &container_arg,
+                "--",
+                "sh",
+                "-c",
+                &cmd,
+            ])
+            .output()
+            .await;
+
+        match output {
+            Ok(out) => {
+                let exit_code = out.status.code().unwrap_or(-1);
+                let success = exit_code == check.expected_exit_code;
+
+                CheckResult {
+                    name: check.name.clone(),
+                    success,
+                    error: if success {
+                        None
+                    } else {
+                        let stderr = String::from_utf8_lossy(&out.stderr);
+                        Some(format!(
+                            "Command exited with code {} (expected {}): {}",
+                            exit_code, check.expected_exit_code, stderr
+                        ))
+                    },
+                    response_time: Duration::milliseconds(start.elapsed().as_millis() as i64),
+                }
+            }
+            Err(e) => CheckResult {
+                name: check.name.clone(),
+                success: false,
+                error: Some(format!("Failed to exec command: {}", e)),
+                response_time: Duration::milliseconds(start.elapsed().as_millis() as i64),
+            },
         }
     }
 }

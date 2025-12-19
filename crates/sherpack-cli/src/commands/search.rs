@@ -43,7 +43,7 @@ pub async fn run(
     }
 
     // Print results
-    println!("{:<30} {:<15} {:<15} {}", "NAME", "VERSION", "REPO", "DESCRIPTION");
+    println!("{:<30} {:<15} {:<15} DESCRIPTION", "NAME", "VERSION", "REPO");
     println!("{}", "-".repeat(90));
 
     for pack in results {

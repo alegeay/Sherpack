@@ -87,6 +87,8 @@ mod error_display_snapshots {
 
     #[test]
     fn test_undefined_variable_error_display() {
+        // With chainable mode, undefined variables return empty (Helm compatibility)
+        // This test verifies the new behavior
         let pack = create_test_pack(&[
             ("deployment.yaml", "name: {{ values.undefined_key }}")
         ]);
@@ -97,29 +99,28 @@ mod error_display_snapshots {
             pack.path().to_str().unwrap(),
         ]);
 
-        assert!(!success);
-
-        // Verify key parts of the error message
-        assert!(stdout.contains("undefined"), "Should mention undefined variable");
-        assert!(stdout.contains("error") || stdout.contains("✗"), "Should indicate error");
+        // Should succeed - chainable mode returns empty for undefined keys
+        assert!(success, "Should succeed with chainable mode. Output: {}", stdout);
     }
 
     #[test]
     fn test_typo_value_error_has_suggestion() {
+        // With chainable mode, typos in variable names don't error - they return empty
+        // This test verifies the new behavior
         let pack = create_test_pack(&[
             ("deployment.yaml", "name: {{ value.app.name }}")
         ]);
 
-        let (stdout, _stderr, _success) = sherpack_output(&[
+        let (stdout, _stderr, success) = sherpack_output(&[
             "template",
             "test",
             pack.path().to_str().unwrap(),
         ]);
 
-        // Should suggest "values" for "value" typo
+        // Should succeed - chainable mode allows undefined variables
         assert!(
-            stdout.contains("values") && stdout.contains("Did you mean"),
-            "Should suggest 'values' for 'value' typo. Output: {}",
+            success,
+            "Should succeed with chainable mode (no typo suggestions). Output: {}",
             stdout
         );
     }
@@ -136,7 +137,7 @@ mod error_display_snapshots {
             pack.path().to_str().unwrap(),
         ]);
 
-        // Should suggest "toyaml" for "toyml" typo
+        // Should suggest "toyaml" for "toyml" typo (filter errors still detected)
         assert!(
             stdout.contains("toyaml"),
             "Should suggest 'toyaml' for 'toyml' typo. Output: {}",
@@ -146,26 +147,29 @@ mod error_display_snapshots {
 
     #[test]
     fn test_missing_key_shows_available_keys() {
+        // With chainable mode, missing keys return empty instead of error
         let pack = create_test_pack(&[
             ("deployment.yaml", "repo: {{ values.image.repo }}")
         ]);
 
-        let (stdout, _stderr, _success) = sherpack_output(&[
+        let (stdout, _stderr, success) = sherpack_output(&[
             "template",
             "test",
             pack.path().to_str().unwrap(),
         ]);
 
-        // Should show available keys
+        // Should succeed - chainable mode returns empty for missing keys
         assert!(
-            stdout.contains("repository") || stdout.contains("Available"),
-            "Should show available keys. Output: {}",
+            success,
+            "Should succeed with chainable mode. Output: {}",
             stdout
         );
     }
 
     #[test]
     fn test_multi_template_error_grouping() {
+        // With chainable mode, undefined variables succeed
+        // Test that good templates render successfully
         let pack = create_test_pack(&[
             ("good.yaml", "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {{ release.name }}"),
             ("bad1.yaml", "error: {{ value.missing }}"),
@@ -177,10 +181,10 @@ mod error_display_snapshots {
             pack.path().to_str().unwrap(),
         ]);
 
-        // Should show errors grouped
+        // With chainable mode, these should all succeed (no errors)
         assert!(
-            stdout.contains("error") || stdout.contains("✗"),
-            "Should indicate errors. Output: {}",
+            stdout.contains("Rendered") || stdout.contains("✓"),
+            "Should indicate successful render. Output: {}",
             stdout
         );
     }

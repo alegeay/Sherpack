@@ -12,20 +12,31 @@ const config: Config = {
   },
 
   // GitHub Pages URL
-  url: 'https://music-soul1-1.github.io',
+  url: 'https://alegeay.github.io',
   baseUrl: '/sherpack/',
 
   // GitHub pages deployment config
-  organizationName: 'music-soul1-1',
+  organizationName: 'alegeay',
   projectName: 'sherpack',
   trailingSlash: false,
 
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
 
+  // i18n configuration for French and English
   i18n: {
     defaultLocale: 'en',
-    locales: ['en'],
+    locales: ['en', 'fr'],
+    localeConfigs: {
+      en: {
+        label: 'English',
+        htmlLang: 'en-US',
+      },
+      fr: {
+        label: 'Français',
+        htmlLang: 'fr-FR',
+      },
+    },
   },
 
   presets: [
@@ -34,10 +45,10 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/music-soul1-1/sherpack/tree/main/website/',
+          editUrl: 'https://github.com/alegeay/sherpack/tree/main/website/',
           routeBasePath: 'docs',
         },
-        blog: false, // Disable blog
+        blog: false,
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -70,9 +81,15 @@ const config: Config = {
           position: 'left',
         },
         {
-          href: 'https://github.com/music-soul1-1/sherpack',
+          type: 'localeDropdown',
+          position: 'right',
+        },
+        {
+          href: 'https://github.com/alegeay/sherpack',
           label: 'GitHub',
           position: 'right',
+          className: 'header-github-link',
+          'aria-label': 'GitHub repository',
         },
       ],
     },
@@ -97,15 +114,28 @@ const config: Config = {
           ],
         },
         {
+          title: 'Community',
+          items: [
+            {
+              label: 'GitHub Discussions',
+              href: 'https://github.com/alegeay/sherpack/discussions',
+            },
+            {
+              label: 'Report Issues',
+              href: 'https://github.com/alegeay/sherpack/issues',
+            },
+          ],
+        },
+        {
           title: 'More',
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/music-soul1-1/sherpack',
+              href: 'https://github.com/alegeay/sherpack',
             },
             {
-              label: 'Issues',
-              href: 'https://github.com/music-soul1-1/sherpack/issues',
+              label: 'Releases',
+              href: 'https://github.com/alegeay/sherpack/releases',
             },
           ],
         },
@@ -117,7 +147,7 @@ const config: Config = {
       darkTheme: prismThemes.dracula,
       additionalLanguages: ['bash', 'yaml', 'rust', 'toml', 'json'],
     },
-    algolia: undefined, // Disable Algolia for now
+    algolia: undefined,
   } satisfies Preset.ThemeConfig,
 };
 

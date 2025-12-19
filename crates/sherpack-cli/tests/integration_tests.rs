@@ -860,6 +860,139 @@ mod push_command {
     }
 }
 
+mod convert_command {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_convert_helm_chart() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("nginx-sherpack");
+
+        let output = sherpack(&[
+            "convert",
+            &format!("{}/helm-nginx", fixtures_path()),
+            "--output",
+            output_path.to_str().unwrap(),
+        ]);
+
+        // Conversion should succeed
+        assert!(output.status.success(), "Convert failed: {}", String::from_utf8_lossy(&output.stderr));
+
+        // Pack.yaml should exist
+        assert!(output_path.join("Pack.yaml").exists(), "Pack.yaml should be created");
+
+        // values.yaml should exist
+        assert!(output_path.join("values.yaml").exists(), "values.yaml should be copied");
+
+        // templates should exist
+        assert!(output_path.join("templates").exists(), "templates/ should exist");
+    }
+
+    #[test]
+    fn test_convert_e2e_render_after_convert() {
+        // E2E test: convert Helm chart → lint converted pack → render templates
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("nginx-sherpack");
+
+        // Step 1: Convert
+        let convert_output = sherpack(&[
+            "convert",
+            &format!("{}/helm-nginx", fixtures_path()),
+            "--output",
+            output_path.to_str().unwrap(),
+        ]);
+        assert!(convert_output.status.success(), "Convert failed: {}", String::from_utf8_lossy(&convert_output.stderr));
+
+        // Step 2: Lint the converted pack
+        let lint_output = sherpack(&[
+            "lint",
+            output_path.to_str().unwrap(),
+        ]);
+        let lint_stdout = String::from_utf8_lossy(&lint_output.stdout);
+
+        // Lint should pass (Pack.yaml valid, values.yaml valid)
+        assert!(
+            lint_stdout.contains("Pack.yaml is valid") || lint_stdout.contains("✓"),
+            "Lint output should show Pack.yaml is valid. Got: {}",
+            lint_stdout
+        );
+
+        // Step 3: Template the converted pack
+        let template_output = sherpack(&[
+            "template",
+            "test-release",
+            output_path.to_str().unwrap(),
+        ]);
+
+        // Template should succeed (Chainable mode handles optional values)
+        assert!(template_output.status.success(),
+            "Template failed: {}",
+            String::from_utf8_lossy(&template_output.stderr)
+        );
+
+        let template_stdout = String::from_utf8_lossy(&template_output.stdout);
+        // Should contain Kubernetes manifest content
+        assert!(
+            template_stdout.contains("apiVersion:") || template_stdout.contains("kind:"),
+            "Template output should contain Kubernetes manifests. Got: {}",
+            template_stdout
+        );
+    }
+
+    #[test]
+    fn test_convert_dry_run() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("nginx-sherpack");
+
+        let output = sherpack(&[
+            "convert",
+            &format!("{}/helm-nginx", fixtures_path()),
+            "--output",
+            output_path.to_str().unwrap(),
+            "--dry-run",
+        ]);
+
+        // Dry run should succeed without creating files
+        assert!(output.status.success());
+
+        // No files should be created
+        assert!(!output_path.exists(), "Dry run should not create output directory");
+    }
+
+    #[test]
+    fn test_convert_force_overwrite() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("nginx-sherpack");
+
+        // Create existing directory
+        std::fs::create_dir_all(&output_path).unwrap();
+        std::fs::write(output_path.join("existing.txt"), "test").unwrap();
+
+        // First convert without --force should fail
+        let first_output = sherpack(&[
+            "convert",
+            &format!("{}/helm-nginx", fixtures_path()),
+            "--output",
+            output_path.to_str().unwrap(),
+        ]);
+        assert!(!first_output.status.success(), "Should fail without --force");
+
+        // Convert with --force should succeed
+        let force_output = sherpack(&[
+            "convert",
+            &format!("{}/helm-nginx", fixtures_path()),
+            "--output",
+            output_path.to_str().unwrap(),
+            "--force",
+        ]);
+        assert!(force_output.status.success(), "Should succeed with --force");
+
+        // Pack.yaml should exist
+        assert!(output_path.join("Pack.yaml").exists());
+    }
+}
+
 mod dependency_command {
     use super::*;
 
@@ -983,7 +1116,9 @@ image:
     }
 
     #[test]
-    fn test_error_message_typo_value_vs_values() {
+    fn test_chainable_mode_ignores_undefined_vars() {
+        // With chainable mode, undefined variables return empty (Helm compatibility)
+        // This test verifies that undefined vars don't cause errors
         let pack = create_test_pack_with_error(
             "name: {{ value.app.name }}"
         );
@@ -994,13 +1129,11 @@ image:
             pack.path().to_str().unwrap(),
         ]);
 
-        assert!(!output.status.success());
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        // Should suggest "values" instead of "value"
+        // Should succeed - chainable mode allows undefined variables
         assert!(
-            stdout.contains("values") && stdout.contains("Did you mean"),
-            "Expected suggestion for 'value' -> 'values' typo. Got: {}",
-            stdout
+            output.status.success(),
+            "Expected success with chainable mode. Got: {}",
+            String::from_utf8_lossy(&output.stdout)
         );
     }
 
@@ -1027,9 +1160,11 @@ image:
     }
 
     #[test]
-    fn test_error_message_undefined_nested_key() {
+    fn test_chainable_mode_allows_undefined_vars() {
+        // With chainable mode, undefined variables return empty instead of erroring
+        // This is required for Helm chart compatibility
         let pack = create_test_pack_with_error(
-            "repo: {{ values.image.repo }}"
+            "name: {{ undefined_variable }}"
         );
 
         let output = sherpack(&[
@@ -1038,22 +1173,38 @@ image:
             pack.path().to_str().unwrap(),
         ]);
 
-        assert!(!output.status.success());
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        // Should show available keys
+        // Should succeed - chainable mode returns empty for undefined
         assert!(
-            stdout.contains("repository") || stdout.contains("Available"),
-            "Expected available keys in error. Got: {}",
-            stdout
+            output.status.success(),
+            "Expected success with chainable mode for undefined var. Got: {}",
+            String::from_utf8_lossy(&output.stdout)
         );
     }
 
     #[test]
-    fn test_multi_error_collection() {
+    fn test_chainable_mode_allows_optional_values() {
+        // Test that optional nested values don't cause errors (Helm compatibility)
         let pack = create_test_pack_with_error(
-            r#"# Multiple errors
-error1: {{ value.app.name }}
-error2: {{ values.undefined.key }}
+            "# Optional value test\nrepo: {{ values.image.repo }}"
+        );
+
+        let output = sherpack(&[
+            "template",
+            "test",
+            pack.path().to_str().unwrap(),
+        ]);
+
+        // Should succeed - chainable mode allows accessing undefined nested keys
+        assert!(output.status.success());
+    }
+
+    #[test]
+    fn test_filter_errors_still_detected() {
+        // Test that unknown filter errors are still detected
+        // (Only undefined variables are ignored in chainable mode)
+        let pack = create_test_pack_with_error(
+            r#"# Filter error test
+error1: {{ values.app.name | unknownfilter }}
 "#
         );
 
@@ -1062,12 +1213,12 @@ error2: {{ values.undefined.key }}
             pack.path().to_str().unwrap(),
         ]);
 
-        // lint should show multiple errors
+        // lint should show errors for unknown filters
         let stdout = String::from_utf8_lossy(&output.stdout);
-        // Should contain at least one error indication
+        // Should contain error indication for unknown filter
         assert!(
-            stdout.contains("error") || stdout.contains("✗"),
-            "Expected error indication. Got: {}",
+            stdout.contains("error") || stdout.contains("✗") || stdout.contains("unknown"),
+            "Expected error for unknown filter. Got: {}",
             stdout
         );
     }

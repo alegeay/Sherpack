@@ -17,10 +17,11 @@ Sherpack is a modern alternative to Helm written in Rust, featuring familiar Jin
 |---------|----------|------|
 | **Templating** | Jinja2 (familiar syntax) | Go templates (complex) |
 | **Performance** | Native Rust binary | Go runtime |
-| **Binary Size** | ~5 MB | ~50 MB |
+| **Binary Size** | ~19 MB | ~50 MB |
 | **Learning Curve** | Minimal (if you know Jinja2) | Steep |
 | **Schema Validation** | Built-in JSON Schema | External tools |
 | **Error Messages** | Contextual suggestions | Generic errors |
+| **Helm Migration** | Automatic chart converter | N/A |
 
 ## Features
 
@@ -47,6 +48,12 @@ Sherpack is a modern alternative to Helm written in Rust, featuring familiar Jin
 - **Health Checks** - Wait for deployments, custom HTTP/command probes
 - **Release Storage** - Secrets, ConfigMap, or file-based storage
 - **Diff Preview** - See changes before applying
+
+### Helm Migration
+- **Automatic Conversion** - Convert Helm charts to Sherpack packs
+- **Template Translation** - Go templates → Jinja2 syntax
+- **Helper Function Support** - Converts `include`, `define`, `range`, `with`, etc.
+- **Full Chart Compatibility** - Tested with ingress-nginx (43 templates)
 
 ### Repository & Dependencies
 - **Repository Management** - HTTP, OCI, and file-based repositories
@@ -83,17 +90,23 @@ sherpack install myapp ./mypack -n production --wait
 
 ## Architecture
 
-Sherpack is built as a Cargo workspace with 5 crates:
+Sherpack is built as a Cargo workspace with 6 crates (~32k lines of Rust):
 
 | Crate | Purpose | Tests |
 |-------|---------|-------|
 | `sherpack-core` | Pack, Values, Archive, Manifest | 19 |
-| `sherpack-engine` | MiniJinja templating, filters, functions | 43 |
-| `sherpack-kube` | Kubernetes operations, storage, hooks | 107 |
-| `sherpack-repo` | Repository backends, dependencies, search | 42 |
-| `sherpack-cli` | CLI application | 71 |
-| **Total** | | **282** |
+| `sherpack-engine` | MiniJinja templating, filters, functions | 58 |
+| `sherpack-convert` | Helm Go templates → Jinja2 converter | 63 |
+| `sherpack-kube` | Kubernetes operations, storage, hooks | 151 |
+| `sherpack-repo` | Repository backends, dependencies, search | 43 |
+| `sherpack-cli` | CLI application | 75 |
+| **Total** | | **410** |
 
 ## Getting Started
 
-Ready to get started? Head to the [Installation](/docs/getting-started/installation) guide.
+Ready to get started?
+
+1. [Install Sherpack](/docs/getting-started/installation)
+2. [Quick Start Guide](/docs/getting-started/quick-start) - Create your first pack in 5 minutes
+3. [Complete Tutorial](/docs/getting-started/tutorial) - Learn Sherpack step by step
+4. [Convert from Helm](/docs/cli-reference#convert) - Migrate existing Helm charts

@@ -1,0 +1,19 @@
+apiVersion: v2
+name: nginx
+version: 1.0.0
+appVersion: "1.25.0"
+description: A Helm chart for deploying nginx
+type: application
+
+keywords:
+  - nginx
+  - web
+  - proxy
+
+maintainers:
+  - name: John Doe
+    email: john@example.com
+
+home: https://nginx.org
+sources:
+  - https://github.com/nginx/nginx

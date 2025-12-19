@@ -263,6 +263,45 @@ Check if empty:
 {% endif %}
 ```
 
+## Type Conversion
+
+### int
+
+Convert to integer:
+
+```yaml
+port: {{ values.port | int }}
+replicas: {{ "5" | int }}
+```
+
+Works with strings, floats, and booleans:
+
+```yaml
+{{ "42" | int }}       # 42
+{{ 3.14 | int }}       # 3
+{{ true | int }}       # 1
+{{ false | int }}      # 0
+```
+
+### float
+
+Convert to float:
+
+```yaml
+ratio: {{ values.ratio | float }}
+threshold: {{ "0.95" | float }}
+```
+
+### string
+
+Convert to string:
+
+```yaml
+port: {{ values.port | string }}
+env:
+  COUNT: {{ values.count | string | quote }}
+```
+
 ## Chaining Filters
 
 Filters can be chained:

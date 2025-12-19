@@ -5,7 +5,10 @@
 //! - **Release Management**: Full lifecycle management with state machine and auto-recovery
 //! - **Hooks System**: Improved hooks with policies and better error handling
 //! - **Diff Engine**: Compare releases and detect cluster drift
-//! - **Health Checks**: Validate deployments and auto-rollback on failure
+//! - **Health Checks**: Validate deployments with REAL Kubernetes API calls
+//! - **Sync Waves**: Resource ordering with wait-for dependencies
+//! - **Progress Reporting**: Real-time feedback during deployment operations
+//! - **Annotations**: Helm-compatible annotation parsing with Sherpack extensions
 
 pub mod error;
 pub mod release;
@@ -16,6 +19,9 @@ pub mod health;
 pub mod actions;
 pub mod resources;
 pub mod client;
+pub mod annotations;
+pub mod waves;
+pub mod progress;
 
 pub use error::{KubeError, Result};
 pub use release::{StoredRelease, ReleaseState, ValueSource, ValuesProvenance};
@@ -26,3 +32,6 @@ pub use health::{HealthChecker, HealthCheckConfig, HealthStatus, ResourceHealth}
 pub use actions::{InstallOptions, UpgradeOptions, UninstallOptions, RollbackOptions};
 pub use resources::{ResourceManager, ApplyResult, DeleteResult, OperationSummary};
 pub use client::KubeClient;
+pub use annotations::{ResourceRef, DeletePolicy, FailurePolicy};
+pub use waves::{ExecutionPlan, Wave, Resource, WaveExecutionConfig};
+pub use progress::{ProgressReporter, ResourceStatus, ResourceState};

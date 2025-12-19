@@ -209,11 +209,10 @@ pub fn run(
             .wrap_err_with(|| format!("Failed to create output directory: {}", output_path.display()))?;
 
         for (filename, content) in &result.manifests {
-            if let Some(filter) = show_only {
-                if !filename.contains(filter) {
+            if let Some(filter) = show_only
+                && !filename.contains(filter) {
                     continue;
                 }
-            }
 
             let file_path = output_path.join(filename);
 
@@ -248,11 +247,10 @@ pub fn run(
         let mut first = true;
 
         for (filename, content) in &result.manifests {
-            if let Some(filter) = show_only {
-                if !filename.contains(filter) {
+            if let Some(filter) = show_only
+                && !filename.contains(filter) {
                     continue;
                 }
-            }
 
             if !first {
                 println!();

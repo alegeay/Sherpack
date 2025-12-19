@@ -368,8 +368,8 @@ fn extract_defaults_recursive(schema: &JsonValue) -> JsonValue {
     }
 
     // For objects, recursively extract property defaults
-    if obj.get("type") == Some(&JsonValue::String("object".into())) {
-        if let Some(props) = obj.get("properties").and_then(|p| p.as_object()) {
+    if obj.get("type") == Some(&JsonValue::String("object".into()))
+        && let Some(props) = obj.get("properties").and_then(|p| p.as_object()) {
             let mut defaults = serde_json::Map::new();
 
             for (key, prop_schema) in props {
@@ -383,7 +383,6 @@ fn extract_defaults_recursive(schema: &JsonValue) -> JsonValue {
                 return JsonValue::Object(defaults);
             }
         }
-    }
 
     JsonValue::Null
 }

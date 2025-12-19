@@ -85,8 +85,8 @@ impl Manifest {
         }
 
         // Add schema file if present
-        if let Some(schema_path) = &pack.schema_path {
-            if schema_path.exists() {
+        if let Some(schema_path) = &pack.schema_path
+            && schema_path.exists() {
                 let hash = hash_file(schema_path)?;
                 let rel_path = schema_path
                     .file_name()
@@ -94,7 +94,6 @@ impl Manifest {
                     .unwrap_or_else(|| "values.schema.yaml".to_string());
                 files.insert(rel_path, hash);
             }
-        }
 
         // Add template files
         let template_files = pack.template_files()?;
@@ -167,14 +166,13 @@ impl Manifest {
                 }
             } else if in_files_section {
                 // File line: path sha256:HASH
-                if let Some((path, hash_part)) = line.rsplit_once(' ') {
-                    if let Some(hash) = hash_part.strip_prefix("sha256:") {
+                if let Some((path, hash_part)) = line.rsplit_once(' ')
+                    && let Some(hash) = hash_part.strip_prefix("sha256:") {
                         files.push(FileEntry {
                             path: path.to_string(),
                             sha256: hash.to_string(),
                         });
                     }
-                }
             } else {
                 // Header section: key: value
                 if let Some((key, value)) = line.split_once(':') {

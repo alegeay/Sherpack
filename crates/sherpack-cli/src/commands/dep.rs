@@ -47,11 +47,10 @@ pub async fn list(pack_path: &Path) -> Result<()> {
 
         let pack_yaml_content =
             std::fs::read_to_string(pack_path.join("Pack.yaml")).unwrap_or_default();
-        if let Ok(lock) = LockFile::load(&lock_path) {
-            if lock.is_outdated(&pack_yaml_content) {
+        if let Ok(lock) = LockFile::load(&lock_path)
+            && lock.is_outdated(&pack_yaml_content) {
                 println!("  WARNING: Lock file is outdated. Run 'sherpack dependency update'");
             }
-        }
     } else {
         println!();
         println!("Lock file: not found");
@@ -138,7 +137,7 @@ pub async fn update(pack_path: &Path) -> Result<()> {
 
     // Create lock file
     let pack_yaml_content =
-        std::fs::read_to_string(pack_path.join("Pack.yaml")).map_err(|e| CliError::io(e))?;
+        std::fs::read_to_string(pack_path.join("Pack.yaml")).map_err(CliError::io)?;
 
     let lock = graph.to_lock_file(&pack_yaml_content);
     let lock_path = pack_path.join("Pack.lock.yaml");
@@ -167,7 +166,7 @@ pub async fn build(pack_path: &Path, verify: bool) -> Result<()> {
 
     // Check if lock file is outdated
     let pack_yaml_content =
-        std::fs::read_to_string(pack_path.join("Pack.yaml")).map_err(|e| CliError::io(e))?;
+        std::fs::read_to_string(pack_path.join("Pack.yaml")).map_err(CliError::io)?;
 
     if lock.is_outdated(&pack_yaml_content) {
         return Err(CliError::input(
@@ -218,7 +217,7 @@ pub async fn build(pack_path: &Path, verify: bool) -> Result<()> {
 
         // Verify if requested
         if verify {
-            match lock.verify(&locked.effective_name(), &data) {
+            match lock.verify(locked.effective_name(), &data) {
                 Ok(sherpack_repo::VerifyResult::Match) => {
                     print!("verified... ");
                 }

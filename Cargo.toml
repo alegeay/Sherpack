@@ -5,6 +5,7 @@ members = [
     "crates/sherpack-engine",
     "crates/sherpack-kube",
     "crates/sherpack-repo",
+    "crates/sherpack-convert",
     "crates/sherpack-cli",
 ]
 
@@ -14,7 +15,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
-repository = "https://github.com/sherpack/sherpack"
+repository = "https://github.com/alegeay/sherpack"
 keywords = ["kubernetes", "helm", "jinja2", "devops", "k8s"]
 categories = ["command-line-utilities", "development-tools"]
 
@@ -24,6 +25,12 @@ sherpack-core = { path = "crates/sherpack-core" }
 sherpack-engine = { path = "crates/sherpack-engine" }
 sherpack-kube = { path = "crates/sherpack-kube" }
 sherpack-repo = { path = "crates/sherpack-repo" }
+sherpack-convert = { path = "crates/sherpack-convert" }
+
+# Parser
+pest = "2.7"
+pest_derive = "2.7"
+phf = { version = "0.11", features = ["macros"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

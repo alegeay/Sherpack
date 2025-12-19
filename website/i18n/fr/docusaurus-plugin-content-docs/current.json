@@ -1,0 +1,34 @@
+{
+  "sidebar.docsSidebar.category.Getting Started": {
+    "message": "Démarrage",
+    "description": "The label for the Getting Started category"
+  },
+  "sidebar.docsSidebar.category.Core Concepts": {
+    "message": "Concepts clés",
+    "description": "The label for the Core Concepts category"
+  },
+  "sidebar.docsSidebar.category.Templating": {
+    "message": "Templating",
+    "description": "The label for the Templating category"
+  },
+  "sidebar.docsSidebar.category.Kubernetes": {
+    "message": "Kubernetes",
+    "description": "The label for the Kubernetes category"
+  },
+  "sidebar.docsSidebar.category.Packaging": {
+    "message": "Packaging",
+    "description": "The label for the Packaging category"
+  },
+  "sidebar.docsSidebar.category.Repositories": {
+    "message": "Dépôts",
+    "description": "The label for the Repositories category"
+  },
+  "sidebar.docsSidebar.link.CLI Reference": {
+    "message": "Référence CLI",
+    "description": "The label for the CLI Reference link"
+  },
+  "sidebar.docsSidebar.link.Architecture": {
+    "message": "Architecture",
+    "description": "The label for the Architecture link"
+  }
+}

@@ -37,9 +37,9 @@ pub fn run(
     let sig_path = sign_archive(archive_path, &key_path, comment)?;
 
     // Show trusted comment if we can read the signature
-    if let Ok(sig_content) = std::fs::read_to_string(&sig_path) {
-        if let Ok(sig_box) = minisign::SignatureBox::from_string(&sig_content) {
-            if let Ok(trusted_comment) = sig_box.trusted_comment() {
+    if let Ok(sig_content) = std::fs::read_to_string(&sig_path)
+        && let Ok(sig_box) = minisign::SignatureBox::from_string(&sig_content)
+            && let Ok(trusted_comment) = sig_box.trusted_comment() {
                 println!();
                 println!(
                     "{}: {}",
@@ -47,8 +47,6 @@ pub fn run(
                     trusted_comment
                 );
             }
-        }
-    }
 
     Ok(())
 }

@@ -11,6 +11,7 @@ pub mod keygen;
 pub mod sign;
 pub mod signing;
 pub mod verify;
+pub mod convert;
 
 // Phase 4 - Kubernetes deployment commands
 pub mod install;

@@ -1,0 +1,17 @@
+# Default owners for everything in the repo
+* @alegeay
+
+# Specific crate owners
+/crates/sherpack-core/ @alegeay
+/crates/sherpack-engine/ @alegeay
+/crates/sherpack-kube/ @alegeay
+/crates/sherpack-repo/ @alegeay
+/crates/sherpack-cli/ @alegeay
+
+# Documentation
+/website/ @alegeay
+/docs/ @alegeay
+*.md @alegeay
+
+# CI/CD
+/.github/ @alegeay

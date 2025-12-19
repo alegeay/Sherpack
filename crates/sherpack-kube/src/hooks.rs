@@ -210,6 +210,12 @@ pub enum HookCleanupPolicy {
     /// Delete immediately after successful completion
     OnSuccess,
 
+    /// Delete only after failure (for debugging)
+    OnFailure,
+
+    /// Always delete after completion (success or failure)
+    Always,
+
     /// Delete after a delay (useful for debugging)
     AfterDelay(#[serde(with = "duration_serde")] Duration),
 
@@ -285,6 +291,8 @@ impl HookResult {
 pub struct HookExecutor {
     /// Results of executed hooks
     pub results: Vec<HookResult>,
+    /// Namespace to execute hooks in
+    namespace: String,
 }
 
 impl HookExecutor {
@@ -292,6 +300,15 @@ impl HookExecutor {
     pub fn new() -> Self {
         Self {
             results: Vec::new(),
+            namespace: "default".to_string(),
+        }
+    }
+
+    /// Create with a specific namespace
+    pub fn with_namespace(namespace: &str) -> Self {
+        Self {
+            results: Vec::new(),
+            namespace: namespace.to_string(),
         }
     }
 
@@ -305,7 +322,7 @@ impl HookExecutor {
         phase: HookPhase,
         release_name: &str,
         revision: u32,
-        _client: &kube::Client,
+        client: &kube::Client,
     ) -> crate::Result<()> {
         // Filter and sort hooks for this phase
         let mut phase_hooks: Vec<&Hook> = hooks
@@ -319,9 +336,10 @@ impl HookExecutor {
             let started_at = Utc::now();
             let unique_name = hook.unique_name(release_name, phase, revision);
 
-            // TODO: Actually execute the hook against Kubernetes
-            // For now, we simulate success
-            let result = self.execute_single_hook(hook, &unique_name, phase, started_at).await;
+            // Execute the hook
+            let result = self
+                .execute_single_hook(client, hook, &unique_name, phase, started_at)
+                .await;
 
             match result {
                 Ok(r) => self.results.push(r),
@@ -376,7 +394,7 @@ impl HookExecutor {
                                 attempts += 1;
 
                                 match self
-                                    .execute_single_hook(hook, &unique_name, phase, started_at)
+                                    .execute_single_hook(client, hook, &unique_name, phase, started_at)
                                     .await
                                 {
                                     Ok(r) => {
@@ -416,24 +434,254 @@ impl HookExecutor {
         Ok(())
     }
 
-    /// Execute a single hook
+    /// Execute a single hook by creating a Kubernetes Job
     async fn execute_single_hook(
         &self,
+        client: &kube::Client,
         hook: &Hook,
-        _unique_name: &str,
+        unique_name: &str,
         phase: HookPhase,
         started_at: DateTime<Utc>,
     ) -> crate::Result<HookResult> {
-        // TODO: Implement actual hook execution:
-        // 1. Parse hook.resource as YAML
-        // 2. Set metadata.name to unique_name
-        // 3. Apply labels for tracking
-        // 4. Create the resource
-        // 5. If Job/Pod, wait for completion with timeout
-        // 6. Handle cleanup based on policy
+        use k8s_openapi::api::batch::v1::Job;
+        use kube::api::{Api, PostParams};
+        use kube::runtime::wait::{await_condition, conditions};
 
-        // For now, return success
-        Ok(HookResult::success(hook.name.clone(), phase, started_at))
+        // Parse the hook resource as YAML
+        let mut resource: serde_yaml::Value = serde_yaml::from_str(&hook.resource).map_err(|e| {
+            crate::KubeError::InvalidManifest(format!("Failed to parse hook YAML: {}", e))
+        })?;
+
+        // Update the name to unique name
+        if let Some(metadata) = resource.get_mut("metadata")
+            && let Some(meta_map) = metadata.as_mapping_mut() {
+                meta_map.insert(
+                    serde_yaml::Value::String("name".to_string()),
+                    serde_yaml::Value::String(unique_name.to_string()),
+                );
+
+                // Add labels for tracking
+                let labels = meta_map
+                    .entry(serde_yaml::Value::String("labels".to_string()))
+                    .or_insert(serde_yaml::Value::Mapping(serde_yaml::Mapping::new()));
+
+                if let Some(labels_map) = labels.as_mapping_mut() {
+                    labels_map.insert(
+                        serde_yaml::Value::String("sherpack.io/hook".to_string()),
+                        serde_yaml::Value::String("true".to_string()),
+                    );
+                    labels_map.insert(
+                        serde_yaml::Value::String("sherpack.io/hook-phase".to_string()),
+                        serde_yaml::Value::String(phase.to_string()),
+                    );
+                    labels_map.insert(
+                        serde_yaml::Value::String("sherpack.io/hook-name".to_string()),
+                        serde_yaml::Value::String(hook.name.clone()),
+                    );
+                }
+            }
+
+        let kind = resource
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown");
+
+        // Handle cleanup policy: BeforeNextRun - delete existing hook if present
+        if matches!(hook.cleanup, HookCleanupPolicy::BeforeNextRun | HookCleanupPolicy::Always) {
+            self.cleanup_existing_hook(client, kind, unique_name).await?;
+        }
+
+        // For Jobs, we need to handle them specially
+        if kind == "Job" {
+            let job: Job = serde_yaml::from_value(resource.clone()).map_err(|e| {
+                crate::KubeError::InvalidManifest(format!("Failed to parse Job: {}", e))
+            })?;
+
+            let jobs: Api<Job> = Api::namespaced(client.clone(), &self.namespace);
+
+            // Create the job
+            let pp = PostParams::default();
+            let created_job = jobs.create(&pp, &job).await.map_err(crate::KubeError::KubeApi)?;
+
+            let job_name = created_job.metadata.name.as_deref().unwrap_or(unique_name);
+
+            // Wait for job completion with timeout
+            let timeout = hook.timeout.to_std().unwrap_or(std::time::Duration::from_secs(300));
+            let condition = await_condition(jobs.clone(), job_name, conditions::is_job_completed());
+
+            match tokio::time::timeout(timeout, condition).await {
+                Ok(Ok(Some(completed_job))) => {
+                    // Check if job succeeded
+                    let status = completed_job.status.as_ref();
+                    let succeeded = status.and_then(|s| s.succeeded).unwrap_or(0);
+                    let failed = status.and_then(|s| s.failed).unwrap_or(0);
+
+                    if succeeded > 0 {
+                        // Handle cleanup on success
+                        if matches!(
+                            hook.cleanup,
+                            HookCleanupPolicy::OnSuccess | HookCleanupPolicy::Always
+                        ) {
+                            let _ = self.cleanup_hook(client, "Job", unique_name).await;
+                        }
+                        Ok(HookResult::success(hook.name.clone(), phase, started_at))
+                    } else {
+                        let error_msg = format!("Job failed with {} failures", failed);
+
+                        // Handle cleanup on failure
+                        if matches!(
+                            hook.cleanup,
+                            HookCleanupPolicy::OnFailure | HookCleanupPolicy::Always
+                        ) {
+                            let _ = self.cleanup_hook(client, "Job", unique_name).await;
+                        }
+
+                        Err(crate::KubeError::HookFailed {
+                            hook_name: hook.name.clone(),
+                            phase: phase.to_string(),
+                            message: error_msg,
+                        })
+                    }
+                }
+                Ok(Ok(None)) => {
+                    // Job was deleted or not found
+                    Err(crate::KubeError::HookFailed {
+                        hook_name: hook.name.clone(),
+                        phase: phase.to_string(),
+                        message: "Job was deleted before completion".to_string(),
+                    })
+                }
+                Ok(Err(e)) => Err(crate::KubeError::HookFailed {
+                    hook_name: hook.name.clone(),
+                    phase: phase.to_string(),
+                    message: format!("Wait condition failed: {}", e),
+                }),
+                Err(_) => {
+                    // Timeout
+                    Err(crate::KubeError::HookFailed {
+                        hook_name: hook.name.clone(),
+                        phase: phase.to_string(),
+                        message: format!(
+                            "Hook timed out after {:?}",
+                            hook.timeout.to_std().unwrap_or_default()
+                        ),
+                    })
+                }
+            }
+        } else {
+            // For non-Job resources (ConfigMaps, Secrets, etc.), just create them
+            // Use dynamic client for generic resources
+            let yaml_string = serde_yaml::to_string(&resource).map_err(|e| {
+                crate::KubeError::InvalidManifest(format!("Failed to serialize resource: {}", e))
+            })?;
+
+            // Use kubectl apply as fallback for generic resources
+            let output = tokio::process::Command::new("kubectl")
+                .args([
+                    "apply",
+                    "-f",
+                    "-",
+                    "-n",
+                    &self.namespace,
+                    "-o",
+                    "name",
+                ])
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .map_err(|e| {
+                    crate::KubeError::HookFailed {
+                        hook_name: hook.name.clone(),
+                        phase: phase.to_string(),
+                        message: format!("Failed to spawn kubectl: {}", e),
+                    }
+                })?;
+
+            use tokio::io::AsyncWriteExt;
+            let mut child = output;
+            if let Some(stdin) = child.stdin.as_mut() {
+                stdin.write_all(yaml_string.as_bytes()).await.map_err(|e| {
+                    crate::KubeError::HookFailed {
+                        hook_name: hook.name.clone(),
+                        phase: phase.to_string(),
+                        message: format!("Failed to write to kubectl stdin: {}", e),
+                    }
+                })?;
+            }
+
+            let output = child.wait_with_output().await.map_err(|e| {
+                crate::KubeError::HookFailed {
+                    hook_name: hook.name.clone(),
+                    phase: phase.to_string(),
+                    message: format!("Failed to wait for kubectl: {}", e),
+                }
+            })?;
+
+            if output.status.success() {
+                Ok(HookResult::success(hook.name.clone(), phase, started_at))
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Err(crate::KubeError::HookFailed {
+                    hook_name: hook.name.clone(),
+                    phase: phase.to_string(),
+                    message: format!("kubectl apply failed: {}", stderr),
+                })
+            }
+        }
+    }
+
+    /// Clean up existing hook resource before creating new one
+    async fn cleanup_existing_hook(
+        &self,
+        client: &kube::Client,
+        kind: &str,
+        name: &str,
+    ) -> crate::Result<()> {
+        self.cleanup_hook(client, kind, name).await
+    }
+
+    /// Clean up a hook resource
+    async fn cleanup_hook(
+        &self,
+        client: &kube::Client,
+        kind: &str,
+        name: &str,
+    ) -> crate::Result<()> {
+        use k8s_openapi::api::batch::v1::Job;
+        use k8s_openapi::api::core::v1::{ConfigMap, Secret};
+        use kube::api::{Api, DeleteParams};
+
+        let dp = DeleteParams::default();
+
+        match kind {
+            "Job" => {
+                let api: Api<Job> = Api::namespaced(client.clone(), &self.namespace);
+                // Use propagation policy to delete pods too
+                let dp = DeleteParams {
+                    propagation_policy: Some(kube::api::PropagationPolicy::Background),
+                    ..Default::default()
+                };
+                let _ = api.delete(name, &dp).await;
+            }
+            "ConfigMap" => {
+                let api: Api<ConfigMap> = Api::namespaced(client.clone(), &self.namespace);
+                let _ = api.delete(name, &dp).await;
+            }
+            "Secret" => {
+                let api: Api<Secret> = Api::namespaced(client.clone(), &self.namespace);
+                let _ = api.delete(name, &dp).await;
+            }
+            _ => {
+                // Use kubectl for other resource types
+                let _ = tokio::process::Command::new("kubectl")
+                    .args(["delete", kind, name, "-n", &self.namespace, "--ignore-not-found"])
+                    .output()
+                    .await;
+            }
+        }
+
+        Ok(())
     }
 
     /// Get all results for a phase
@@ -484,12 +732,12 @@ pub fn parse_hooks_from_manifest(manifest: &str) -> Vec<Hook> {
         if let Some(annotations) = annotations {
             // Check for sherpack.io/hook or helm.sh/hook (for compatibility)
             let hook_phases: Option<Vec<HookPhase>> = annotations
-                .get(&serde_yaml::Value::String("sherpack.io/hook".to_string()))
+                .get(serde_yaml::Value::String("sherpack.io/hook".to_string()))
                 .or_else(|| {
-                    annotations.get(&serde_yaml::Value::String("helm.sh/hook".to_string()))
+                    annotations.get(serde_yaml::Value::String("helm.sh/hook".to_string()))
                 })
                 .and_then(|v| v.as_str())
-                .map(|s| parse_hook_phases(s));
+                .map(parse_hook_phases);
 
             if let Some(phases) = hook_phases {
                 let name = yaml
@@ -500,21 +748,21 @@ pub fn parse_hooks_from_manifest(manifest: &str) -> Vec<Hook> {
                     .to_string();
 
                 let weight = annotations
-                    .get(&serde_yaml::Value::String("sherpack.io/hook-weight".to_string()))
+                    .get(serde_yaml::Value::String("sherpack.io/hook-weight".to_string()))
                     .or_else(|| {
                         annotations
-                            .get(&serde_yaml::Value::String("helm.sh/hook-weight".to_string()))
+                            .get(serde_yaml::Value::String("helm.sh/hook-weight".to_string()))
                     })
                     .and_then(|v| v.as_str())
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0);
 
                 let cleanup = annotations
-                    .get(&serde_yaml::Value::String(
+                    .get(serde_yaml::Value::String(
                         "sherpack.io/hook-delete-policy".to_string(),
                     ))
                     .or_else(|| {
-                        annotations.get(&serde_yaml::Value::String(
+                        annotations.get(serde_yaml::Value::String(
                             "helm.sh/hook-delete-policy".to_string(),
                         ))
                     })
