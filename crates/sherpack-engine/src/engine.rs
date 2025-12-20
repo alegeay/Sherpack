@@ -674,7 +674,6 @@ replicas: 3
     #[test]
     fn test_engine_with_secret_state() {
         use crate::secrets::SecretFunctionState;
-        use sherpack_core::SecretState;
 
         // Create engine with secret state via builder
         let secret_state = SecretFunctionState::new();
