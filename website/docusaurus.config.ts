@@ -13,11 +13,11 @@ const config: Config = {
 
   // GitHub Pages URL
   url: 'https://alegeay.github.io',
-  baseUrl: '/sherpack/',
+  baseUrl: '/Sherpack/',
 
   // GitHub pages deployment config
   organizationName: 'alegeay',
-  projectName: 'sherpack',
+  projectName: 'Sherpack',
   trailingSlash: false,
 
   onBrokenLinks: 'throw',
