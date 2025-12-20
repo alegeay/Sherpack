@@ -175,7 +175,7 @@ jobs:
             ${{ runner.os }}-${{ matrix.target }}-cargo-release-
 
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }} -p sherpack-cli
+        run: cargo build --release --target ${{ matrix.target }} -p sherpack
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
@@ -329,6 +329,6 @@ jobs:
       - name: Wait for crates.io indexing
         run: sleep 30
 
-      - name: Publish sherpack-cli
-        run: cargo publish -p sherpack-cli --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish sherpack
+        run: cargo publish -p sherpack --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
         continue-on-error: true
