@@ -67,7 +67,8 @@ pub fn create_archive(pack: &LoadedPack, output: &Path) -> Result<PathBuf> {
             .strip_prefix(&pack.root)
             .unwrap_or(&file_path)
             .to_string_lossy()
-            .to_string();
+            // Normalize path separators for cross-platform compatibility
+            .replace('\\', "/");
         add_file_to_archive(&mut builder, &file_path, &rel_path)?;
     }
 

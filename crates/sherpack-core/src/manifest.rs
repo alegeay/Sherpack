@@ -104,7 +104,9 @@ impl Manifest {
                 .strip_prefix(&pack.root)
                 .unwrap_or(&file_path)
                 .to_string_lossy()
-                .to_string();
+                // Normalize path separators for cross-platform compatibility
+                // Tar archives use forward slashes, so we must match that
+                .replace('\\', "/");
             files.insert(rel_path, hash);
         }
 
