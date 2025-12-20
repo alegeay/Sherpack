@@ -91,7 +91,7 @@ similar = "2"
 # Packaging
 tar = "0.4"
 flate2 = "1.0"
-minisign = "0.7"
+minisign = "0.8"
 
 # HTTP & Networking
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "stream"] }
