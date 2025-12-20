@@ -1,0 +1,17 @@
+apiVersion: sherpack/v1
+kind: application
+metadata:
+  name: app-with-deps
+  version: 1.0.0
+  description: Application with subchart dependencies
+
+dependencies:
+  - name: redis
+    version: "^7.0.0"
+    repository: "file://charts/redis"
+    condition: redis.enabled
+  - name: postgresql
+    version: "^15.0.0"
+    repository: "file://charts/postgresql"
+    condition: postgresql.enabled
+    enabled: false

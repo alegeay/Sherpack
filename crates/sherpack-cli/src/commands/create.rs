@@ -190,10 +190,7 @@ packs/
         "  1. Edit {} to customize your pack",
         style("values.yaml").cyan()
     );
-    println!(
-        "  2. Edit templates in {}",
-        style("templates/").cyan()
-    );
+    println!("  2. Edit templates in {}", style("templates/").cyan());
     println!(
         "  3. Test with: {} template myrelease {}",
         style("sherpack").green(),

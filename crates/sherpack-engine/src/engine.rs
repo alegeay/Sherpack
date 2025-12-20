@@ -1,18 +1,29 @@
 //! Template engine based on MiniJinja
+//!
+//! This module provides the core rendering engine for Sherpack templates,
+//! built on top of MiniJinja with Helm-compatible filters and functions.
 
+use indexmap::IndexMap;
 use minijinja::Environment;
-use sherpack_core::{LoadedPack, TemplateContext};
+use sherpack_core::{LoadedPack, SandboxedFileProvider, TemplateContext};
 use std::collections::HashMap;
 
-use crate::error::{EngineError, Result, TemplateError};
+use crate::error::{EngineError, RenderReport, RenderResultWithReport, Result, TemplateError};
+use crate::files_object::create_files_value_from_provider;
 use crate::filters;
 use crate::functions;
+
+/// Prefix character for helper templates (skipped during rendering)
+const HELPER_TEMPLATE_PREFIX: char = '_';
+
+/// Pattern to identify NOTES templates
+const NOTES_TEMPLATE_PATTERN: &str = "notes";
 
 /// Result of rendering a pack
 #[derive(Debug)]
 pub struct RenderResult {
-    /// Rendered manifests by filename
-    pub manifests: HashMap<String, String>,
+    /// Rendered manifests by filename (IndexMap preserves insertion order)
+    pub manifests: IndexMap<String, String>,
 
     /// Post-install notes (if NOTES.txt exists)
     pub notes: Option<String>,
@@ -52,12 +63,38 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Create a new engine with default settings
+    /// Create a new engine
+    ///
+    /// # Arguments
+    /// * `strict_mode` - If true, uses Chainable undefined behavior (Helm-compatible).
+    ///   If false, uses Lenient mode (empty strings for undefined).
+    ///
+    /// # Prefer using convenience methods
+    /// For clearer code, prefer `Engine::strict()` or `Engine::lenient()`.
     pub fn new(strict_mode: bool) -> Self {
         Self { strict_mode }
     }
 
-    /// Create a builder
+    /// Create a strict mode engine (Helm-compatible, recommended)
+    ///
+    /// Uses `UndefinedBehavior::Chainable` which allows accessing properties
+    /// on undefined values, returning undefined instead of error.
+    #[must_use]
+    pub fn strict() -> Self {
+        Self { strict_mode: true }
+    }
+
+    /// Create a lenient mode engine
+    ///
+    /// Uses `UndefinedBehavior::Lenient` which returns empty strings
+    /// for undefined values.
+    #[must_use]
+    pub fn lenient() -> Self {
+        Self { strict_mode: false }
+    }
+
+    /// Create a builder for more configuration options
+    #[must_use]
     pub fn builder() -> EngineBuilder {
         EngineBuilder::new()
     }
@@ -67,8 +104,11 @@ impl Engine {
         let mut env = Environment::new();
 
         // Configure behavior
+        // Use Chainable mode by default - allows accessing properties on undefined values
+        // (returns undefined instead of error), matching Helm's Go template behavior.
+        // This is essential for converted charts where values may be optional.
         if self.strict_mode {
-            env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
+            env.set_undefined_behavior(minijinja::UndefinedBehavior::Chainable);
         } else {
             env.set_undefined_behavior(minijinja::UndefinedBehavior::Lenient);
         }
@@ -94,12 +134,62 @@ impl Engine {
         env.add_filter("trimsuffix", filters::trimsuffix);
         env.add_filter("snakecase", filters::snakecase);
         env.add_filter("kebabcase", filters::kebabcase);
+        env.add_filter("tostrings", filters::tostrings);
+        env.add_filter("semver_match", filters::semver_match);
+        env.add_filter("int", filters::int);
+        env.add_filter("float", filters::float);
+        env.add_filter("abs", filters::abs);
+
+        // Path filters
+        env.add_filter("basename", filters::basename);
+        env.add_filter("dirname", filters::dirname);
+        env.add_filter("extname", filters::extname);
+        env.add_filter("cleanpath", filters::cleanpath);
+
+        // Regex filters
+        env.add_filter("regex_match", filters::regex_match);
+        env.add_filter("regex_replace", filters::regex_replace);
+        env.add_filter("regex_find", filters::regex_find);
+        env.add_filter("regex_find_all", filters::regex_find_all);
+
+        // Dict filters
+        env.add_filter("values", filters::values);
+        env.add_filter("pick", filters::pick);
+        env.add_filter("omit", filters::omit);
+
+        // List filters
+        env.add_filter("append", filters::append);
+        env.add_filter("prepend", filters::prepend);
+        env.add_filter("concat", filters::concat);
+        env.add_filter("without", filters::without);
+        env.add_filter("compact", filters::compact);
+
+        // Math filters
+        env.add_filter("floor", filters::floor);
+        env.add_filter("ceil", filters::ceil);
+
+        // Crypto filters
+        env.add_filter("sha1", filters::sha1sum);
+        env.add_filter("sha512", filters::sha512sum);
+        env.add_filter("md5", filters::md5sum);
+
+        // String filters
+        env.add_filter("repeat", filters::repeat);
+        env.add_filter("camelcase", filters::camelcase);
+        env.add_filter("pascalcase", filters::pascalcase);
+        env.add_filter("substr", filters::substr);
+        env.add_filter("wrap", filters::wrap);
+        env.add_filter("hasprefix", filters::hasprefix);
+        env.add_filter("hassuffix", filters::hassuffix);
 
         // Register global functions
         env.add_function("fail", functions::fail);
         env.add_function("dict", functions::dict);
         env.add_function("list", functions::list);
         env.add_function("get", functions::get);
+        env.add_function("set", functions::set);
+        env.add_function("unset", functions::unset);
+        env.add_function("dig", functions::dig);
         env.add_function("coalesce", functions::coalesce);
         env.add_function("ternary", functions::ternary);
         env.add_function("uuidv4", functions::uuidv4);
@@ -108,6 +198,9 @@ impl Engine {
         env.add_function("tofloat", functions::tofloat);
         env.add_function("now", functions::now);
         env.add_function("printf", functions::printf);
+        env.add_function("tpl", functions::tpl);
+        env.add_function("tpl_ctx", functions::tpl_ctx);
+        env.add_function("lookup", functions::lookup);
 
         env
     }
@@ -125,12 +218,20 @@ impl Engine {
         let mut env = env;
         env.add_template_owned(template_name.to_string(), template.to_string())
             .map_err(|e| {
-                EngineError::Template(TemplateError::from_minijinja(e, template_name, template))
+                EngineError::Template(Box::new(TemplateError::from_minijinja(
+                    e,
+                    template_name,
+                    template,
+                )))
             })?;
 
         // Get template and render
         let tmpl = env.get_template(template_name).map_err(|e| {
-            EngineError::Template(TemplateError::from_minijinja(e, template_name, template))
+            EngineError::Template(Box::new(TemplateError::from_minijinja(
+                e,
+                template_name,
+                template,
+            )))
         })?;
 
         // Build context
@@ -143,50 +244,152 @@ impl Engine {
         };
 
         tmpl.render(ctx).map_err(|e| {
-            EngineError::Template(TemplateError::from_minijinja(e, template_name, template))
+            EngineError::Template(Box::new(TemplateError::from_minijinja(
+                e,
+                template_name,
+                template,
+            )))
         })
     }
 
     /// Render all templates in a pack
+    ///
+    /// This is a convenience wrapper around `render_pack_collect_errors` that
+    /// returns the first error encountered, suitable for most use cases.
     pub fn render_pack(
         &self,
         pack: &LoadedPack,
         context: &TemplateContext,
     ) -> Result<RenderResult> {
-        let template_files = pack.template_files().map_err(|e| {
-            EngineError::Template(TemplateError::simple(format!(
-                "Failed to list templates: {}",
-                e
-            )))
-        })?;
+        let result = self.render_pack_collect_errors(pack, context);
 
-        let mut manifests = HashMap::new();
+        // If there were any errors, return the first one
+        if result.report.has_errors() {
+            // Get the first error from the report
+            let first_error = result
+                .report
+                .errors_by_template
+                .into_values()
+                .next()
+                .and_then(|errors| errors.into_iter().next());
+
+            return Err(match first_error {
+                Some(err) => EngineError::Template(Box::new(err)),
+                None => {
+                    EngineError::Template(Box::new(TemplateError::simple("Unknown template error")))
+                }
+            });
+        }
+
+        Ok(RenderResult {
+            manifests: result.manifests,
+            notes: result.notes,
+        })
+    }
+
+    /// Render all templates in a pack, collecting all errors instead of stopping at the first
+    ///
+    /// Unlike `render_pack`, this method continues after errors and returns
+    /// a comprehensive report of all issues found.
+    pub fn render_pack_collect_errors(
+        &self,
+        pack: &LoadedPack,
+        context: &TemplateContext,
+    ) -> RenderResultWithReport {
+        let mut report = RenderReport::new();
+        let mut manifests = IndexMap::new();
         let mut notes = None;
 
-        // First, load all helper templates (those starting with _)
+        let template_files = match pack.template_files() {
+            Ok(files) => files,
+            Err(e) => {
+                report.add_error(
+                    "<pack>".to_string(),
+                    TemplateError::simple(format!("Failed to list templates: {}", e)),
+                );
+                return RenderResultWithReport {
+                    manifests,
+                    notes,
+                    report,
+                };
+            }
+        };
+
+        // Create environment with all templates loaded
         let mut env = self.create_environment();
         let templates_dir = &pack.templates_dir;
 
-        // Load all templates into the environment
-        for file_path in &template_files {
-            let rel_path = file_path
-                .strip_prefix(templates_dir)
-                .unwrap_or(file_path);
-            let template_name = rel_path.to_string_lossy().to_string();
-            let content = std::fs::read_to_string(file_path)?;
+        // Track template sources for error reporting
+        let mut template_sources: HashMap<String, String> = HashMap::new();
 
-            env.add_template_owned(template_name, content)
-                .map_err(|e| {
-                    let content = std::fs::read_to_string(file_path).unwrap_or_default();
-                    EngineError::Template(TemplateError::from_minijinja(
+        // Load all templates - continue even if some fail to parse
+        for file_path in &template_files {
+            let rel_path = file_path.strip_prefix(templates_dir).unwrap_or(file_path);
+            let template_name = rel_path.to_string_lossy().into_owned();
+
+            let content = match std::fs::read_to_string(file_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    report.add_error(
+                        template_name,
+                        TemplateError::simple(format!("Failed to read template: {}", e)),
+                    );
+                    continue;
+                }
+            };
+
+            // Store content first, then add to environment
+            // This avoids cloning content twice
+            if let Err(e) = env.add_template_owned(template_name.clone(), content.clone()) {
+                report.add_error(
+                    template_name.clone(),
+                    TemplateError::from_minijinja_enhanced(
                         e,
-                        &file_path.to_string_lossy(),
+                        &template_name,
                         &content,
-                    ))
-                })?;
+                        Some(&context.values),
+                    ),
+                );
+            }
+            // Store after attempting to add (content is still valid)
+            template_sources.insert(template_name, content);
         }
 
-        // Build context value - use direct references for structs (context! macro serializes)
+        // Add context as globals so imported macros can access them
+        // This is necessary because MiniJinja macros don't automatically get the render context
+        env.add_global("values", minijinja::Value::from_serialize(&context.values));
+        env.add_global(
+            "release",
+            minijinja::Value::from_serialize(&context.release),
+        );
+        env.add_global("pack", minijinja::Value::from_serialize(&context.pack));
+        env.add_global(
+            "capabilities",
+            minijinja::Value::from_serialize(&context.capabilities),
+        );
+        env.add_global(
+            "template",
+            minijinja::Value::from_serialize(&context.template),
+        );
+
+        // Add Files API - provides sandboxed access to pack files from templates
+        // Usage: {{ files.get("config/app.conf") }}, files.exists(), files.glob(), files.lines()
+        match SandboxedFileProvider::new(&pack.root) {
+            Ok(provider) => {
+                env.add_global("files", create_files_value_from_provider(provider));
+            }
+            Err(e) => {
+                report.add_warning(
+                    "files_api",
+                    format!(
+                        "Files API unavailable: {}. Templates using `files.*` will fail.",
+                        e
+                    ),
+                );
+            }
+        }
+
+        // Build render context (still needed for direct template rendering)
         let ctx = minijinja::context! {
             values => &context.values,
             release => &context.release,
@@ -195,75 +398,94 @@ impl Engine {
             template => &context.template,
         };
 
-        // Now render each non-helper template
+        // Render each non-helper template, collecting errors
         for file_path in &template_files {
-            let rel_path = file_path
-                .strip_prefix(templates_dir)
-                .unwrap_or(file_path);
-            let template_name = rel_path.to_string_lossy().to_string();
+            let rel_path = file_path.strip_prefix(templates_dir).unwrap_or(file_path);
+            let template_name = rel_path.to_string_lossy().into_owned();
 
-            // Skip helper templates (starting with _)
+            // Skip helper templates (prefixed with '_')
             let file_stem = rel_path
                 .file_name()
                 .map(|s| s.to_string_lossy())
                 .unwrap_or_default();
 
-            if file_stem.starts_with('_') {
+            if file_stem.starts_with(HELPER_TEMPLATE_PREFIX) {
                 continue;
             }
 
-            let tmpl = env.get_template(&template_name).map_err(|e| {
-                let content = std::fs::read_to_string(file_path).unwrap_or_default();
-                EngineError::Template(TemplateError::from_minijinja(
-                    e,
-                    &template_name,
-                    &content,
-                ))
-            })?;
+            // Try to get template (may have failed during loading)
+            let tmpl = match env.get_template(&template_name) {
+                Ok(t) => t,
+                Err(_) => {
+                    // Error already recorded during loading
+                    continue;
+                }
+            };
 
-            let rendered = tmpl.render(&ctx).map_err(|e| {
-                let content = std::fs::read_to_string(file_path).unwrap_or_default();
-                EngineError::Template(TemplateError::from_minijinja(
-                    e,
-                    &template_name,
-                    &content,
-                ))
-            })?;
+            // Try to render
+            match tmpl.render(&ctx) {
+                Ok(rendered) => {
+                    // Process successful render
+                    if template_name
+                        .to_lowercase()
+                        .contains(NOTES_TEMPLATE_PATTERN)
+                    {
+                        notes = Some(rendered);
+                    } else {
+                        let trimmed = rendered.trim();
+                        if !trimmed.is_empty() && trimmed != "---" {
+                            let output_name = template_name
+                                .trim_end_matches(".j2")
+                                .trim_end_matches(".jinja2");
+                            manifests.insert(output_name.to_string(), rendered);
+                        }
+                    }
+                    report.add_success(template_name);
+                }
+                Err(e) => {
+                    // Get template source for error context
+                    // Use empty string only if template was never loaded (shouldn't happen)
+                    let content = template_sources
+                        .get(&template_name)
+                        .map(String::as_str)
+                        .unwrap_or("");
 
-            // Check if it's NOTES.txt
-            if template_name.to_lowercase().contains("notes") {
-                notes = Some(rendered);
-            } else {
-                // Skip empty rendered templates
-                let trimmed = rendered.trim();
-                if !trimmed.is_empty() && trimmed != "---" {
-                    // Generate output filename (remove .j2 extension if present)
-                    let output_name = template_name
-                        .trim_end_matches(".j2")
-                        .trim_end_matches(".jinja2");
-
-                    manifests.insert(output_name.to_string(), rendered);
+                    report.add_error(
+                        template_name.clone(),
+                        TemplateError::from_minijinja_enhanced(
+                            e,
+                            &template_name,
+                            content,
+                            Some(&context.values),
+                        ),
+                    );
                 }
             }
         }
 
-        Ok(RenderResult { manifests, notes })
+        RenderResultWithReport {
+            manifests,
+            notes,
+            report,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sherpack_core::{PackMetadata, ReleaseInfo, Values};
     use semver::Version;
+    use sherpack_core::{PackMetadata, ReleaseInfo, Values};
 
     fn create_test_context() -> TemplateContext {
-        let values = Values::from_yaml(r#"
+        let values = Values::from_yaml(
+            r#"
 image:
   repository: nginx
   tag: "1.25"
 replicas: 3
-"#)
+"#,
+        )
         .unwrap();
 
         let release = ReleaseInfo::for_install("myapp", "default");
@@ -321,13 +543,95 @@ replicas: 3
     }
 
     #[test]
-    fn test_undefined_error() {
+    fn test_chainable_undefined_returns_empty() {
+        // With UndefinedBehavior::Chainable, undefined keys return empty string
+        // This matches Helm's behavior for optional values
         let engine = Engine::new(true);
         let ctx = create_test_context();
 
         let template = "value: {{ values.undefined_key }}";
         let result = engine.render_string(template, &ctx, "test.yaml");
 
+        // Chainable mode: undefined attributes return empty, not error
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert_eq!(output.trim(), "value:");
+    }
+
+    #[test]
+    fn test_chainable_typo_returns_empty() {
+        // With UndefinedBehavior::Chainable, even top-level undefined vars return empty
+        // This is intentional for Helm compatibility (optional values pattern)
+        let engine = Engine::new(true);
+        let ctx = create_test_context();
+
+        // Common typo: "value" instead of "values"
+        let template = "name: {{ value.app.name }}";
+        let result = engine.render_string(template, &ctx, "test.yaml");
+
+        // Chainable mode allows this - returns empty
+        // Users should rely on linting and unknown filter errors to catch typos
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert_eq!(output.trim(), "name:");
+    }
+
+    #[test]
+    fn test_render_string_unknown_filter() {
+        let engine = Engine::new(true);
+        let ctx = create_test_context();
+
+        let template = "name: {{ values.image.repository | unknownfilter }}";
+        let result = engine.render_string(template, &ctx, "test.yaml");
+
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_render_result_with_report_structure() {
+        use crate::error::{RenderReport, RenderResultWithReport};
+
+        // Test successful result
+        let result = RenderResultWithReport {
+            manifests: {
+                let mut m = IndexMap::new();
+                m.insert("deployment.yaml".to_string(), "apiVersion: v1".to_string());
+                m
+            },
+            notes: Some("Install notes".to_string()),
+            report: RenderReport::new(),
+        };
+
+        assert!(result.is_success());
+        assert_eq!(result.manifests.len(), 1);
+        assert!(result.notes.is_some());
+    }
+
+    #[test]
+    fn test_render_result_partial_success() {
+        use crate::error::{RenderReport, RenderResultWithReport, TemplateError};
+
+        let mut report = RenderReport::new();
+        report.add_success("good.yaml".to_string());
+        report.add_error(
+            "bad.yaml".to_string(),
+            TemplateError::simple("undefined variable"),
+        );
+
+        let result = RenderResultWithReport {
+            manifests: {
+                let mut m = IndexMap::new();
+                m.insert("good.yaml".to_string(), "content".to_string());
+                m
+            },
+            notes: None,
+            report,
+        };
+
+        // Not a success because there was an error
+        assert!(!result.is_success());
+        // But we still have partial results
+        assert_eq!(result.manifests.len(), 1);
+        assert!(result.manifests.contains_key("good.yaml"));
     }
 }

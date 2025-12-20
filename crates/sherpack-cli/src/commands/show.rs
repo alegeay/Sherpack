@@ -6,8 +6,7 @@ use sherpack_core::LoadedPack;
 use std::path::Path;
 
 pub fn run(path: &Path, show_all: bool) -> Result<()> {
-    let pack = LoadedPack::load(path)
-        .into_diagnostic()?;
+    let pack = LoadedPack::load(path).into_diagnostic()?;
 
     let meta = &pack.pack.metadata;
 
@@ -67,12 +66,7 @@ pub fn run(path: &Path, show_all: bool) -> Result<()> {
             println!();
             println!("{}:", style("Dependencies").bold());
             for dep in &pack.pack.dependencies {
-                println!(
-                    "  - {} {} ({})",
-                    dep.name,
-                    dep.version,
-                    dep.repository
-                );
+                println!("  - {} {} ({})", dep.name, dep.version, dep.repository);
             }
         }
 

@@ -1,0 +1,6 @@
+apiVersion: sherpack/v1
+kind: application
+metadata:
+  name: postgresql
+  version: 15.0.0
+  description: PostgreSQL subchart

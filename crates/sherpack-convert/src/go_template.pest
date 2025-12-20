@@ -1,0 +1,238 @@
+// Go Template Grammar for Sherpack Converter
+// Based on Go's text/template syntax
+// Reference: https://pkg.go.dev/text/template
+
+// ====================
+// Top-level structure
+// ====================
+
+template = { SOI ~ element* ~ EOI }
+
+element = _{
+    action
+    | raw_text
+}
+
+// Raw text is anything not inside {{ }}
+raw_text = @{ (!(action_start) ~ ANY)+ }
+
+// ====================
+// Actions (template directives)
+// ====================
+
+action = {
+    action_start ~ ws* ~ action_body ~ ws* ~ action_end
+}
+
+action_start = @{ "{{" ~ "-"? }
+action_end = @{ "-"? ~ "}}" }
+
+action_body = _{
+    comment
+    | if_action
+    | else_if_action
+    | else_action
+    | end_action
+    | range_action
+    | with_action
+    | define_action
+    | template_action
+    | block_action
+    | pipeline
+}
+
+// ====================
+// Comments
+// ====================
+
+comment = @{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+
+// ====================
+// Control flow
+// ====================
+
+if_action = { ^"if" ~ ws+ ~ pipeline }
+
+else_if_action = { ^"else" ~ ws+ ~ ^"if" ~ ws+ ~ pipeline }
+
+else_action = { ^"else" }
+
+end_action = { ^"end" }
+
+range_action = {
+    ^"range" ~ ws+ ~ (range_clause ~ ws*)? ~ pipeline
+}
+
+range_clause = {
+    range_vars ~ ws* ~ ":=" ~ ws*
+}
+
+range_vars = {
+    variable ~ (ws* ~ "," ~ ws* ~ variable)?
+}
+
+with_action = { ^"with" ~ ws+ ~ pipeline }
+
+// ====================
+// Template definitions
+// ====================
+
+define_action = { ^"define" ~ ws+ ~ string_literal }
+
+template_action = {
+    ^"template" ~ ws+ ~ string_literal ~ (ws+ ~ pipeline)?
+}
+
+block_action = {
+    ^"block" ~ ws+ ~ string_literal ~ ws+ ~ pipeline
+}
+
+// ====================
+// Pipeline (core expression system)
+// ====================
+
+pipeline = {
+    pipeline_decl
+    | pipeline_expr
+}
+
+// Variable declaration: $x := .Value or reassignment: $x = .Value
+pipeline_decl = {
+    variable ~ ws* ~ (":=" | "=") ~ ws* ~ pipeline_expr
+}
+
+// Expression with optional pipe chain
+pipeline_expr = {
+    command ~ (ws* ~ "|" ~ ws* ~ command)*
+}
+
+// ====================
+// Commands
+// ====================
+
+command = {
+    parenthesized
+    | function_call
+    | method_call
+    | field_chain
+    | variable
+    | literal
+    | bare_identifier
+}
+
+// Parenthesized expression
+parenthesized = { "(" ~ ws* ~ pipeline ~ ws* ~ ")" }
+
+// Function call: funcName arg1 arg2
+function_call = {
+    !keyword ~ identifier ~ (ws+ ~ argument)+
+}
+
+// Method call on a value: .Method arg1
+method_call = {
+    field_chain ~ ws+ ~ argument+
+}
+
+// Bare identifier (function with no args, like "quote" or "now")
+bare_identifier = {
+    !keyword ~ identifier
+}
+
+// Argument to a function
+argument = {
+    parenthesized
+    | field_chain
+    | variable
+    | literal
+}
+
+// ====================
+// Field access
+// ====================
+
+// Field chain: .Values.image.tag or $.Values.x or just .
+field_chain = @{
+    root_marker? ~ "." ~ field_path?
+}
+
+root_marker = { "$" }
+
+field_path = @{
+    identifier ~ ("." ~ identifier)*
+}
+
+// ====================
+// Variables
+// ====================
+
+variable = @{ "$" ~ identifier? }
+
+// ====================
+// Keywords (to avoid matching as identifiers)
+// ====================
+
+keyword = {
+    (^"if" | ^"else" | ^"end" | ^"range" | ^"with" | ^"define" | ^"template" | ^"block" | "true" | "false" | "nil") ~ !ASCII_ALPHANUMERIC
+}
+
+// ====================
+// Identifiers
+// ====================
+
+identifier = @{
+    (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*
+}
+
+// ====================
+// Literals
+// ====================
+
+literal = {
+    string_literal
+    | char_literal
+    | number
+    | boolean
+    | nil
+}
+
+// String: "hello" or `raw string`
+string_literal = @{
+    "\"" ~ string_content ~ "\""
+    | "`" ~ raw_string_content ~ "`"
+}
+
+string_content = @{
+    (
+        "\\" ~ ANY  // Escape sequence
+        | !"\"" ~ ANY
+    )*
+}
+
+raw_string_content = @{
+    (!"`" ~ ANY)*
+}
+
+// Character: 'a'
+char_literal = @{
+    "'" ~ (("\\" ~ ANY) | (!"'" ~ ANY)) ~ "'"
+}
+
+// Numbers
+number = @{
+    "-"? ~ (
+        "0x" ~ ASCII_HEX_DIGIT+  // Hex
+        | "0o" ~ ASCII_OCT_DIGIT+  // Octal
+        | "0b" ~ ASCII_BIN_DIGIT+  // Binary
+        | ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? ~ (^"e" ~ "-"? ~ ASCII_DIGIT+)?  // Decimal/float
+    )
+}
+
+boolean = { "true" | "false" }
+
+nil = { "nil" }
+
+// ====================
+// Whitespace (explicit handling)
+// ====================
+
+ws = _{ " " | "\t" | "\n" | "\r" }

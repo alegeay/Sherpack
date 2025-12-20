@@ -1,0 +1,21 @@
+# Cargo configuration for Sherpack
+#
+# This file configures platform-specific build settings.
+
+# Windows x86_64 MSVC target: Increase main thread stack size to 16MB
+# This is needed because RUST_MIN_STACK only affects threads created by
+# std::thread::spawn(), not the main thread. Windows default is 1MB,
+# which is insufficient for deep recursion in the template engine.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "link-args=/STACK:16777216"]
+
+# Windows x86 MSVC target (32-bit)
+[target.i686-pc-windows-msvc]
+rustflags = ["-C", "link-args=/STACK:16777216"]
+
+# Windows GNU targets (if using MinGW)
+[target.x86_64-pc-windows-gnu]
+rustflags = ["-C", "link-args=-Wl,--stack,16777216"]
+
+[target.i686-pc-windows-gnu]
+rustflags = ["-C", "link-args=-Wl,--stack,16777216"]

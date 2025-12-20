@@ -1,0 +1,65 @@
+name: Feature Request
+description: Suggest a new feature for Sherpack
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please fill out the form below.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How would you like to see this solved?
+      placeholder: It would be great if Sherpack could...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered any alternative solutions or workarounds?
+      placeholder: I've tried...
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: What area of Sherpack does this affect?
+      options:
+        - Templating Engine
+        - CLI Interface
+        - Kubernetes Integration
+        - Repository/Dependencies
+        - Packaging/Signing
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example Usage
+      description: Show how you'd use this feature.
+      render: bash
+      placeholder: |
+        sherpack new-command --flag value
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other information, mockups, or references.

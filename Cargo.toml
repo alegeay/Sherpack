@@ -3,6 +3,9 @@ resolver = "2"
 members = [
     "crates/sherpack-core",
     "crates/sherpack-engine",
+    "crates/sherpack-kube",
+    "crates/sherpack-repo",
+    "crates/sherpack-convert",
     "crates/sherpack-cli",
 ]
 
@@ -10,9 +13,9 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "Apache-2.0"
-repository = "https://github.com/sherpack/sherpack"
+repository = "https://github.com/alegeay/sherpack"
 keywords = ["kubernetes", "helm", "jinja2", "devops", "k8s"]
 categories = ["command-line-utilities", "development-tools"]
 
@@ -20,6 +23,14 @@ categories = ["command-line-utilities", "development-tools"]
 # Internal crates
 sherpack-core = { path = "crates/sherpack-core" }
 sherpack-engine = { path = "crates/sherpack-engine" }
+sherpack-kube = { path = "crates/sherpack-kube" }
+sherpack-repo = { path = "crates/sherpack-repo" }
+sherpack-convert = { path = "crates/sherpack-convert" }
+
+# Parser
+pest = "2.7"
+pest_derive = "2.7"
+phf = { version = "0.11", features = ["macros"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -38,15 +49,25 @@ miette = { version = "7", features = ["fancy"] }
 
 # Async
 tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# Kubernetes
+kube = { version = "0.98", features = ["runtime", "client", "derive"] }
+k8s-openapi = { version = "0.24", features = ["v1_31"] }
 
 # Utils
 semver = { version = "1.0", features = ["serde"] }
 walkdir = "2"
 sha2 = "0.10"
+sha1 = "0.10"
+md-5 = "0.10"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1"
 once_cell = "1"
+indexmap = { version = "2", features = ["serde"] }
+humantime-serde = "1"
 
 # Validation
 jsonschema = "0.26"
@@ -57,6 +78,39 @@ indicatif = "0.17"
 
 # Testing
 insta = { version = "1", features = ["yaml"] }
+
+# String similarity (fuzzy matching)
+strsim = "0.11"
+
+# Compression
+zstd = "0.13"
+
+# Diffing
+similar = "2"
+
+# Packaging
+tar = "0.4"
+flate2 = "1.0"
+minisign = "0.7"
+
+# HTTP & Networking
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "stream"] }
+url = "2"
+
+# OCI
+oci-distribution = "0.11"
+
+# Database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# System
+dirs = "5"
+hex = "0.4"
+tracing = "0.1"
+
+# Testing extras
+tempfile = "3"
+wiremock = "0.6"
 
 [profile.release]
 lto = true

@@ -13,6 +13,14 @@ semver = { workspace = true }
 thiserror = { workspace = true }
 walkdir = { workspace = true }
 chrono = { workspace = true }
+jsonschema = { workspace = true }
+regex = { workspace = true }
+tar = { workspace = true }
+flate2 = { workspace = true }
+sha2 = { workspace = true }
+humantime-serde = { workspace = true }
+glob = "0.3"
 
 [dev-dependencies]
 insta = { workspace = true }
+tempfile = "3"

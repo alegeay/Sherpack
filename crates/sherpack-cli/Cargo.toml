@@ -12,15 +12,28 @@ path = "src/main.rs"
 [dependencies]
 sherpack-core = { workspace = true }
 sherpack-engine = { workspace = true }
+sherpack-kube = { workspace = true }
+sherpack-repo = { workspace = true }
+sherpack-convert = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 miette = { workspace = true }
+thiserror = { workspace = true }
 console = { workspace = true }
 indicatif = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }
+minisign = { workspace = true }
+chrono = { workspace = true }
+indexmap = { workspace = true }
+flate2 = { workspace = true }
+tar = { workspace = true }
+rpassword = "7"
+dirs = "5"
 
 [dev-dependencies]
 insta = { workspace = true }
+tempfile = "3"
+serde_json = { workspace = true }

@@ -1,0 +1,70 @@
+//! Sherpack Repository Management
+//!
+//! This crate provides repository management for Sherpack, including:
+//!
+//! - **HTTP repositories**: Traditional Helm-style repos with index.yaml
+//! - **OCI registries**: Push/pull from Docker Hub, GHCR, ECR, etc.
+//! - **Local file repositories**: For development and testing
+//!
+//! ## Key Features
+//!
+//! - **Unified interface**: Same commands work for HTTP and OCI
+//! - **Secure credentials**: Scoped credentials with redirect protection
+//! - **SQLite cache**: Fast local search with FTS5
+//! - **Lock files**: Reproducible builds with integrity verification
+//! - **Diamond detection**: Catch version conflicts before they cause problems
+//!
+//! ## Example
+//!
+//! ```rust,no_run
+//! use sherpack_repo::{RepositoryConfig, Repository, RepositoryBackend, create_backend};
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Add a repository
+//! let repo = Repository::new("bitnami", "https://charts.bitnami.com/bitnami")?;
+//!
+//! // Create backend (works for HTTP, OCI, or file repos)
+//! let mut backend = create_backend(repo, None).await?;
+//!
+//! // Search for packs
+//! let results = backend.search("nginx").await?;
+//!
+//! // Download a pack
+//! let data = backend.download("nginx", "15.0.0").await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Security Notes
+//!
+//! - Credentials are NEVER sent after cross-origin redirects
+//! - Lock files verify SHA256 integrity by default
+//! - Diamond dependencies cause errors, not silent conflicts
+
+pub mod backend;
+pub mod cache;
+pub mod config;
+pub mod credentials;
+pub mod dependency;
+pub mod error;
+pub mod http;
+pub mod index;
+pub mod lock;
+pub mod oci;
+
+// Re-exports for convenience
+pub use backend::{RepositoryBackend, create_backend, create_backend_by_name};
+pub use cache::{CacheStats, CachedPack, IndexCache};
+pub use config::{Repository, RepositoryConfig, RepositoryType};
+pub use credentials::{
+    CredentialStore, Credentials, ResolvedCredentials, ScopedCredentials, SecureHttpClient,
+};
+pub use dependency::{
+    DependencyGraph, DependencyResolver, DependencySpec, FilterResult, ResolvedDependency,
+    SkipReason, SkippedDependency, filter_dependencies,
+};
+pub use error::{RepoError, Result};
+pub use http::HttpRepository;
+pub use index::{PackEntry, RepositoryIndex};
+pub use lock::{LockFile, LockPolicy, LockedDependency, VerifyResult};
+pub use oci::{OciReference, OciRegistry};

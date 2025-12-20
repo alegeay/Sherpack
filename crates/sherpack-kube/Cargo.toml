@@ -1,0 +1,51 @@
+[package]
+name = "sherpack-kube"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Kubernetes integration for Sherpack - storage drivers, release management, and cluster operations"
+
+[dependencies]
+sherpack-core = { workspace = true }
+sherpack-engine = { workspace = true }
+
+# Kubernetes
+kube = { workspace = true }
+k8s-openapi = { workspace = true }
+
+# Async
+tokio = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+
+# Errors
+thiserror = { workspace = true }
+
+# Utils
+chrono = { workspace = true }
+base64 = { workspace = true }
+semver = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+
+# Compression
+zstd = { workspace = true }
+flate2 = { workspace = true }
+
+# Diffing
+similar = { workspace = true }
+
+# HTTP (for health checks)
+reqwest = { workspace = true }
+
+# Terminal (for progress reporting)
+console = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+tempfile = "3"

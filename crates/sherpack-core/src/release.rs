@@ -39,8 +39,11 @@ pub struct Release {
 }
 
 /// Release status
+///
+/// Note: This enum is non-exhaustive - new variants may be added in future versions.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum ReleaseStatus {
     #[default]
     Unknown,

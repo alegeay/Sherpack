@@ -1,0 +1,154 @@
+{
+  "homepage.title": {
+    "message": "Gestionnaire de paquets Kubernetes",
+    "description": "The homepage title"
+  },
+  "homepage.description": {
+    "message": "Un gestionnaire de paquets Kubernetes ultra-rapide avec templating Jinja2",
+    "description": "The homepage description"
+  },
+  "homepage.hero.tag": {
+    "message": "Écrit en Rust",
+    "description": "The hero tag text"
+  },
+  "homepage.hero.subtitle": {
+    "message": "Un gestionnaire de paquets Kubernetes ultra-rapide avec templating Jinja2",
+    "description": "The hero subtitle"
+  },
+  "homepage.stats.binary": {
+    "message": "Taille binaire",
+    "description": "Binary size stat label"
+  },
+  "homepage.stats.tests": {
+    "message": "Tests passés",
+    "description": "Tests passing stat label"
+  },
+  "homepage.stats.runtime": {
+    "message": "Dépendances runtime",
+    "description": "Runtime deps stat label"
+  },
+  "homepage.hero.getStarted": {
+    "message": "Commencer",
+    "description": "Get started button"
+  },
+  "homepage.hero.cliReference": {
+    "message": "Référence CLI",
+    "description": "CLI reference button"
+  },
+  "homepage.features.heading": {
+    "message": "Pourquoi Sherpack ?",
+    "description": "Features section heading"
+  },
+  "homepage.features.subheading": {
+    "message": "Tout ce dont vous avez besoin pour gérer vos applications Kubernetes, sans la complexité.",
+    "description": "Features section subheading"
+  },
+  "homepage.features.jinja2.title": {
+    "message": "Templating Jinja2",
+    "description": "Jinja2 feature title"
+  },
+  "homepage.features.jinja2.description": {
+    "message": "Syntaxe Python familière. Plus de lutte avec les templates Go. Si vous connaissez Jinja2 ou Ansible, vous êtes prêt.",
+    "description": "Jinja2 feature description"
+  },
+  "homepage.features.kubernetes.title": {
+    "message": "Cycle de vie Kubernetes complet",
+    "description": "Kubernetes feature title"
+  },
+  "homepage.features.kubernetes.description": {
+    "message": "Installez, mettez à jour, annulez et désinstallez avec un seul outil. Hooks, health checks et rollback automatique en cas d'échec.",
+    "description": "Kubernetes feature description"
+  },
+  "homepage.features.schema.title": {
+    "message": "Validation de schéma",
+    "description": "Schema feature title"
+  },
+  "homepage.features.schema.description": {
+    "message": "Validez la configuration avec JSON Schema avant le déploiement. Messages d'erreur utiles avec suggestions pour les fautes de frappe.",
+    "description": "Schema feature description"
+  },
+  "homepage.features.signing.title": {
+    "message": "Signature de paquets",
+    "description": "Signing feature title"
+  },
+  "homepage.features.signing.description": {
+    "message": "Signatures cryptographiques avec Minisign pour la sécurité de la chaîne d'approvisionnement. Vérifiez l'intégrité des paquets avant l'installation.",
+    "description": "Signing feature description"
+  },
+  "homepage.features.repository.title": {
+    "message": "Support des dépôts",
+    "description": "Repository feature title"
+  },
+  "homepage.features.repository.description": {
+    "message": "Support HTTP et registres OCI. Poussez vers Docker Hub, GHCR ou tout registre compatible OCI. Gestion complète des dépendances avec fichiers de verrouillage.",
+    "description": "Repository feature description"
+  },
+  "homepage.features.fast.title": {
+    "message": "Ultra-rapide",
+    "description": "Fast feature title"
+  },
+  "homepage.features.fast.description": {
+    "message": "Écrit en Rust sans dépendances runtime. Binaire de ~5MB contre ~50MB pour Helm. Démarrage instantané.",
+    "description": "Fast feature description"
+  },
+  "homepage.comparison.heading": {
+    "message": "Sherpack vs Helm",
+    "description": "Comparison section heading"
+  },
+  "theme.common.skipToMainContent": {
+    "message": "Aller au contenu principal",
+    "description": "The skip to content label used for accessibility"
+  },
+  "theme.docs.sidebar.expandButtonTitle": {
+    "message": "Développer la barre latérale",
+    "description": "The expand button title for the sidebar"
+  },
+  "theme.docs.sidebar.collapseButtonTitle": {
+    "message": "Réduire la barre latérale",
+    "description": "The collapse button title for the sidebar"
+  },
+  "theme.colorToggle.ariaLabel": {
+    "message": "Basculer entre le mode clair et sombre (actuellement {mode})",
+    "description": "The ARIA label for the color mode toggle"
+  },
+  "theme.colorToggle.ariaLabel.mode.dark": {
+    "message": "mode sombre",
+    "description": "The name for the dark color mode"
+  },
+  "theme.colorToggle.ariaLabel.mode.light": {
+    "message": "mode clair",
+    "description": "The name for the light color mode"
+  },
+  "theme.docs.paginator.navAriaLabel": {
+    "message": "Navigation des pages de documentation",
+    "description": "The ARIA label for the pagination nav"
+  },
+  "theme.docs.paginator.previous": {
+    "message": "Précédent",
+    "description": "The label for the previous page"
+  },
+  "theme.docs.paginator.next": {
+    "message": "Suivant",
+    "description": "The label for the next page"
+  },
+  "theme.docs.sidebar.navAriaLabel": {
+    "message": "Barre latérale des documents",
+    "description": "The ARIA label for the docs sidebar"
+  },
+  "theme.navbar.mobileLanguageDropdown.label": {
+    "message": "Langues",
+    "description": "The label for the mobile language dropdown"
+  },
+  "theme.TOCCollapsible.toggleButtonLabel": {
+    "message": "Sur cette page",
+    "description": "The label for the table of contents toggle button"
+  },
+  "theme.docs.breadcrumbs.navAriaLabel": {
+    "message": "Fil d'Ariane",
+    "description": "The ARIA label for the breadcrumbs"
+  },
+  "theme.docs.breadcrumbs.home": {
+    "message": "Accueil",
+    "description": "The ARIA label for the home breadcrumb"
+  }
+}

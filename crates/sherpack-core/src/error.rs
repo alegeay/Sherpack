@@ -2,6 +2,19 @@
 
 use thiserror::Error;
 
+/// Information about a single validation error
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ValidationErrorInfo {
+    /// JSON path where the error occurred (e.g., "/image/tag")
+    pub path: String,
+    /// Human-readable error message
+    pub message: String,
+    /// Expected value/type (if applicable)
+    pub expected: Option<String>,
+    /// Actual value/type (if applicable)
+    pub actual: Option<String>,
+}
+
 #[derive(Error, Debug)]
 pub enum CoreError {
     #[error("Pack not found: {path}")]
@@ -27,6 +40,39 @@ pub enum CoreError {
 
     #[error("Missing required field: {field}")]
     MissingField { field: String },
+
+    #[error("Invalid schema: {message}")]
+    InvalidSchema { message: String },
+
+    #[error("Schema validation failed")]
+    SchemaValidation { errors: Vec<ValidationErrorInfo> },
+
+    #[error("Schema file not found: {path}")]
+    SchemaNotFound { path: String },
+
+    #[error("Invalid manifest: {message}")]
+    InvalidManifest { message: String },
+
+    #[error("Archive error: {message}")]
+    Archive { message: String },
+
+    #[error("File access error for '{path}': {message}")]
+    FileAccess { path: String, message: String },
+
+    #[error("Glob pattern error: {message}")]
+    GlobPattern { message: String },
+}
+
+impl CoreError {
+    /// Format validation errors for display
+    #[must_use]
+    pub fn format_validation_errors(errors: &[ValidationErrorInfo]) -> String {
+        errors
+            .iter()
+            .map(|e| format!("  - {}: {}", e.path, e.message))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 }
 
 pub type Result<T> = std::result::Result<T, CoreError>;

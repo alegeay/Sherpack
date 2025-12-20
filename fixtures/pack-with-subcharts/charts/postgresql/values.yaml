@@ -1,0 +1,10 @@
+# PostgreSQL defaults
+enabled: true
+image:
+  repository: postgres
+  tag: "15-alpine"
+primary:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 10Gi

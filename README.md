@@ -7,16 +7,15 @@
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg?style=flat-square)](LICENSE)
 [![Build](https://img.shields.io/badge/build-passing-brightgreen.svg?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/tests-21%20passed-brightgreen.svg?style=flat-square)]()
-[![Binary Size](https://img.shields.io/badge/binary-3.1MB-purple.svg?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/tests-600%20passed-brightgreen.svg?style=flat-square)]()
 
 *A modern Helm alternative written in Rust, featuring familiar Jinja2 templating syntax*
 
 [Features](#-features) •
 [Installation](#-installation) •
 [Quick Start](#-quick-start) •
-[Templating](#-templating-reference) •
-[CLI](#-cli-reference)
+[Commands](#-cli-reference) •
+[Templating](#-templating-reference)
 
 </div>
 
@@ -28,18 +27,69 @@
 |---------|----------|------|
 | **Templating** | Jinja2 (familiar syntax) | Go templates (complex) |
 | **Performance** | Native Rust binary | Go runtime |
-| **Binary Size** | ~3 MB | ~50 MB |
+| **Binary Size** | ~19 MB | ~50 MB |
 | **Learning Curve** | Minimal (if you know Jinja2) | Steep |
 | **Dependencies** | None | None |
+| **Schema Validation** | Built-in JSON Schema | External tools |
+| **Error Messages** | Contextual suggestions | Generic errors |
+| **Helm Migration** | Automatic chart converter | N/A |
+| **CRD Handling** | Smart updates with safety analysis | Never updates CRDs |
+| **CRD Templating** | Supported in crds/ and templates/ | Only in templates/ (dangerous) |
+| **Subchart Rendering** | Full support with global values | Full support |
+
+---
 
 ## Features
 
+### Core Templating
 - **Jinja2 Templating** - Familiar Python-like syntax with `{{ }}` and `{% %}`
-- **Helm-Compatible Filters** - `toyaml`, `tojson`, `b64encode`, `indent`, `nindent`, `quote`, and more
-- **Rich Function Library** - `get()`, `ternary()`, `now()`, `uuidv4()`, `tostring()`
+- **Helm-Compatible Filters** - `toyaml`, `tojson`, `b64encode`, `indent`, `nindent`, `quote`, and 20+ more
+- **Rich Function Library** - `get()`, `ternary()`, `now()`, `uuidv4()`, `tostring()`, `fail()`
 - **Strict Mode** - Catch undefined variables before deployment
-- **Fast** - Written in Rust with zero runtime dependencies
-- **Small** - Single 3MB binary
+
+### Schema Validation
+- **JSON Schema Support** - Validate values against schema before rendering
+- **Default Extraction** - Automatic default values from schema
+- **Helpful Error Messages** - Contextual suggestions for typos and missing keys
+
+### Packaging & Signing
+- **Archive Format** - Reproducible tar.gz with SHA256 manifest
+- **Cryptographic Signatures** - Minisign-based signing for supply chain security
+- **Integrity Verification** - Verify archives before deployment
+
+### Kubernetes Integration
+- **Full Lifecycle Management** - Install, upgrade, rollback, uninstall
+- **Server-Side Apply** - Modern Kubernetes apply with conflict detection
+- **Hook Support** - Pre/post install, upgrade, rollback, delete hooks
+- **Health Checks** - Wait for deployments, custom HTTP/command probes
+- **Release Storage** - Secrets, ConfigMap, or file-based storage
+- **Diff Preview** - See changes before applying
+
+### CRD Handling (Better than Helm)
+- **Smart CRD Updates** - Safe updates with change analysis (24 change types)
+- **Intent-Based Policies** - Explicit control via annotations (`managed`, `shared`, `external`)
+- **Templated CRDs** - Support templating in both `crds/` and `templates/`
+- **Deletion Protection** - Impact analysis before CRD deletion
+- **Auto-Detection** - CRDs in templates/ are automatically protected
+- **Rich Diff Output** - See exactly what will change in CRD updates
+
+### Subchart Support
+- **Full Subchart Rendering** - Render subcharts with their own values
+- **Global Values** - Pass global values to all subcharts
+- **Conditional Subcharts** - Enable/disable via conditions and tags
+- **Files Object** - Access files in subcharts (`.Files.Get`, `.Files.Glob`)
+
+### Helm Migration
+- **Automatic Conversion** - Convert Helm charts to Sherpack packs
+- **Template Translation** - Go templates → Jinja2 syntax
+- **Helper Function Support** - Converts `include`, `define`, `range`, `with`, etc.
+- **Full Chart Compatibility** - Tested with ingress-nginx (43 templates)
+
+### Repository & Dependencies
+- **Repository Management** - HTTP, OCI, and file-based repositories
+- **Dependency Resolution** - Lock file with version policies
+- **SQLite Search** - Fast local search with FTS5
+- **OCI Registry Support** - Push/pull to container registries
 
 ---
 
@@ -49,7 +99,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/sherpack/sherpack.git
+git clone https://github.com/alegeay/sherpack.git
 cd sherpack
 
 # Build release binary
@@ -62,6 +112,7 @@ cp target/release/sherpack ~/.local/bin/
 ### Requirements
 
 - Rust 1.85+ (Edition 2024)
+- For Kubernetes operations: `kubectl` configured with cluster access
 
 ---
 
@@ -78,6 +129,7 @@ This generates:
 myapp/
 ├── Pack.yaml           # Pack metadata
 ├── values.yaml         # Default values
+├── values.schema.yaml  # Optional: JSON Schema
 └── templates/
     └── deployment.yaml # Kubernetes template
 ```
@@ -120,24 +172,99 @@ spec:
             {{ values.resources | toyaml | nindent(12) }}
 ```
 
-### 4. Render Templates
+### 4. Validate and Render
 
 ```bash
-# Basic rendering
+# Validate against schema
+sherpack validate ./myapp
+
+# Lint the pack structure
+sherpack lint ./myapp
+
+# Render templates locally
 sherpack template myrelease ./myapp
 
-# With namespace
-sherpack template myrelease ./myapp -n production
-
-# With value overrides
-sherpack template myrelease ./myapp --set app.replicas=5
-
-# With external values file
-sherpack template myrelease ./myapp -f production-values.yaml
-
-# Output to files
-sherpack template myrelease ./myapp -o ./manifests/
+# Render with overrides
+sherpack template myrelease ./myapp --set app.replicas=5 -n production
 ```
+
+### 5. Deploy to Kubernetes
+
+```bash
+# Install to cluster
+sherpack install myrelease ./myapp -n production
+
+# Upgrade existing release
+sherpack upgrade myrelease ./myapp --set app.replicas=5
+
+# View release status
+sherpack status myrelease
+
+# Rollback if needed
+sherpack rollback myrelease 1
+
+# Uninstall
+sherpack uninstall myrelease
+```
+
+---
+
+## CLI Reference
+
+### Templating Commands
+
+| Command | Description |
+|---------|-------------|
+| `sherpack template <name> <pack>` | Render templates to stdout |
+| `sherpack lint <pack>` | Validate pack structure and templates |
+| `sherpack validate <pack>` | Validate values against schema |
+| `sherpack show <pack>` | Display pack information |
+| `sherpack create <name>` | Scaffold a new pack |
+| `sherpack convert <chart>` | Convert Helm chart to Sherpack pack |
+
+### Packaging Commands
+
+| Command | Description |
+|---------|-------------|
+| `sherpack package <pack>` | Create archive from pack directory |
+| `sherpack inspect <archive>` | Show archive contents and manifest |
+| `sherpack keygen` | Generate signing keypair |
+| `sherpack sign <archive>` | Sign archive with private key |
+| `sherpack verify <archive>` | Verify archive integrity and signature |
+
+### Kubernetes Commands
+
+| Command | Description |
+|---------|-------------|
+| `sherpack install <name> <pack>` | Install pack to cluster |
+| `sherpack upgrade <name> <pack>` | Upgrade existing release |
+| `sherpack uninstall <name>` | Remove release from cluster |
+| `sherpack rollback <name> <rev>` | Rollback to previous revision |
+| `sherpack list` | List installed releases |
+| `sherpack history <name>` | Show release history |
+| `sherpack status <name>` | Show release status |
+| `sherpack recover <name>` | Recover stale release |
+
+### Repository Commands
+
+| Command | Description |
+|---------|-------------|
+| `sherpack repo add <name> <url>` | Add repository |
+| `sherpack repo list` | List repositories |
+| `sherpack repo update [name]` | Update repository index |
+| `sherpack repo remove <name>` | Remove repository |
+| `sherpack search <query>` | Search for packs |
+| `sherpack pull <pack>` | Download pack from repository |
+| `sherpack push <archive> <dest>` | Push to OCI registry |
+
+### Dependency Commands
+
+| Command | Description |
+|---------|-------------|
+| `sherpack dependency list <pack>` | List pack dependencies |
+| `sherpack dependency update <pack>` | Resolve and lock dependencies |
+| `sherpack dependency build <pack>` | Download locked dependencies |
+| `sherpack dependency tree <pack>` | Show dependency tree |
 
 ---
 
@@ -154,216 +281,71 @@ sherpack template myrelease ./myapp -o ./manifests/
 | `pack.version` | Pack version | `{{ pack.version }}` |
 | `capabilities.*` | Cluster capabilities | `{{ capabilities.kubeVersion }}` |
 
----
-
 ### Filters
 
 #### Serialization
-
-| Filter | Description | Example |
-|--------|-------------|---------|
-| `toyaml` | Object → YAML string | `{{ values.config \| toyaml }}` |
-| `tojson` | Object → JSON (compact) | `{{ values.env \| tojson }}` |
-| `tojson_pretty` | Object → JSON (formatted) | `{{ values.config \| tojson_pretty }}` |
-
-<details>
-<summary><b>Example</b></summary>
-
-```yaml
-# Input: values.config = {server: {port: 8080}}
-config.yaml: |
-{{ values.config | toyaml | indent(2) }}
-
-# Output:
-config.yaml: |
-  server:
-    port: 8080
-```
-</details>
+| Filter | Description |
+|--------|-------------|
+| `toyaml` | Object to YAML string |
+| `tojson` | Object to compact JSON |
+| `tojson_pretty` | Object to formatted JSON |
 
 #### Encoding
-
-| Filter | Description | Example |
-|--------|-------------|---------|
-| `b64encode` | Base64 encode | `{{ secret \| b64encode }}` |
-| `b64decode` | Base64 decode | `{{ encoded \| b64decode }}` |
-| `sha256` | SHA256 hash | `{{ data \| sha256 }}` |
-
-<details>
-<summary><b>Example</b></summary>
-
-```yaml
-# Kubernetes Secret
-apiVersion: v1
-kind: Secret
-data:
-  password: {{ values.secrets.password | b64encode }}
-  # Output: cGFzc3dvcmQxMjM=
-```
-</details>
+| Filter | Description |
+|--------|-------------|
+| `b64encode` | Base64 encode |
+| `b64decode` | Base64 decode |
+| `sha256` | SHA256 hash |
 
 #### Strings
-
-| Filter | Description | Example |
-|--------|-------------|---------|
-| `quote` | Wrap in double quotes | `{{ name \| quote }}` → `"myapp"` |
-| `squote` | Wrap in single quotes | `{{ name \| squote }}` → `'myapp'` |
-| `upper` | UPPERCASE | `{{ name \| upper }}` |
-| `lower` | lowercase | `{{ name \| lower }}` |
-| `snakecase` | Convert to snake_case | `{{ "myApp" \| snakecase }}` → `my_app` |
-| `kebabcase` | Convert to kebab-case | `{{ "myApp" \| kebabcase }}` → `my-app` |
-| `trunc(n)` | Truncate to n chars | `{{ hash \| trunc(8) }}` |
-| `trimprefix(s)` | Remove prefix | `{{ "/api" \| trimprefix("/") }}` → `api` |
-| `trimsuffix(s)` | Remove suffix | `{{ "app.yaml" \| trimsuffix(".yaml") }}` → `app` |
+| Filter | Description |
+|--------|-------------|
+| `quote` / `squote` | Wrap in quotes |
+| `upper` / `lower` | Change case |
+| `snakecase` / `kebabcase` / `camelcase` | Case conversion |
+| `trunc(n)` | Truncate to n characters |
+| `trimprefix(s)` / `trimsuffix(s)` | Remove prefix/suffix |
+| `replace(old, new)` | Replace substring |
 
 #### Indentation
+| Filter | Description |
+|--------|-------------|
+| `indent(n)` | Add n spaces to each line |
+| `nindent(n)` | Newline + indent |
 
-| Filter | Description | Example |
-|--------|-------------|---------|
-| `indent(n)` | Add n spaces to each line | `{{ yaml \| indent(4) }}` |
-| `nindent(n)` | Newline + indent | `{{ yaml \| nindent(8) }}` |
-
-<details>
-<summary><b>Example</b></summary>
-
-```yaml
-# Using nindent for nested YAML
-spec:
-  containers:
-    - name: app
-      resources:
-        {{ values.resources | toyaml | nindent(8) }}
-```
-</details>
-
-#### Objects & Collections
-
-| Filter | Description | Example |
-|--------|-------------|---------|
-| `keys` | Get object keys | `{{ env \| keys }}` → `["LOG_LEVEL", "DEBUG"]` |
-| `haskey(k)` | Check key exists | `{% if obj \| haskey("tls") %}` |
-| `merge(obj)` | Merge two objects | `{{ defaults \| merge(overrides) }}` |
-| `dictsort` | Sort for iteration | `{% for k,v in obj \| dictsort %}` |
-
-<details>
-<summary><b>Example</b></summary>
-
-```yaml
-# Iterate over object (dictsort required)
-labels:
-  {% for key, value in values.labels | dictsort %}
-  {{ key }}: {{ value | quote }}
-  {% endfor %}
-```
-</details>
+#### Collections
+| Filter | Description |
+|--------|-------------|
+| `keys` | Get object keys |
+| `haskey(k)` | Check if key exists |
+| `merge(obj)` | Merge objects |
+| `dictsort` | Sort for iteration |
+| `first` / `last` | First/last element |
+| `default(val)` | Default if undefined |
 
 #### Validation
+| Filter | Description |
+|--------|-------------|
+| `required` | Fail if undefined/empty |
+| `empty` | Check if empty |
 
-| Filter | Description | Example |
-|--------|-------------|---------|
-| `required` | Fail if undefined/empty | `{{ values.name \| required }}` |
-| `empty` | Check if empty | `{% if values.list \| empty %}` |
-
----
+### Type Conversion
+| Filter | Description |
+|--------|-------------|
+| `int` | Convert to integer |
+| `float` | Convert to float |
+| `string` | Convert to string |
 
 ### Functions
 
-#### Data Access
-
-| Function | Description | Example |
-|----------|-------------|---------|
-| `get(obj, key, default)` | Safe access with default | `{{ get(values, "opt", "fallback") }}` |
-| `ternary(true, false, cond)` | Conditional value | `{{ ternary("prod", "dev", is_prod) }}` |
-
-<details>
-<summary><b>Example</b></summary>
-
-```yaml
-# Safe access with default
-timeout: {{ get(values, "timeout", 30) }}
-
-# Conditional value
-environment: {{ ternary("production", "development", release.namespace == "production") }}
-```
-</details>
-
-#### Type Conversion
-
-| Function | Description | Example |
-|----------|-------------|---------|
-| `tostring(v)` | Convert to string | `{{ tostring(8080) }}` → `"8080"` |
-| `toint(v)` | Convert to integer | `{{ toint("42") }}` → `42` |
-| `tofloat(v)` | Convert to float | `{{ tofloat("3.14") }}` → `3.14` |
-
-#### Generation
-
-| Function | Description | Example |
-|----------|-------------|---------|
-| `now()` | Current ISO timestamp | `{{ now() }}` → `2024-01-15T10:30:00Z` |
-| `uuidv4()` | Random UUID | `{{ uuidv4() }}` → `550e8400-e29b-41d4-...` |
-
-#### Error Handling
-
-| Function | Description | Example |
-|----------|-------------|---------|
-| `fail(msg)` | Fail with message | `{{ fail("Missing required field") }}` |
-
----
-
-### Control Structures
-
-#### Conditionals
-
-```jinja
-{% if values.ingress.enabled %}
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: {{ release.name }}
-  {% if values.ingress.tls.enabled %}
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt
-  {% endif %}
-{% endif %}
-```
-
-#### Loops
-
-```jinja
-{# Loop over a list #}
-{% for port in values.ports %}
-- name: {{ port.name }}
-  port: {{ port.port }}
-{% endfor %}
-
-{# Loop over an object (use dictsort) #}
-{% for key, value in values.labels | dictsort %}
-{{ key }}: {{ value | quote }}
-{% endfor %}
-
-{# Loop with index #}
-{% for item in items %}
-{{ loop.index }}: {{ item }}
-{% endfor %}
-```
-
-#### Variables
-
-```jinja
-{# Set a variable #}
-{% set fullName = release.name ~ "-" ~ pack.version %}
-
-{# String concatenation with ~ #}
-{{ release.name ~ "-v" ~ pack.version ~ "-" ~ release.namespace }}
-```
-
-#### Whitespace Control
-
-```jinja
-{#- Comment that trims whitespace before -#}
-{%- if condition -%}   {# Trims both sides #}
-{% endif %}
-```
+| Function | Description |
+|----------|-------------|
+| `get(obj, key, default)` | Safe access with default |
+| `ternary(true, false, cond)` | Conditional value |
+| `tostring(v)` / `toint(v)` / `tofloat(v)` | Type conversion |
+| `now()` | Current ISO timestamp |
+| `uuidv4()` | Random UUID |
+| `fail(msg)` | Fail with message |
 
 ---
 
@@ -371,14 +353,15 @@ metadata:
 
 ```
 mypack/
-├── Pack.yaml           # Required: Pack metadata
-├── values.yaml         # Required: Default values
-├── values.schema.yaml  # Optional: Values JSON schema
-└── templates/          # Required: Template directory
+├── Pack.yaml             # Required: Pack metadata
+├── values.yaml           # Required: Default values
+├── values.schema.yaml    # Optional: JSON Schema for validation
+├── Pack.lock.yaml        # Generated: Locked dependencies
+├── packs/                # Downloaded dependencies
+└── templates/            # Required: Template files
     ├── deployment.yaml
     ├── service.yaml
-    ├── configmap.yaml
-    └── _helpers.tpl    # Optional: Template helpers
+    └── _helpers.tpl      # Optional: Shared helpers
 ```
 
 ### Pack.yaml
@@ -389,89 +372,280 @@ kind: application
 metadata:
   name: myapp
   version: 1.0.0
-  description: My awesome application
+  description: My application
   appVersion: "2.0.0"
 
-# Optional: Template engine settings
+# Optional: Dependencies
+dependencies:
+  - name: redis
+    version: ">=7.0.0"
+    repository: https://charts.example.com
+
+# Optional: Engine settings
 engine:
   strict: true  # Fail on undefined variables
 ```
 
+### values.schema.yaml
+
+```yaml
+$schema: http://json-schema.org/draft-07/schema#
+type: object
+properties:
+  app:
+    type: object
+    properties:
+      name:
+        type: string
+        default: myapp
+      replicas:
+        type: integer
+        minimum: 1
+        maximum: 10
+        default: 3
+    required: [name]
+```
+
 ---
 
-## CLI Reference
+## Kubernetes Hooks
 
+Sherpack supports lifecycle hooks for custom actions:
+
+```yaml
+# templates/pre-install-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ release.name }}-pre-install
+  annotations:
+    sherpack.io/hook: pre-install
+    sherpack.io/hook-weight: "0"
+    sherpack.io/hook-delete-policy: hook-succeeded
+spec:
+  template:
+    spec:
+      containers:
+        - name: migrate
+          image: myapp:{{ values.image.tag }}
+          command: ["./migrate.sh"]
+      restartPolicy: Never
 ```
-sherpack - A Helm-like Kubernetes package manager
 
-Usage: sherpack <COMMAND>
+### Hook Phases
 
-Commands:
-  create    Create a new pack
-  template  Render templates locally
-  lint      Validate a pack
-  show      Show pack information
-  help      Print help information
+| Phase | When |
+|-------|------|
+| `pre-install` | Before install |
+| `post-install` | After install |
+| `pre-upgrade` | Before upgrade |
+| `post-upgrade` | After upgrade |
+| `pre-rollback` | Before rollback |
+| `post-rollback` | After rollback |
+| `pre-delete` | Before uninstall |
+| `post-delete` | After uninstall |
+| `test` | On `sherpack test` |
 
-Options:
-  -h, --help     Print help
-  -V, --version  Print version
+---
+
+## CRD Handling
+
+Sherpack provides superior CRD handling compared to Helm:
+
+### CRD Policies
+
+Use annotations to declare how CRDs should be managed:
+
+```yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: myresources.example.com
+  annotations:
+    sherpack.io/crd-policy: managed  # or: shared, external
 ```
 
-### `template`
+| Policy | Behavior | Use Case |
+|--------|----------|----------|
+| `managed` | Owned by release, protected on uninstall | Operator CRDs |
+| `shared` | Never deleted, even with `--delete-crds` | Shared infrastructure |
+| `external` | Don't touch (managed by GitOps) | External management |
 
-Render templates to stdout or files.
+### Templated CRDs
+
+Unlike Helm, Sherpack allows templating in `crds/` directory:
+
+```yaml
+# crds/myresource-crd.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: {{ values.crdName }}.{{ values.group }}
+  labels:
+    {{- values.labels | toyaml | nindent 4 }}
+```
+
+### Safe Updates
+
+CRD changes are analyzed by severity:
 
 ```bash
-sherpack template <NAME> <PACK> [OPTIONS]
+$ sherpack upgrade myrelease ./mypack --show-crd-diff
 
-Arguments:
-  <NAME>  Release name
-  <PACK>  Path to pack directory
+CRD Analysis: myresources.example.com
+══════════════════════════════════════════════════════════════════
 
-Options:
-  -n, --namespace <NS>     Target namespace [default: default]
-  -f, --values <FILE>      Values file (can be repeated)
-      --set <KEY=VALUE>    Override values (can be repeated)
-  -o, --output <DIR>       Output directory
-  -s, --show-only <NAME>   Only render specified template
-      --show-values        Display computed values
-      --debug              Show debug information
+Versions:
+  ✓ + Added API version v1beta2
+
+Schema Changes:
+  ✓ + Added optional field: spec.newFeature
+  ⚠ ~ Tightened validation: spec.config.maxLength 256 → 128
+  ✗ - Removed field: spec.deprecated (DANGEROUS)
+
+Summary:
+  ✓ 2 safe change(s)
+  ⚠ 1 warning(s)
+  ✗ 1 dangerous (require --force-crd-update)
 ```
 
-### `lint`
-
-Validate pack structure and templates.
+### Deletion Protection
 
 ```bash
-sherpack lint <PACK> [OPTIONS]
+$ sherpack uninstall my-operator --delete-crds
 
-Options:
-  --strict  Fail on undefined variables
+⚠ CRD Deletion Impact Analysis
+
+  myresources.example.com:
+    Policy: managed
+    Existing resources: 47 across 12 namespaces
+      - production (23 resources)
+      - staging (15 resources)
+
+  This will PERMANENTLY DELETE all 47 resources.
+  Use --confirm-crd-deletion to proceed.
 ```
 
-### `show`
+---
 
-Display pack information.
+## Helm Chart Conversion
+
+Sherpack can automatically convert Helm charts to Sherpack packs:
 
 ```bash
-sherpack show pack <PACK>    # Show Pack.yaml metadata
-sherpack show values <PACK>  # Show default values
+# Convert a Helm chart
+sherpack convert ./my-helm-chart
+
+# Specify output directory
+sherpack convert ./my-helm-chart -o ./my-sherpack-pack
+
+# Preview without writing
+sherpack convert ./my-helm-chart --dry-run
+
+# Force overwrite existing
+sherpack convert ./my-helm-chart --force
 ```
 
-### `create`
+### Conversion Examples
 
-Scaffold a new pack.
+Go templates are automatically translated to Jinja2:
+
+| Go Template | Jinja2 |
+|-------------|--------|
+| `{{ .Values.name }}` | `{{ values.name }}` |
+| `{{ include "helper" . }}` | `{{ helper() }}` |
+| `{{- if .Values.enabled }}` | `{% if values.enabled %}` |
+| `{{ range .Values.items }}` | `{% for item in values.items %}` |
+| `{{ .Release.Name }}` | `{{ release.name }}` |
+| `{{ default "foo" .Values.x }}` | `{{ values.x \| default("foo") }}` |
+| `{{ .Values.x \| quote }}` | `{{ values.x \| quote }}` |
+| `{{ toYaml .Values \| nindent 2 }}` | `{{ values \| toyaml \| nindent(2) }}` |
+
+### Supported Features
+
+- `{{- define "name" }}` → `{% macro name() %}`
+- `{{ include "name" . }}` → `{{ name() }}`
+- `{{ if }}/{{ else }}/{{ end }}` → `{% if %}/{% else %}/{% endif %}`
+- `{{ range }}/{{ end }}` → `{% for %}/{% endfor %}`
+- `{{ with }}/{{ end }}` → `{% with %}/{% endwith %}` or inline
+- Variable declarations: `$var := value`
+- All common Helm functions and pipelines
+
+---
+
+## Repository Configuration
+
+### Add Repositories
 
 ```bash
-sherpack create <NAME>
+# HTTP repository
+sherpack repo add stable https://charts.example.com
+
+# With authentication
+sherpack repo add private https://charts.example.com --username user --password pass
+
+# OCI registry
+sherpack repo add oci oci://registry.example.com/charts
 ```
+
+### Search and Pull
+
+```bash
+# Search across repositories
+sherpack search nginx
+
+# Pull specific version
+sherpack pull stable/nginx:1.0.0
+
+# Pull from OCI
+sherpack pull oci://registry.example.com/charts/nginx:1.0.0
+```
+
+### Push to OCI
+
+```bash
+# Package and push
+sherpack package ./myapp
+sherpack push myapp-1.0.0.tar.gz oci://registry.example.com/charts/myapp:1.0.0
+```
+
+---
+
+## Architecture
+
+```
+sherpack/
+├── crates/
+│   ├── sherpack-core/     # Core types: Pack, Values, Context, Archive
+│   ├── sherpack-engine/   # Template engine, filters, functions
+│   ├── sherpack-convert/  # Helm chart to Sherpack converter
+│   ├── sherpack-kube/     # Kubernetes client, storage, hooks, health
+│   ├── sherpack-repo/     # Repository, OCI, dependencies, search
+│   └── sherpack-cli/      # CLI commands
+├── fixtures/
+│   ├── simple-pack/       # Basic test fixture
+│   ├── demo-pack/         # Comprehensive demo
+│   └── helm-nginx/        # Helm conversion test
+└── docs/                  # Documentation
+```
+
+### Crates
+
+| Crate | Purpose | Tests |
+|-------|---------|-------|
+| `sherpack-core` | Pack, Values, Archive, Manifest, Files | 65 |
+| `sherpack-engine` | MiniJinja templating, filters, functions, subcharts | 118 |
+| `sherpack-convert` | Helm Go templates → Jinja2 converter | 62 |
+| `sherpack-kube` | Kubernetes, storage, hooks, CRD handling | 219 |
+| `sherpack-repo` | Repository backends, dependencies, search | 53 |
+| `sherpack-cli` | CLI application | 83 |
+| **Total** | ~35k lines of Rust | **600** |
 
 ---
 
 ## Examples
 
-### Complete Deployment
+### Complete Deployment with ConfigMap
 
 ```yaml
 # templates/deployment.yaml
@@ -479,81 +653,55 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ release.name }}
-  namespace: {{ release.namespace }}
   labels:
     app.kubernetes.io/name: {{ release.name }}
     app.kubernetes.io/version: {{ pack.version }}
-    {% for key, value in values.labels | dictsort %}
-    {{ key }}: {{ value | quote }}
-    {% endfor %}
   annotations:
     checksum/config: {{ values.config | tojson | sha256 | trunc(16) }}
 spec:
-  replicas: {{ values.app.replicas }}
+  replicas: {{ values.replicas }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ release.name }}
   template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: {{ release.name }}
     spec:
       containers:
-        - name: {{ values.app.name | kebabcase }}
+        - name: app
           image: {{ values.image.repository }}:{{ values.image.tag }}
-          ports:
-            {% for p in values.ports %}
-            - name: {{ p.name }}
-              containerPort: {{ p.targetPort }}
-            {% endfor %}
-          env:
-            {% for key, value in values.env | dictsort %}
-            - name: {{ key }}
-              value: {{ value | quote }}
-            {% endfor %}
+          envFrom:
+            - configMapRef:
+                name: {{ release.name }}-config
           resources:
             {{ values.resources | toyaml | nindent(12) }}
-```
-
-### Kubernetes Secret with Base64
-
-```yaml
-# templates/secret.yaml
+---
+# templates/configmap.yaml
 apiVersion: v1
-kind: Secret
+kind: ConfigMap
 metadata:
-  name: {{ release.name }}-secrets
-  namespace: {{ release.namespace }}
-type: Opaque
+  name: {{ release.name }}-config
 data:
-  api-key: {{ values.secrets.apiKey | b64encode }}
-  {% if values.secrets.dbPassword %}
-  db-password: {{ values.secrets.dbPassword | b64encode }}
-  {% endif %}
+  {% for key, value in values.env | dictsort %}
+  {{ key }}: {{ value | quote }}
+  {% endfor %}
 ```
 
-### Conditional Ingress
+### Conditional Ingress with TLS
 
 ```yaml
-# templates/ingress.yaml
 {% if values.ingress.enabled %}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ release.name }}
   annotations:
-    kubernetes.io/ingress.class: nginx
-    {% if values.ingress.tls.enabled %}
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+    {% if values.ingress.tls %}
+    cert-manager.io/cluster-issuer: letsencrypt
     {% endif %}
 spec:
-  {% if values.ingress.tls.enabled %}
+  {% if values.ingress.tls %}
   tls:
-    - hosts:
-        {% for host in values.ingress.hosts %}
-        - {{ host }}
-        {% endfor %}
-      secretName: {{ values.ingress.tls.secretName }}
+    - hosts: {{ values.ingress.hosts | tojson }}
+      secretName: {{ release.name }}-tls
   {% endif %}
   rules:
     {% for host in values.ingress.hosts %}
@@ -573,88 +721,23 @@ spec:
 
 ---
 
-## Try the Demo Pack
+## Development
 
 ```bash
-# Clone and build
-git clone https://github.com/sherpack/sherpack.git
-cd sherpack
-cargo build --release
+# Build
+cargo build --workspace
 
-# Run the demo
-./target/release/sherpack template my-release fixtures/demo-pack
-
-# Try different namespaces
-./target/release/sherpack template my-release fixtures/demo-pack -n production
-
-# Override values
-./target/release/sherpack template my-release fixtures/demo-pack --set app.replicas=5
-```
-
----
-
-## Project Status
-
-### Phase 1 - MVP Templating
-
-| Feature | Status |
-|---------|--------|
-| Pack structure (Pack.yaml, values.yaml, templates/) | Complete |
-| Jinja2 templating engine (MiniJinja) | Complete |
-| Helm-compatible filters | Complete |
-| Custom functions | Complete |
-| CLI `template` command | Complete |
-| CLI `lint` command | Complete |
-| CLI `show` command | Complete |
-| CLI `create` command | Complete |
-| 21 unit tests | Complete |
-
-### Roadmap
-
-- **Phase 2**: Schema validation, improved error messages
-- **Phase 3**: `package` command, signatures
-- **Phase 4**: `install`, `upgrade`, `uninstall` commands
-- **Phase 5**: OCI registry support, dependencies
-
----
-
-## Architecture
-
-```
-sherpack/
-├── crates/
-│   ├── sherpack-core/     # Core types: Pack, Values, Context
-│   ├── sherpack-engine/   # Template engine, filters, functions
-│   └── sherpack-cli/      # CLI commands
-├── fixtures/
-│   ├── simple-pack/       # Basic test fixture
-│   └── demo-pack/         # Comprehensive demo
-└── tests/                 # Integration tests
-```
-
-### Tech Stack
-
-- **Rust 2024** - Latest edition with rust-version 1.85
-- **MiniJinja** - Fast Jinja2 template engine
-- **Clap** - CLI argument parsing
-- **Serde** - Serialization (YAML, JSON)
-- **Miette** - Beautiful error reporting
-
----
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-```bash
-# Run tests
+# Test
 cargo test --workspace
 
-# Run lints
+# Lint
 cargo clippy --workspace
 
-# Format code
+# Format
 cargo fmt --all
+
+# Run CLI
+cargo run -p sherpack -- <command>
 ```
 
 ---
