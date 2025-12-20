@@ -61,7 +61,7 @@ impl SecretCharset {
     }
 
     /// Parse charset from string
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "alphanumeric" | "alnum" => Some(Self::Alphanumeric),
             "alpha" => Some(Self::Alpha),
@@ -343,13 +343,13 @@ mod tests {
     }
 
     #[test]
-    fn test_charset_from_str() {
-        assert_eq!(SecretCharset::from_str("hex"), Some(SecretCharset::Hex));
+    fn test_charset_parse() {
+        assert_eq!(SecretCharset::parse("hex"), Some(SecretCharset::Hex));
         assert_eq!(
-            SecretCharset::from_str("ALPHANUMERIC"),
+            SecretCharset::parse("ALPHANUMERIC"),
             Some(SecretCharset::Alphanumeric)
         );
-        assert_eq!(SecretCharset::from_str("unknown"), None);
+        assert_eq!(SecretCharset::parse("unknown"), None);
     }
 
     #[test]

@@ -70,7 +70,7 @@ impl MacroPostProcessor {
                         // Record this key's full path
                         paths
                             .entry(key_str.clone())
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(new_path.clone());
                         // Recurse into nested values
                         Self::collect_paths(val, &new_path, paths);

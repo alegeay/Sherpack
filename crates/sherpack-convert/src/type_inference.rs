@@ -1,3 +1,7 @@
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::collapsible_match)]
+#![allow(clippy::or_fun_call)]
+
 //! Type inference from values.yaml
 //!
 //! Analyzes the structure of values.yaml to infer types for template variables.

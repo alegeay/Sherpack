@@ -143,7 +143,7 @@ impl SecretFunctionState {
                 // Parse optional charset
                 let charset = match charset {
                     Some(ref charset_str) => {
-                        SecretCharset::from_str(charset_str).ok_or_else(|| {
+                        SecretCharset::parse(charset_str).ok_or_else(|| {
                             Error::new(
                                 ErrorKind::InvalidOperation,
                                 format!(

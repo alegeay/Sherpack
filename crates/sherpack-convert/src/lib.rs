@@ -1,3 +1,6 @@
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::or_fun_call)]
+
 //! Sherpack Convert - Helm chart to Sherpack pack converter
 //!
 //! This crate provides functionality to convert Helm charts to Sherpack packs,
