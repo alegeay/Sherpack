@@ -4,7 +4,12 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "Repository management for Sherpack - HTTP repos, OCI registries, and dependency resolution"
+documentation = "https://docs.rs/sherpack-repo"
+homepage = "https://alegeay.github.io/Sherpack/"
 
 [dependencies]
 # Internal

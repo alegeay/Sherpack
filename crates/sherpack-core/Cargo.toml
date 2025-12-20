@@ -3,7 +3,12 @@ name = "sherpack-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "Core types and utilities for Sherpack - the Kubernetes package manager"
+documentation = "https://docs.rs/sherpack-core"
+homepage = "https://alegeay.github.io/Sherpack/"
 
 [dependencies]
 serde = { workspace = true }

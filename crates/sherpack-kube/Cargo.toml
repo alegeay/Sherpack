@@ -3,7 +3,12 @@ name = "sherpack-kube"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "Kubernetes integration for Sherpack - storage drivers, release management, and cluster operations"
+documentation = "https://docs.rs/sherpack-kube"
+homepage = "https://alegeay.github.io/Sherpack/"
 
 [dependencies]
 sherpack-core = { workspace = true }

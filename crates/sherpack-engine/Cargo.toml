@@ -3,7 +3,12 @@ name = "sherpack-engine"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "Jinja2 templating engine for Sherpack with Kubernetes-specific filters"
+documentation = "https://docs.rs/sherpack-engine"
+homepage = "https://alegeay.github.io/Sherpack/"
 
 [dependencies]
 sherpack-core = { workspace = true }

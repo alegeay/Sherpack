@@ -3,7 +3,12 @@ name = "sherpack"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "The Kubernetes package manager with Jinja2 templates"
+documentation = "https://docs.rs/sherpack"
+homepage = "https://alegeay.github.io/Sherpack/"
 
 [[bin]]
 name = "sherpack"
