@@ -531,6 +531,6 @@ udp: {}
 
         let ctx = TypeContext::from_yaml("foo: bar").unwrap();
         assert!(!ctx.is_empty());
-        assert!(ctx.len() > 0);
+        assert_eq!(ctx.len(), 1);
     }
 }
