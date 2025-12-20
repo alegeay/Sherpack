@@ -27,7 +27,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 oci-distribution = "0.11"
 
 # Database (for cache)
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.38", features = ["bundled"] }
 
 # Errors
 thiserror = { workspace = true }
