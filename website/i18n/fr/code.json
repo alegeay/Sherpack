@@ -88,7 +88,7 @@
     "description": "Fast feature title"
   },
   "homepage.features.fast.description": {
-    "message": "Écrit en Rust sans dépendances runtime. Binaire de ~5MB contre ~50MB pour Helm. Démarrage instantané.",
+    "message": "Écrit en Rust sans dépendances runtime. Binaire de ~19MB contre ~50MB pour Helm. Démarrage instantané.",
     "description": "Fast feature description"
   },
   "homepage.comparison.heading": {

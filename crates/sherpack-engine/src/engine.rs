@@ -32,6 +32,7 @@ pub struct RenderResult {
 /// Template engine builder
 pub struct EngineBuilder {
     strict_mode: bool,
+    secret_state: Option<crate::secrets::SecretFunctionState>,
 }
 
 impl Default for EngineBuilder {
@@ -42,7 +43,10 @@ impl Default for EngineBuilder {
 
 impl EngineBuilder {
     pub fn new() -> Self {
-        Self { strict_mode: true }
+        Self {
+            strict_mode: true,
+            secret_state: None,
+        }
     }
 
     /// Set strict mode (fail on undefined variables)
@@ -51,15 +55,28 @@ impl EngineBuilder {
         self
     }
 
+    /// Set the secret state for `generate_secret()` function support
+    ///
+    /// When set, templates can use `generate_secret("name", length)` to generate
+    /// deterministic secrets that persist across renders.
+    pub fn with_secret_state(mut self, state: crate::secrets::SecretFunctionState) -> Self {
+        self.secret_state = Some(state);
+        self
+    }
+
     /// Build the engine
     pub fn build(self) -> Engine {
-        Engine::new(self.strict_mode)
+        Engine {
+            strict_mode: self.strict_mode,
+            secret_state: self.secret_state,
+        }
     }
 }
 
 /// The template engine
 pub struct Engine {
     strict_mode: bool,
+    secret_state: Option<crate::secrets::SecretFunctionState>,
 }
 
 impl Engine {
@@ -72,7 +89,10 @@ impl Engine {
     /// # Prefer using convenience methods
     /// For clearer code, prefer `Engine::strict()` or `Engine::lenient()`.
     pub fn new(strict_mode: bool) -> Self {
-        Self { strict_mode }
+        Self {
+            strict_mode,
+            secret_state: None,
+        }
     }
 
     /// Create a strict mode engine (Helm-compatible, recommended)
@@ -81,7 +101,10 @@ impl Engine {
     /// on undefined values, returning undefined instead of error.
     #[must_use]
     pub fn strict() -> Self {
-        Self { strict_mode: true }
+        Self {
+            strict_mode: true,
+            secret_state: None,
+        }
     }
 
     /// Create a lenient mode engine
@@ -90,13 +113,21 @@ impl Engine {
     /// for undefined values.
     #[must_use]
     pub fn lenient() -> Self {
-        Self { strict_mode: false }
+        Self {
+            strict_mode: false,
+            secret_state: None,
+        }
     }
 
     /// Create a builder for more configuration options
     #[must_use]
     pub fn builder() -> EngineBuilder {
         EngineBuilder::new()
+    }
+
+    /// Get a reference to the secret state (if any)
+    pub fn secret_state(&self) -> Option<&crate::secrets::SecretFunctionState> {
+        self.secret_state.as_ref()
     }
 
     /// Create a configured MiniJinja environment
@@ -201,6 +232,11 @@ impl Engine {
         env.add_function("tpl", functions::tpl);
         env.add_function("tpl_ctx", functions::tpl_ctx);
         env.add_function("lookup", functions::lookup);
+
+        // Register generate_secret function if secret state is available
+        if let Some(ref secret_state) = self.secret_state {
+            secret_state.register(&mut env);
+        }
 
         env
     }
@@ -633,5 +669,84 @@ replicas: 3
         // But we still have partial results
         assert_eq!(result.manifests.len(), 1);
         assert!(result.manifests.contains_key("good.yaml"));
+    }
+
+    #[test]
+    fn test_engine_with_secret_state() {
+        use crate::secrets::SecretFunctionState;
+        use sherpack_core::SecretState;
+
+        // Create engine with secret state via builder
+        let secret_state = SecretFunctionState::new();
+        let engine = Engine::builder()
+            .strict(true)
+            .with_secret_state(secret_state.clone())
+            .build();
+
+        let ctx = create_test_context();
+
+        // Template that uses generate_secret
+        let template = r#"password: {{ generate_secret("db-password", 16) }}"#;
+        let result = engine.render_string(template, &ctx, "test.yaml").unwrap();
+
+        // Should have a 16-char alphanumeric password
+        assert!(result.starts_with("password: "));
+        let password = result.strip_prefix("password: ").unwrap();
+        assert_eq!(password.len(), 16);
+        assert!(password.chars().all(|c| c.is_ascii_alphanumeric()));
+
+        // State should be dirty (new secret generated)
+        assert!(secret_state.is_dirty());
+
+        // Rendering again should return the same value
+        let result2 = engine.render_string(template, &ctx, "test.yaml").unwrap();
+        assert_eq!(result, result2);
+    }
+
+    #[test]
+    fn test_engine_without_secret_state() {
+        // Engine without secret state should fail when using generate_secret
+        let engine = Engine::strict();
+        let ctx = create_test_context();
+
+        let template = r#"password: {{ generate_secret("test", 16) }}"#;
+        let result = engine.render_string(template, &ctx, "test.yaml");
+
+        // Should fail because generate_secret is not registered
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_engine_with_loaded_secret_state() {
+        use crate::secrets::SecretFunctionState;
+        use sherpack_core::SecretState;
+
+        // First "install" - generate secret
+        let secret_state1 = SecretFunctionState::new();
+        let engine1 = Engine::builder()
+            .with_secret_state(secret_state1.clone())
+            .build();
+
+        let ctx = create_test_context();
+        let template = r#"{{ generate_secret("api-key", 32) }}"#;
+        let secret = engine1.render_string(template, &ctx, "test.yaml").unwrap();
+
+        // Extract and serialize state
+        let persisted = secret_state1.take_state();
+        let json = serde_json::to_string(&persisted).unwrap();
+
+        // "Upgrade" - load existing state
+        let loaded: SecretState = serde_json::from_str(&json).unwrap();
+        let secret_state2 = SecretFunctionState::with_state(loaded);
+        let engine2 = Engine::builder()
+            .with_secret_state(secret_state2.clone())
+            .build();
+
+        // Should return same secret
+        let secret2 = engine2.render_string(template, &ctx, "test.yaml").unwrap();
+        assert_eq!(secret, secret2);
+
+        // State should NOT be dirty (secret already existed)
+        assert!(!secret_state2.is_dirty());
     }
 }

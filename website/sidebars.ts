@@ -11,6 +11,7 @@ const sidebars: SidebarsConfig = {
         'getting-started/installation',
         'getting-started/quick-start',
         'getting-started/create-pack',
+        'getting-started/tutorial',
       ],
     },
     {

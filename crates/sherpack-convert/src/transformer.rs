@@ -17,6 +17,7 @@
 //! | `{{ coalesce .A .B "c" }}`      | `{{ a or b or "c" }}`            |
 
 use crate::ast::*;
+use crate::type_inference::{InferredType, TypeContext, TypeHeuristics};
 use phf::phf_map;
 
 // =============================================================================
@@ -145,9 +146,7 @@ static UNSUPPORTED_FEATURES: phf::Map<&'static str, &'static str> = phf_map! {
     "encryptAES" => "Use external secret management",
     "decryptAES" => "Use external secret management",
     "randBytes" => "Use external secret management for random data",
-    "randAlphaNum" => "Use external secret management",
-    "randAlpha" => "Use external secret management",
-    "randNumeric" => "Use external secret management",
+    // Note: randAlphaNum, randAlpha, randNumeric are now converted to generate_secret()
     "randAscii" => "Use external secret management",
 
     // DNS - runtime dependency, breaks GitOps
@@ -256,6 +255,10 @@ pub struct Transformer {
     chart_prefix: Option<String>,
     /// Current context variable (for range/with blocks)
     context_var: Option<String>,
+    /// Type context for smarter conversion (dict vs list detection)
+    type_context: Option<TypeContext>,
+    /// Counter for auto-generated secret names (Cell for interior mutability)
+    secret_counter: std::cell::Cell<usize>,
 }
 
 impl Default for Transformer {
@@ -271,12 +274,20 @@ impl Transformer {
             warnings: Vec::new(),
             chart_prefix: None,
             context_var: None,
+            type_context: None,
+            secret_counter: std::cell::Cell::new(0),
         }
     }
 
     /// Set the chart name prefix to strip from include calls
     pub fn with_chart_prefix(mut self, prefix: &str) -> Self {
         self.chart_prefix = Some(format!("{}.", prefix));
+        self
+    }
+
+    /// Set the type context for smarter dict/list detection
+    pub fn with_type_context(mut self, ctx: TypeContext) -> Self {
+        self.type_context = Some(ctx);
         self
     }
 
@@ -288,6 +299,13 @@ impl Transformer {
     #[allow(dead_code)]
     fn add_warning(&mut self, warning: TransformWarning) {
         self.warnings.push(warning);
+    }
+
+    /// Get the next auto-generated secret name
+    fn next_secret_name(&self) -> String {
+        let n = self.secret_counter.get();
+        self.secret_counter.set(n + 1);
+        format!("auto-secret-{}", n + 1)
     }
 
     /// Transform a Go template AST to Jinja2 string
@@ -366,9 +384,10 @@ impl Transformer {
                 }
             }
 
-            // Range: {{- range $i, $v := .Items }} → {%- for v in items %}
+            // Range: {{- range $k, $v := .Dict }} → {%- for k, v in dict | dictsort %}
+            //        {{- range $i, $v := .List }} → {%- for v in list %}{#- i = loop.index0 #}
             ActionBody::Range { vars, pipeline } => {
-                let var_name = vars
+                let value_var = vars
                     .as_ref()
                     .map(|v| v.value_var.trim_start_matches('$').to_string())
                     .unwrap_or_else(|| "item".to_string());
@@ -383,15 +402,28 @@ impl Transformer {
 
                 let collection = self.transform_pipeline(pipeline);
 
-                if let Some(idx) = &index_var {
-                    // {{- range $i, $v := .Items }} → {%- for v in items %}
-                    // Note: use loop.index0 for index
-                    format!(
-                        "{{%{} for {} in {} %}}{{#- {} = loop.index0 #}}",
-                        trim_left, var_name, collection, idx
-                    )
-                } else {
-                    format!("{{%{} for {} in {} %}}", trim_left, var_name, collection)
+                // Determine if this is a dictionary iteration
+                let is_dict = self.is_dict_type(&collection);
+
+                match (&index_var, is_dict) {
+                    // Dictionary with key variable: for key, value in dict | dictsort
+                    (Some(key_var), true) => {
+                        format!(
+                            "{{%{} for {}, {} in {} | dictsort %}}",
+                            trim_left, key_var, value_var, collection
+                        )
+                    }
+                    // List with index: for value in list, with index comment
+                    (Some(idx), false) => {
+                        format!(
+                            "{{%{} for {} in {} %}}{{#- {} = loop.index0 #}}",
+                            trim_left, value_var, collection, idx
+                        )
+                    }
+                    // No index variable: simple iteration
+                    (None, _) => {
+                        format!("{{%{} for {} in {} %}}", trim_left, value_var, collection)
+                    }
                 }
             }
 
@@ -473,7 +505,7 @@ impl Transformer {
     }
 
     fn post_process_pipeline(&self, result: &str) -> String {
-        let output = result.to_string();
+        let mut output = result.to_string();
 
         // Convert _in_(needle) marker to proper "in" syntax
         // "haystack | _in_(needle)" → "(needle in haystack)"
@@ -483,6 +515,21 @@ impl Transformer {
             if let Some(end) = rest.find(')') {
                 let needle = &rest[..end];
                 return format!("({} in {})", needle, haystack);
+            }
+        }
+
+        // Convert _or_(default) marker to proper "or" syntax for Helm compatibility
+        // "value | _or_(default)" → "(value or default)"
+        // Handles chained defaults: "a | _or_(b) | _or_(c)" → "(a or b or c)"
+        while let Some(idx) = output.find(" | _or_(") {
+            let value = &output[..idx];
+            let rest = &output[idx + 8..]; // Skip " | _or_("
+            if let Some(end) = rest.find(')') {
+                let default_val = &rest[..end];
+                let remaining = &rest[end + 1..];
+                output = format!("({} or {}){}", value, default_val, remaining);
+            } else {
+                break;
             }
         }
 
@@ -521,6 +568,32 @@ impl Transformer {
 
     /// Transform a function call - the heart of idiomatic conversion
     fn transform_function(&self, name: &str, args: &[Argument], as_filter: bool) -> String {
+        // 0. Convert random functions to generate_secret()
+        //    randAlphaNum(16) → generate_secret("auto-secret-N", 16)
+        //    randAlpha(16) → generate_secret("auto-secret-N", 16, "alpha")
+        //    randNumeric(6) → generate_secret("auto-secret-N", 6, "numeric")
+        if let Some(charset) = match name {
+            "randAlphaNum" => Some(None),              // Default charset (alphanumeric)
+            "randAlpha" => Some(Some("alpha")),        // Alpha only
+            "randNumeric" => Some(Some("numeric")),    // Numeric only
+            _ => None,
+        } {
+            if let Some(length_arg) = args.first() {
+                let length = self.transform_argument(length_arg);
+                let secret_name = self.next_secret_name();
+                return match charset {
+                    None => format!(
+                        "generate_secret(\"{}\", {}) {{# RENAME: give meaningful name #}}",
+                        secret_name, length
+                    ),
+                    Some(cs) => format!(
+                        "generate_secret(\"{}\", {}, \"{}\") {{# RENAME: give meaningful name #}}",
+                        secret_name, length, cs
+                    ),
+                };
+            }
+        }
+
         // 1. Check for unsupported features first
         if let Some(alternative) = UNSUPPORTED_FEATURES.get(name) {
             // Return a placeholder with comment
@@ -607,13 +680,14 @@ impl Transformer {
             return Some(format!("({} in {})", needle, haystack));
         }
 
-        // default(value, default) - Jinja2 has this natively but with different order
+        // default(value, default) - Use `or` for Helm compatibility
         // Helm: default "value" .X → X if X else "value"
-        // In pipeline context, this is handled as a filter
+        // Jinja2's `default` only triggers on undefined, not empty strings
+        // Using `or` matches Helm's behavior (falsy values trigger default)
         if name == "default" && args.len() >= 2 {
             let default_val = self.transform_argument(&args[0]);
             let actual_val = self.transform_argument(&args[1]);
-            return Some(format!("{} | default({})", actual_val, default_val));
+            return Some(format!("({} or {})", actual_val, default_val));
         }
 
         // len(x) → x | length
@@ -919,6 +993,16 @@ impl Transformer {
             }
         }
 
+        // Special case: default filter uses `or` for Helm compatibility
+        // {{ .X | default "value" }} → (x or "value")
+        // Returns a marker that transform_pipeline will handle
+        if name == "default" {
+            if let Some(arg) = args.first() {
+                let default_val = self.transform_argument(arg);
+                return format!("_or_({})", default_val);
+            }
+        }
+
         // Look up filter name mapping
         let filter_name = FILTER_MAP.get(name).copied().unwrap_or(name);
 
@@ -1105,6 +1189,29 @@ impl Transformer {
         // Convert dots to underscores for valid Jinja2 macro names
         stripped.trim_matches('"').replace(['.', '-'], "_")
     }
+
+    /// Determines if a collection path refers to a dictionary type
+    ///
+    /// Uses type context from values.yaml if available, otherwise falls back
+    /// to heuristics based on common Helm naming patterns.
+    fn is_dict_type(&self, collection: &str) -> bool {
+        // First, try the type context if available
+        if let Some(ref ctx) = self.type_context {
+            match ctx.get_type(collection) {
+                InferredType::Dict => return true,
+                InferredType::List => return false,
+                InferredType::Scalar => return false,
+                InferredType::Unknown => {
+                    // Fall through to heuristics
+                }
+            }
+        }
+
+        // Fall back to heuristics based on common naming patterns
+        TypeHeuristics::guess_type(collection)
+            .map(|t| t == InferredType::Dict)
+            .unwrap_or(false)
+    }
 }
 
 /// Convert PascalCase/camelCase to snake_case
@@ -1217,6 +1324,33 @@ mod tests {
         assert_eq!(
             transform("{{ coalesce .Values.a .Values.b \"default\" }}"),
             "{{ (values.a or values.b or \"default\") }}"
+        );
+    }
+
+    #[test]
+    fn test_default_function() {
+        // default as function: default "fallback" .X → (X or "fallback")
+        assert_eq!(
+            transform("{{ default \"fallback\" .Values.x }}"),
+            "{{ (values.x or \"fallback\") }}"
+        );
+    }
+
+    #[test]
+    fn test_default_filter() {
+        // default as filter: .X | default "fallback" → (X or "fallback")
+        assert_eq!(
+            transform("{{ .Values.x | default \"fallback\" }}"),
+            "{{ (values.x or \"fallback\") }}"
+        );
+    }
+
+    #[test]
+    fn test_default_chained() {
+        // Chained defaults: .a | default .b | default "c"
+        assert_eq!(
+            transform("{{ .Values.a | default .Values.b | default \"c\" }}"),
+            "{{ ((values.a or values.b) or \"c\") }}"
         );
     }
 
@@ -1433,6 +1567,84 @@ mod tests {
         assert_eq!(
             transform("{{ .Capabilities.KubeVersion.Version }}"),
             "{{ capabilities.kubeVersion.version }}"
+        );
+    }
+
+    // =========================================================================
+    // Dictionary iteration with TypeContext
+    // =========================================================================
+
+    #[test]
+    fn test_range_dict_with_type_context() {
+        use crate::type_inference::TypeContext;
+
+        let yaml = r#"
+controller:
+  containerPort:
+    http: 80
+    https: 443
+"#;
+        let ctx = TypeContext::from_yaml(yaml).unwrap();
+        let mut transformer = Transformer::new().with_type_context(ctx);
+
+        let input = crate::parser::parse("{{- range $key, $value := .Values.controller.containerPort }}{{ $key }}: {{ $value }}{{- end }}").unwrap();
+        let result = transformer.transform(&input);
+
+        assert_eq!(
+            result,
+            "{%- for key, value in values.controller.containerPort | dictsort %}{{ key }}: {{ value }}{%- endfor %}"
+        );
+    }
+
+    #[test]
+    fn test_range_list_with_type_context() {
+        use crate::type_inference::TypeContext;
+
+        let yaml = r#"
+controller:
+  extraEnvs:
+    - name: FOO
+      value: bar
+"#;
+        let ctx = TypeContext::from_yaml(yaml).unwrap();
+        let mut transformer = Transformer::new().with_type_context(ctx);
+
+        let input = crate::parser::parse("{{- range $i, $env := .Values.controller.extraEnvs }}{{ $env }}{{- end }}").unwrap();
+        let result = transformer.transform(&input);
+
+        // List iteration should NOT use dictsort
+        assert_eq!(
+            result,
+            "{%- for env in values.controller.extraEnvs %}{#- i = loop.index0 #}{{ env }}{%- endfor %}"
+        );
+    }
+
+    #[test]
+    fn test_range_dict_heuristic() {
+        // Without type context, should use heuristics
+        let mut transformer = Transformer::new();
+
+        // "containerPort" is in DICT_SUFFIXES
+        let input = crate::parser::parse("{{- range $key, $value := .Values.controller.containerPort }}{{ $key }}{{- end }}").unwrap();
+        let result = transformer.transform(&input);
+
+        assert_eq!(
+            result,
+            "{%- for key, value in values.controller.containerPort | dictsort %}{{ key }}{%- endfor %}"
+        );
+    }
+
+    #[test]
+    fn test_range_annotations_heuristic() {
+        let mut transformer = Transformer::new();
+
+        // "annotations" is in DICT_SUFFIXES
+        let input = crate::parser::parse("{{- range $k, $v := .Values.podAnnotations }}{{- end }}").unwrap();
+        let result = transformer.transform(&input);
+
+        assert_eq!(
+            result,
+            "{%- for k, v in values.podAnnotations | dictsort %}{%- endfor %}"
         );
     }
 }

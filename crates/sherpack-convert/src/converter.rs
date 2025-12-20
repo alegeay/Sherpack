@@ -17,8 +17,10 @@ use walkdir::WalkDir;
 
 use crate::chart::HelmChart;
 use crate::error::{ConversionWarning, ConvertError, Result, WarningCategory, WarningSeverity};
+use crate::macro_processor::MacroPostProcessor;
 use crate::parser;
 use crate::transformer::Transformer;
+use crate::type_inference::TypeContext;
 
 /// Options for the converter
 #[derive(Debug, Clone, Default)]
@@ -65,9 +67,37 @@ impl Converter {
         Self { options }
     }
 
+    /// Load type context from values.yaml
+    fn load_type_context(chart_path: &Path) -> Option<TypeContext> {
+        let values_path = chart_path.join("values.yaml");
+        if values_path.exists() {
+            if let Ok(content) = fs::read_to_string(&values_path) {
+                return TypeContext::from_yaml(&content).ok();
+            }
+        }
+        None
+    }
+
+    /// Load macro post-processor from values.yaml
+    fn load_macro_processor(chart_path: &Path) -> Option<MacroPostProcessor> {
+        let values_path = chart_path.join("values.yaml");
+        if values_path.exists() {
+            if let Ok(content) = fs::read_to_string(&values_path) {
+                return MacroPostProcessor::from_yaml(&content).ok();
+            }
+        }
+        None
+    }
+
     /// Convert a Helm chart directory to a Sherpack pack
     pub fn convert(&self, chart_path: &Path, output_path: &Path) -> Result<ConversionResult> {
         let mut result = ConversionResult::new();
+
+        // Load type context for smarter dict/list detection
+        let type_context = Self::load_type_context(chart_path);
+
+        // Load macro post-processor for variable scoping in macros
+        let macro_processor = Self::load_macro_processor(chart_path);
 
         // Validate input
         if !chart_path.exists() {
@@ -140,6 +170,8 @@ impl Converter {
                 &templates_dir,
                 &output_path.join("templates"),
                 &chart_name,
+                type_context.as_ref(),
+                macro_processor.as_ref(),
                 &mut result,
             )?;
         }
@@ -161,6 +193,8 @@ impl Converter {
         src_dir: &Path,
         dest_dir: &Path,
         chart_name: &str,
+        type_context: Option<&TypeContext>,
+        macro_processor: Option<&MacroPostProcessor>,
         result: &mut ConversionResult,
     ) -> Result<()> {
         if !self.options.dry_run {
@@ -246,7 +280,7 @@ impl Converter {
             }
 
             // Generate import statements
-            let final_content = if !imports_by_file.is_empty() {
+            let with_imports = if !imports_by_file.is_empty() {
                 let mut import_statements = String::new();
                 let mut sorted_files: Vec<&&str> = imports_by_file.keys().collect();
                 sorted_files.sort();
@@ -263,6 +297,35 @@ impl Converter {
                 format!("{}{}", import_statements, converted)
             } else {
                 converted.clone()
+            };
+
+            // Apply macro post-processing to resolve bare variable references
+            let final_content = if let Some(processor) = macro_processor {
+                let (processed, unresolved) = processor.process(&with_imports);
+
+                // Add warnings for unresolved variables
+                for var in unresolved {
+                    result.warnings.push(ConversionWarning {
+                        severity: WarningSeverity::Warning,
+                        category: WarningCategory::UnsupportedFeature,
+                        file: dest_path.clone(),
+                        line: None,
+                        pattern: var.variable.clone(),
+                        message: format!(
+                            "Could not resolve variable '{}' in macro '{}': {}",
+                            var.variable, var.macro_name, var.reason
+                        ),
+                        suggestion: Some(format!(
+                            "Candidates: {}",
+                            var.candidates.join(", ")
+                        )),
+                        doc_link: None,
+                    });
+                }
+
+                processed
+            } else {
+                with_imports
             };
 
             if !self.options.dry_run {
@@ -326,6 +389,7 @@ impl Converter {
                     &dest_path,
                     &defined_macros,
                     &macro_sources,
+                    type_context,
                 ) {
                     Ok((converted, warnings)) => {
                         if !self.options.dry_run {
@@ -370,9 +434,16 @@ impl Converter {
         dest_path: &Path,
         defined_macros: &HashSet<String>,
         macro_sources: &std::collections::HashMap<String, String>,
+        type_context: Option<&TypeContext>,
     ) -> Result<(String, Vec<ConversionWarning>)> {
         let ast = parser::parse(content)?;
         let mut transformer = Transformer::new().with_chart_prefix(chart_name);
+
+        // Add type context for smarter dict/list detection
+        if let Some(ctx) = type_context {
+            transformer = transformer.with_type_context(ctx.clone());
+        }
+
         let converted = transformer.transform(&ast);
 
         // Find macros used in the converted template
@@ -423,13 +494,14 @@ impl Converter {
         chart_name: &str,
         dest_path: &Path,
     ) -> Result<(String, Vec<ConversionWarning>)> {
-        // For backwards compatibility, use empty macro set
+        // For backwards compatibility, use empty macro set and no type context
         self.convert_template_with_macros(
             content,
             chart_name,
             dest_path,
             &HashSet::new(),
             &std::collections::HashMap::new(),
+            None,
         )
     }
 

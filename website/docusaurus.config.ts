@@ -56,6 +56,20 @@ const config: Config = {
     ],
   ],
 
+  themes: [
+    [
+      require.resolve('@easyops-cn/docusaurus-search-local'),
+      {
+        hashed: true,
+        language: ['en', 'fr'],
+        highlightSearchTermsOnTargetPage: true,
+        explicitSearchResultPath: true,
+        docsRouteBasePath: '/docs',
+        indexBlog: false,
+      },
+    ],
+  ],
+
   themeConfig: {
     image: 'img/sherpack-social-card.png',
     colorMode: {
@@ -147,7 +161,6 @@ const config: Config = {
       darkTheme: prismThemes.dracula,
       additionalLanguages: ['bash', 'yaml', 'rust', 'toml', 'json'],
     },
-    algolia: undefined,
   } satisfies Preset.ThemeConfig,
 };
 

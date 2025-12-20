@@ -14,6 +14,7 @@ pub mod files_object;
 pub mod filters;
 pub mod functions;
 pub mod pack_renderer;
+pub mod secrets;
 pub mod subchart;
 pub mod suggestions;
 
@@ -26,5 +27,6 @@ pub use files_object::{FilesObject, create_files_value, create_files_value_from_
 pub use pack_renderer::{
     PackRenderResult, PackRenderResultWithReport, PackRenderer, PackRendererBuilder,
 };
+pub use secrets::SecretFunctionState;
 pub use subchart::{DiscoveryResult, SubchartConfig, SubchartInfo};
 pub use suggestions::{AVAILABLE_FILTERS, AVAILABLE_FUNCTIONS};

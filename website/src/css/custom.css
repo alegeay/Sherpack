@@ -3,8 +3,12 @@
  * A sophisticated dark-first design with electric accents
  */
 
-/* Import distinctive fonts */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+/* Self-hosted fonts for performance (no external requests to Google) */
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/600.css';
+@import '@fontsource/jetbrains-mono/700.css';
+@import '@fontsource-variable/plus-jakarta-sans';
 
 /* ============================================
    CSS CUSTOM PROPERTIES

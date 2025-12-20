@@ -68,6 +68,30 @@ annotations:
   checksum/config: {{ values.config | tojson | sha256 }}
 ```
 
+### sha1
+
+SHA-1 hash (for compatibility, prefer sha256):
+
+```yaml
+checksum: {{ values.data | sha1 }}
+```
+
+### sha512
+
+SHA-512 hash:
+
+```yaml
+checksum: {{ values.data | sha512 }}
+```
+
+### md5
+
+MD5 hash (for checksums only, not cryptographically secure):
+
+```yaml
+checksum: {{ values.data | md5 }}
+```
+
 ## String Manipulation
 
 ### quote / squote
@@ -96,14 +120,15 @@ Title case:
 title: {{ values.name | title }}     # My App
 ```
 
-### snakecase / kebabcase / camelcase
+### snakecase / kebabcase / camelcase / pascalcase
 
 Case conversion:
 
 ```yaml
-snake: {{ "myAppName" | snakecase }}  # my_app_name
-kebab: {{ "myAppName" | kebabcase }}  # my-app-name
+snake: {{ "myAppName" | snakecase }}   # my_app_name
+kebab: {{ "myAppName" | kebabcase }}   # my-app-name
 camel: {{ "my_app_name" | camelcase }} # myAppName
+pascal: {{ "foo_bar" | pascalcase }}   # FooBar
 ```
 
 ### trunc
@@ -137,6 +162,45 @@ Remove leading/trailing whitespace:
 
 ```yaml
 clean: {{ values.input | trim }}
+```
+
+### repeat
+
+Repeat a string N times:
+
+```yaml
+separator: {{ "-" | repeat(40) }}
+```
+
+### substr
+
+Extract substring:
+
+```yaml
+prefix: {{ values.name | substr(0, 5) }}   # first 5 chars
+suffix: {{ values.name | substr(5) }}      # from position 5 to end
+```
+
+### wrap
+
+Word wrap at specified width:
+
+```yaml
+wrapped: {{ values.description | wrap(80) }}
+```
+
+### hasprefix / hassuffix
+
+Check string prefix/suffix:
+
+```yaml
+{% if values.name | hasprefix("v") %}
+  version: {{ values.name | trimprefix("v") }}
+{% endif %}
+
+{% if values.file | hassuffix(".yaml") %}
+  # YAML file
+{% endif %}
 ```
 
 ## Indentation
@@ -302,6 +366,203 @@ env:
   COUNT: {{ values.count | string | quote }}
 ```
 
+## Path Functions
+
+### basename
+
+Extract filename from path:
+
+```yaml
+file: {{ "/etc/nginx/nginx.conf" | basename }}  # nginx.conf
+```
+
+### dirname
+
+Extract directory from path:
+
+```yaml
+dir: {{ "/etc/nginx/nginx.conf" | dirname }}  # /etc/nginx
+```
+
+### extname
+
+Extract file extension (without dot):
+
+```yaml
+ext: {{ "archive.tar.gz" | extname }}  # gz
+```
+
+### cleanpath
+
+Normalize path (resolve `.` and `..`):
+
+```yaml
+path: {{ "a/b/../c/./d" | cleanpath }}  # a/c/d
+```
+
+## Regex Functions
+
+### regex_match
+
+Check if string matches pattern:
+
+```yaml
+{% if values.version | regex_match("^v[0-9]+") %}
+  # Starts with v followed by number
+{% endif %}
+```
+
+### regex_replace
+
+Replace matches with replacement (supports capture groups `$1`, `$2`, etc.):
+
+```yaml
+normalized: {{ values.name | regex_replace("[^a-z0-9]", "-") }}
+version: {{ "v1.2.3" | regex_replace("v([0-9]+)", "version-$1") }}
+```
+
+### regex_find
+
+Find first match:
+
+```yaml
+port: {{ "server:8080" | regex_find("[0-9]+") }}  # 8080
+```
+
+### regex_find_all
+
+Find all matches:
+
+```yaml
+{% for num in "a1b2c3" | regex_find_all("[0-9]+") %}
+- {{ num }}
+{% endfor %}
+# Results: 1, 2, 3
+```
+
+## Advanced Collections
+
+### values
+
+Get all values from a dict as a list:
+
+```yaml
+{% for v in values.config | values %}
+- {{ v }}
+{% endfor %}
+```
+
+### pick
+
+Select only specified keys from dict:
+
+```yaml
+{% set subset = values.config | pick("name", "version") %}
+```
+
+### omit
+
+Exclude specified keys from dict:
+
+```yaml
+{% set safe = values.config | omit("password", "secret") %}
+```
+
+### tostrings
+
+Convert list elements to strings:
+
+```yaml
+ports: {{ values.ports | tostrings | join(",") }}
+```
+
+With prefix/suffix:
+
+```yaml
+{{ values.ports | tostrings(prefix="port-") }}           # ["port-80", "port-443"]
+{{ values.ports | tostrings(suffix="/TCP") }}            # ["80/TCP", "443/TCP"]
+{{ values.items | tostrings(skip_empty=true) }}          # Skip empty values
+```
+
+## List Operations
+
+### append
+
+Append item to end of list:
+
+```yaml
+{% set hosts = values.hosts | append("localhost") %}
+```
+
+### prepend
+
+Prepend item to start of list:
+
+```yaml
+{% set hosts = values.hosts | prepend("primary.example.com") %}
+```
+
+### concat
+
+Concatenate two lists:
+
+```yaml
+{% set all = values.hosts | concat(values.extra_hosts) %}
+```
+
+### without
+
+Remove specified values from list:
+
+```yaml
+{% set filtered = values.items | without("deprecated", "old") %}
+```
+
+### compact
+
+Remove empty/falsy values from list:
+
+```yaml
+{% set cleaned = ["a", "", null, "b"] | compact %}  # ["a", "b"]
+```
+
+## Math Functions
+
+### abs
+
+Absolute value:
+
+```yaml
+diff: {{ values.delta | abs }}
+```
+
+### floor / ceil
+
+Round down/up:
+
+```yaml
+rounded_down: {{ 3.7 | floor }}  # 3
+rounded_up: {{ 3.2 | ceil }}     # 4
+```
+
+## Version Comparison
+
+### semver_match
+
+Compare version against semver constraint:
+
+```yaml
+{% if capabilities.kubeVersion | semver_match(">=1.21.0") %}
+  # Kubernetes 1.21 or later
+{% endif %}
+
+{% if values.version | semver_match("^2.0.0") %}
+  # Compatible with 2.x
+{% endif %}
+```
+
+Supports operators: `>=`, `<=`, `>`, `<`, `^` (compatible), `~` (approximately).
+
 ## Chaining Filters
 
 Filters can be chained:
@@ -316,4 +577,7 @@ checksum: {{ values.config | tojson | sha256 | trunc(16) }}
 
 # Safe default with transformation
 name: {{ values.name | default("app") | kebabcase | trunc(63) }}
+
+# Regex + case transformation
+safe_name: {{ values.name | regex_replace("[^a-zA-Z0-9]", "_") | snakecase }}
 ```

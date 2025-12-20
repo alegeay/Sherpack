@@ -73,9 +73,12 @@ pub mod ast;
 pub mod chart;
 pub mod converter;
 pub mod error;
+pub mod macro_processor;
 pub mod parser;
 pub mod transformer;
+pub mod type_inference;
 
 // Re-exports
 pub use converter::{convert, convert_with_options, ConversionResult, ConvertOptions, Converter};
 pub use error::{ConversionWarning, ConvertError, Result, WarningCategory, WarningSeverity};
+pub use type_inference::{InferredType, TypeContext, TypeHeuristics};

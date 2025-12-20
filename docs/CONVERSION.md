@@ -267,19 +267,58 @@ anti-patterns in a GitOps workflow:
 
 ### Cryptographic Functions
 
-| Function | Alternative |
-|----------|-------------|
+| Function | Sherpack Alternative |
+|----------|----------------------|
 | `genCA` | Use [cert-manager](https://cert-manager.io) CRDs |
 | `genSelfSignedCert` | Use cert-manager or pre-generated certs |
 | `genPrivateKey` | Use [external-secrets](https://external-secrets.io) |
 | `htpasswd` | Pre-generate and store in external secrets |
-| `randAlphaNum` | Pre-generate and store in values.yaml |
+| `randAlphaNum` | **`generate_secret()`** - Idempotent secret generation |
+| `randAlpha` | **`generate_secret(name, len, "alpha")`** |
+| `randNumeric` | **`generate_secret(name, len, "numeric")`** |
 
-**Why?** Generating secrets in templates means:
-- Different output on each render
-- Secrets regenerated on upgrade (breaks applications)
+#### generate_secret: GitOps-Compatible Secret Generation
+
+Unlike Helm's `randAlphaNum` which generates a **new random value on every render**,
+Sherpack's `generate_secret()` is **idempotent**:
+
+```yaml
+# Helm - breaks on every upgrade!
+password: {{ randAlphaNum 24 | b64enc }}
+
+# Sherpack - stable across renders
+password: {{ generate_secret("db-password", 24) | b64encode }}
+```
+
+**Automatic conversion**: When converting a Helm chart, `randAlphaNum` calls are
+automatically converted to `generate_secret()`:
+
+```yaml
+# Original Helm
+{{ randAlphaNum 10 }}
+
+# Converted to Sherpack
+{{ generate_secret("auto-secret-1", 10) }} {# RENAME: give meaningful name #}
+```
+
+The `{# RENAME #}` comment reminds you to give the secret a meaningful name.
+
+**Supported charsets:**
+| Charset | Example Output |
+|---------|----------------|
+| `alphanumeric` (default) | `ZyitwTXQeYUNX5tC` |
+| `hex` | `3b56ff6fe00929f0` |
+| `numeric` | `529607` |
+| `alpha` | `QeYUNXtCuvmTB` |
+| `base64` | `+/aB3xZ=` |
+| `urlsafe` | `_-aB3xZ` |
+
+### Other Cryptographic Functions
+
+**Why are these not supported?** Generating complex certificates in templates:
+- Is error-prone and hard to debug
 - Cannot be reviewed in Git diff
-- Incompatible with GitOps (ArgoCD, Flux)
+- Lacks proper certificate lifecycle management
 
 ### Files API
 

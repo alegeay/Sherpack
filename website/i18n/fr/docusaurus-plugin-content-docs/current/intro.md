@@ -12,7 +12,7 @@ Un gestionnaire de paquets Kubernetes **ultra-rapide** avec templating **Jinja2*
 ## Pourquoi Sherpack ?
 
 - **Syntaxe Jinja2** - Templating Python familier au lieu des templates Go
-- **Ultra-rapide** - Binaire Rust de ~5MB, démarrage instantané
+- **Ultra-rapide** - Binaire Rust de ~19MB, démarrage instantané
 - **Cycle de vie complet** - Install, upgrade, rollback, uninstall avec hooks
 - **Validation de schéma** - JSON Schema avec messages d'erreur utiles
 - **Signature de paquets** - Signatures cryptographiques Minisign
@@ -39,7 +39,7 @@ sherpack install my-release ./myapp -n production
 | Fonctionnalité | Sherpack | Helm |
 |----------------|----------|------|
 | Templating | Jinja2 | Go templates |
-| Taille binaire | ~5MB | ~50MB |
+| Taille binaire | ~19MB | ~50MB |
 | Runtime | Aucun | Aucun |
 | Validation | JSON Schema | values.schema.json |
 | Signature | Minisign | GPG |

@@ -161,8 +161,15 @@ pub fn run(
     let release = ReleaseInfo::for_install(name, namespace);
     let context = TemplateContext::new(values, release, &pack.pack.metadata);
 
+    // Create secret state for generate_secret() function support
+    // In template mode, secrets are generated fresh each time (no persistence)
+    let secret_state = sherpack_engine::SecretFunctionState::new();
+
     // Create pack renderer (handles subcharts automatically)
-    let engine = Engine::builder().strict(pack.pack.engine.strict).build();
+    let engine = Engine::builder()
+        .strict(pack.pack.engine.strict)
+        .with_secret_state(secret_state)
+        .build();
     let renderer = PackRenderer::new(engine);
 
     // Render templates with subchart support and error collection

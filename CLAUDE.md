@@ -58,12 +58,14 @@ Core types and data structures (19 tests):
 - `Archive` - Create/extract tar.gz archives with MANIFEST
 - `Manifest` - SHA256 checksums for integrity verification
 - `Schema` - JSON Schema validation and default extraction
+- `secrets.rs` - Secret state management for `generate_secret()` function
 
 ### `sherpack-engine`
 MiniJinja-based template engine (58 tests):
 - `Engine` / `EngineBuilder` - Template compilation and rendering
 - `filters.rs` - 25+ Helm-compatible filters: `toyaml`, `tojson`, `b64encode`, `indent`, `nindent`, `quote`, `kebabcase`, `sha256`, `int`, `float`, etc.
-- `functions.rs` - Template functions: `get()`, `ternary()`, `now()`, `uuidv4()`, `fail()`, `tostring()`, `toint()`, `tofloat()`
+- `functions.rs` - Template functions: `get()`, `ternary()`, `now()`, `uuidv4()`, `fail()`, `tostring()`, `toint()`, `tofloat()`, `generate_secret()`
+- `secrets.rs` - Idempotent secret generation with multiple charsets (alphanumeric, hex, numeric, alpha, base64, urlsafe)
 - `suggestions.rs` - Contextual error suggestions with fuzzy matching
 
 ### `sherpack-convert`
@@ -73,6 +75,7 @@ Helm chart to Sherpack converter (63 tests):
 - `transformer.rs` - AST transformer from Go templates to Jinja2
 - `converter.rs` - Full chart conversion with three-pass macro handling
 - Supports: `define`, `include`, `if/else`, `range`, `with`, variable pipelines
+- Converts `randAlphaNum`, `randAlpha`, `randNumeric` → `generate_secret()`
 
 ### `sherpack-kube`
 Kubernetes integration (151 tests):

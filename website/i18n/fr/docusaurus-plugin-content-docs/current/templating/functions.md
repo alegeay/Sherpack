@@ -6,43 +6,43 @@ sidebar_position: 3
 
 # Functions
 
-Functions are called with parentheses and can take arguments.
+Les functions sont appelées avec des parenthèses et peuvent prendre des arguments.
 
-## Data Access
+## Accès aux données
 
 ### get
 
-Safe access with default value:
+Accès sécurisé avec valeur par défaut :
 
 ```yaml
-# Simple access
+# Accès simple
 timeout: {{ get(values, "timeout", 30) }}
 
-# Nested access with dot notation
+# Accès imbriqué avec notation à points
 port: {{ get(values, "service.port", 80) }}
 
-# Object access
+# Accès à un objet
 host: {{ get(values.ingress, "host", "localhost") }}
 ```
 
 ### ternary
 
-Conditional value selection:
+Sélection conditionnelle de valeur :
 
 ```yaml
-# ternary(true_value, false_value, condition)
+# ternary(valeur_vraie, valeur_fausse, condition)
 env: {{ ternary("production", "development", release.namespace == "prod") }}
 
-# Common use cases
+# Cas d'usage courants
 replicas: {{ ternary(3, 1, values.highAvailability) }}
 pullPolicy: {{ ternary("Always", "IfNotPresent", values.image.tag == "latest") }}
 ```
 
-## Type Conversion
+## Conversion de types
 
 ### tostring
 
-Convert to string:
+Convertir en chaîne :
 
 ```yaml
 port: {{ tostring(values.port) }}  # "8080"
@@ -50,7 +50,7 @@ port: {{ tostring(values.port) }}  # "8080"
 
 ### toint
 
-Convert to integer:
+Convertir en entier :
 
 ```yaml
 replicas: {{ toint(values.replicas) }}  # 3
@@ -58,38 +58,38 @@ replicas: {{ toint(values.replicas) }}  # 3
 
 ### tofloat
 
-Convert to float:
+Convertir en flottant :
 
 ```yaml
 ratio: {{ tofloat(values.ratio) }}  # 0.5
 ```
 
-## Generation
+## Génération
 
 ### now
 
-Current ISO timestamp:
+Timestamp ISO actuel :
 
 ```yaml
 annotations:
   deployed-at: {{ now() }}
-  # Output: 2024-01-15T10:30:00Z
+  # Sortie: 2024-01-15T10:30:00Z
 ```
 
 ### uuidv4
 
-Generate random UUID:
+Générer un UUID aléatoire :
 
 ```yaml
 metadata:
   annotations:
     deployment-id: {{ uuidv4() }}
-    # Output: 550e8400-e29b-41d4-a716-446655440000
+    # Sortie: 550e8400-e29b-41d4-a716-446655440000
 ```
 
 ### generate_secret
 
-Generate idempotent secrets with various charsets:
+Générer des secrets idempotents avec différents jeux de caractères :
 
 ```yaml
 apiVersion: v1
@@ -98,76 +98,76 @@ metadata:
   name: {{ release.name }}-secrets
 type: Opaque
 data:
-  # Alphanumeric (default) - 24 characters
+  # Alphanumérique (défaut) - 24 caractères
   db-password: {{ generate_secret("db-password", 24) | b64encode }}
 
-  # Hexadecimal - 32 characters
+  # Hexadécimal - 32 caractères
   api-key: {{ generate_secret("api-key", 32, "hex") | b64encode }}
 
-  # Numeric only - 6 digits
+  # Numérique uniquement - 6 chiffres
   pin-code: {{ generate_secret("pin-code", 6, "numeric") | b64encode }}
 
-  # Letters only
+  # Lettres uniquement
   token: {{ generate_secret("token", 16, "alpha") | b64encode }}
 ```
 
-**Signature:** `generate_secret(name, length, charset?)`
+**Signature :** `generate_secret(nom, longueur, charset?)`
 
-| Charset | Characters | Example |
+| Charset | Caractères | Exemple |
 |---------|------------|---------|
-| `alphanumeric` (default) | `a-zA-Z0-9` | `ZyitwTXQeYUNX5tC` |
+| `alphanumeric` (défaut) | `a-zA-Z0-9` | `ZyitwTXQeYUNX5tC` |
 | `hex` | `0-9a-f` | `3b56ff6fe00929f0` |
 | `numeric` | `0-9` | `529607` |
 | `alpha` | `a-zA-Z` | `QeYUNXtCuvmTB` |
-| `base64` | Base64 alphabet | `+/aB3xZ=` |
-| `urlsafe` | URL-safe Base64 | `_-aB3xZ` |
+| `base64` | Alphabet Base64 | `+/aB3xZ=` |
+| `urlsafe` | Base64 URL-safe | `_-aB3xZ` |
 
-**Key feature: Idempotent** - The same name always returns the same value within a render session:
+**Caractéristique clé : Idempotent** - Le même nom retourne toujours la même valeur au sein d'une session de rendu :
 
 ```yaml
-# All three calls return the SAME value
+# Les trois appels retournent la MÊME valeur
 first: {{ generate_secret("shared-key", 16) }}
 second: {{ generate_secret("shared-key", 16) }}
 third: {{ generate_secret("shared-key", 16) }}
 ```
 
-:::tip GitOps Compatible
-Unlike Helm's `randAlphaNum`, `generate_secret` is designed for GitOps workflows.
-The state can be persisted between renders, ensuring secrets don't change on every upgrade.
+:::tip Compatible GitOps
+Contrairement au `randAlphaNum` de Helm, `generate_secret` est conçu pour les workflows GitOps.
+L'état peut être persisté entre les rendus, garantissant que les secrets ne changent pas à chaque upgrade.
 :::
 
-## Error Handling
+## Gestion des erreurs
 
 ### fail
 
-Fail with custom error message:
+Échouer avec un message d'erreur personnalisé :
 
 ```yaml
 {% if not values.required.field %}
 {{ fail("required.field must be set") }}
 {% endif %}
 
-# With condition
+# Avec condition
 {{ fail("Database password required") if not values.db.password }}
 ```
 
-## Usage Examples
+## Exemples d'utilisation
 
-### Safe Nested Access
+### Accès imbriqué sécurisé
 
 ```yaml
-# Instead of crashing on missing keys
+# Au lieu de crasher sur des clés manquantes
 apiVersion: {{ get(values, "apiVersion", "apps/v1") }}
 kind: {{ get(values, "kind", "Deployment") }}
 
-# Deeply nested
+# Profondément imbriqué
 tlsSecret: {{ get(values, "ingress.tls.secretName", release.name ~ "-tls") }}
 ```
 
-### Dynamic Configuration
+### Configuration dynamique
 
 ```yaml
-# Environment-based settings
+# Paramètres basés sur l'environnement
 {% set isProd = release.namespace == "production" %}
 
 spec:
@@ -181,10 +181,10 @@ spec:
               memory: {{ ternary("1Gi", "256Mi", isProd) }}
 ```
 
-### Validation with fail
+### Validation avec fail
 
 ```yaml
-# Require certain values
+# Exiger certaines valeurs
 {% if not values.image.repository %}
 {{ fail("image.repository is required") }}
 {% endif %}
@@ -193,32 +193,32 @@ spec:
 {{ fail("replicas cannot exceed 10") }}
 {% endif %}
 
-# Validate combinations
+# Valider les combinaisons
 {% if values.ingress.enabled and not values.ingress.host %}
 {{ fail("ingress.host is required when ingress is enabled") }}
 {% endif %}
 ```
 
-### Type Coercion
+### Coercition de types
 
 ```yaml
-# Ensure string for annotations
+# Assurer une chaîne pour les annotations
 annotations:
   replicas: {{ tostring(values.replicas) }}
 
-# Ensure integer for spec
+# Assurer un entier pour les specs
 spec:
   replicas: {{ toint(values.replicas) }}
 ```
 
-### Deployment Tracking
+### Suivi des déploiements
 
 ```yaml
 metadata:
   annotations:
-    # Unique deployment identifier
+    # Identifiant unique de déploiement
     deployment.kubernetes.io/revision: {{ uuidv4() | trunc(8) }}
 
-    # Timestamp for tracking
+    # Timestamp pour le suivi
     deployed-at: {{ now() }}
 ```

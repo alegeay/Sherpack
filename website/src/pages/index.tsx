@@ -28,14 +28,14 @@ function HomepageHeader() {
           </p>
           <div className={styles.heroStats}>
             <div className={styles.stat}>
-              <span className={styles.statValue}>~5MB</span>
+              <span className={styles.statValue}>~19MB</span>
               <span className={styles.statLabel}>
                 <Translate id="homepage.stats.binary">Binary size</Translate>
               </span>
             </div>
             <div className={styles.statDivider} />
             <div className={styles.stat}>
-              <span className={styles.statValue}>282+</span>
+              <span className={styles.statValue}>524+</span>
               <span className={styles.statLabel}>
                 <Translate id="homepage.stats.tests">Tests passing</Translate>
               </span>
@@ -149,7 +149,7 @@ const FeatureList: FeatureItem[] = [
     description: (
       <Translate id="homepage.features.fast.description">
         Written in Rust with zero runtime dependencies.
-        ~5MB binary vs ~50MB for Helm. Instant startup time.
+        ~19MB binary vs ~50MB for Helm. Instant startup time.
       </Translate>
     ),
   },

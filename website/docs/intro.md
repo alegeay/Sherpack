@@ -96,13 +96,13 @@ Sherpack is built as a Cargo workspace with 6 crates (~35k lines of Rust):
 
 | Crate | Purpose | Tests |
 |-------|---------|-------|
-| `sherpack-core` | Pack, Values, Archive, Manifest, Schema | 35 |
-| `sherpack-engine` | MiniJinja templating, filters, functions | 70 |
-| `sherpack-convert` | Helm Go templates → Jinja2 converter | 85 |
-| `sherpack-kube` | Kubernetes ops, storage, hooks, CRD handling | 200 |
-| `sherpack-repo` | Repository backends, dependencies, search | 55 |
-| `sherpack-cli` | CLI application | 155 |
-| **Total** | | **600** |
+| `sherpack-core` | Pack, Values, Archive, Manifest, Schema | 10 |
+| `sherpack-engine` | MiniJinja templating, filters, functions | 62 |
+| `sherpack-convert` | Helm Go templates → Jinja2 converter | 60 |
+| `sherpack-kube` | Kubernetes ops, storage, hooks, CRD handling | 118 |
+| `sherpack-repo` | Repository backends, dependencies, search | 219 |
+| `sherpack-cli` | CLI application | 53 |
+| **Total** | | **524** |
 
 ## Getting Started
 

@@ -16,6 +16,7 @@ pub mod manifest;
 pub mod pack;
 pub mod release;
 pub mod schema;
+pub mod secrets;
 pub mod values;
 
 pub use archive::{
@@ -36,4 +37,5 @@ pub use release::{Release, ReleaseInfo, ReleaseStatus};
 pub use schema::{
     Schema, SchemaValidator, SherpProperty, SherpSchema, SherpType, ValidationResult,
 };
+pub use secrets::{SecretCharset, SecretEntry, SecretGenerator, SecretState};
 pub use values::{Values, parse_set_values};
