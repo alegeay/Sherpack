@@ -30,7 +30,7 @@ sherpack-convert = { path = "crates/sherpack-convert" }
 # Parser
 pest = "2.7"
 pest_derive = "2.7"
-phf = { version = "0.11", features = ["macros"] }
+phf = { version = "0.13", features = ["macros"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
