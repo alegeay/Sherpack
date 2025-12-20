@@ -9,7 +9,7 @@ metadata:
   namespace: {{ release.namespace }}
   labels:
     app.kubernetes.io/name: {{ release.name }}
-    {#- Utilisation de ternary pour valeur conditionnelle -#}
+    {# Utilisation de ternary pour valeur conditionnelle #}
     environment: {{ ternary("prod", "non-prod", release.namespace == "production") }}
 spec:
   type: ClusterIP

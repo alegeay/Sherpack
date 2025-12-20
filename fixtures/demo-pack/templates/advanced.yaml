@@ -38,6 +38,6 @@ data:
   merged-labels: {{ values.labels | merge(extraLabels) | tojson | quote }}
   # Conversion de types
   port-as-string: {{ tostring(values.config.server.port) | quote }}
-  replicas-doubled: {{ values.app.replicas * 2 }}
+  replicas-doubled: {{ tostring(values.app.replicas * 2) | quote }}
   # Concaténation avec ~
   formatted: {{ (release.name ~ "-v" ~ pack.version ~ "-" ~ release.namespace) | quote }}
