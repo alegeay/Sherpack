@@ -573,9 +573,9 @@ impl Transformer {
         //    randAlpha(16) → generate_secret("auto-secret-N", 16, "alpha")
         //    randNumeric(6) → generate_secret("auto-secret-N", 6, "numeric")
         if let Some(charset) = match name {
-            "randAlphaNum" => Some(None),              // Default charset (alphanumeric)
-            "randAlpha" => Some(Some("alpha")),        // Alpha only
-            "randNumeric" => Some(Some("numeric")),    // Numeric only
+            "randAlphaNum" => Some(None),       // Default charset (alphanumeric)
+            "randAlpha" => Some(Some("alpha")), // Alpha only
+            "randNumeric" => Some(Some("numeric")), // Numeric only
             _ => None,
         } {
             if let Some(length_arg) = args.first() {
@@ -1609,7 +1609,10 @@ controller:
         let ctx = TypeContext::from_yaml(yaml).unwrap();
         let mut transformer = Transformer::new().with_type_context(ctx);
 
-        let input = crate::parser::parse("{{- range $i, $env := .Values.controller.extraEnvs }}{{ $env }}{{- end }}").unwrap();
+        let input = crate::parser::parse(
+            "{{- range $i, $env := .Values.controller.extraEnvs }}{{ $env }}{{- end }}",
+        )
+        .unwrap();
         let result = transformer.transform(&input);
 
         // List iteration should NOT use dictsort
@@ -1625,7 +1628,10 @@ controller:
         let mut transformer = Transformer::new();
 
         // "containerPort" is in DICT_SUFFIXES
-        let input = crate::parser::parse("{{- range $key, $value := .Values.controller.containerPort }}{{ $key }}{{- end }}").unwrap();
+        let input = crate::parser::parse(
+            "{{- range $key, $value := .Values.controller.containerPort }}{{ $key }}{{- end }}",
+        )
+        .unwrap();
         let result = transformer.transform(&input);
 
         assert_eq!(
@@ -1639,7 +1645,8 @@ controller:
         let mut transformer = Transformer::new();
 
         // "annotations" is in DICT_SUFFIXES
-        let input = crate::parser::parse("{{- range $k, $v := .Values.podAnnotations }}{{- end }}").unwrap();
+        let input = crate::parser::parse("{{- range $k, $v := .Values.podAnnotations }}{{- end }}")
+            .unwrap();
         let result = transformer.transform(&input);
 
         assert_eq!(

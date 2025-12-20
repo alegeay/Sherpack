@@ -79,6 +79,6 @@ pub mod transformer;
 pub mod type_inference;
 
 // Re-exports
-pub use converter::{convert, convert_with_options, ConversionResult, ConvertOptions, Converter};
+pub use converter::{ConversionResult, ConvertOptions, Converter, convert, convert_with_options};
 pub use error::{ConversionWarning, ConvertError, Result, WarningCategory, WarningSeverity};
 pub use type_inference::{InferredType, TypeContext, TypeHeuristics};

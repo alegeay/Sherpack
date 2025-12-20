@@ -315,10 +315,7 @@ impl Converter {
                             "Could not resolve variable '{}' in macro '{}': {}",
                             var.variable, var.macro_name, var.reason
                         ),
-                        suggestion: Some(format!(
-                            "Candidates: {}",
-                            var.candidates.join(", ")
-                        )),
+                        suggestion: Some(format!("Candidates: {}", var.candidates.join(", "))),
                         doc_link: None,
                     });
                 }

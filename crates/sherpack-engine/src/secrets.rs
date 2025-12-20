@@ -136,25 +136,24 @@ impl SecretFunctionState {
                 if length > 4096 {
                     return Err(Error::new(
                         ErrorKind::InvalidOperation,
-                        format!(
-                            "generate_secret: length {} exceeds maximum of 4096",
-                            length
-                        ),
+                        format!("generate_secret: length {} exceeds maximum of 4096", length),
                     ));
                 }
 
                 // Parse optional charset
                 let charset = match charset {
-                    Some(ref charset_str) => SecretCharset::from_str(charset_str).ok_or_else(|| {
-                        Error::new(
-                            ErrorKind::InvalidOperation,
-                            format!(
-                                "generate_secret: unknown charset '{}'. Valid options: \
+                    Some(ref charset_str) => {
+                        SecretCharset::from_str(charset_str).ok_or_else(|| {
+                            Error::new(
+                                ErrorKind::InvalidOperation,
+                                format!(
+                                    "generate_secret: unknown charset '{}'. Valid options: \
                                  alphanumeric, alpha, numeric, hex, base64, urlsafe",
-                                charset_str
-                            ),
-                        )
-                    })?,
+                                    charset_str
+                                ),
+                            )
+                        })?
+                    }
                     None => SecretCharset::default(),
                 };
 
@@ -207,7 +206,8 @@ mod tests {
         let state = SecretFunctionState::new();
         state.register(&mut env);
 
-        let template = r#"{{ generate_secret("password1", 16) }}-{{ generate_secret("password2", 16) }}"#;
+        let template =
+            r#"{{ generate_secret("password1", 16) }}-{{ generate_secret("password2", 16) }}"#;
         let result = env.render_str(template, ()).unwrap();
 
         let parts: Vec<&str> = result.split('-').collect();

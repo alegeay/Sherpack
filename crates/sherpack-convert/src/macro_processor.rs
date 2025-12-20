@@ -139,9 +139,9 @@ impl MacroPostProcessor {
     pub fn extract_macros(content: &str) -> Vec<MacroDefinition> {
         let mut macros = Vec::new();
         // Match {%- macro name(...) %}...{%- endmacro %}
-        let macro_re = Regex::new(
-            r"(?s)\{%-?\s*macro\s+(\w+)\s*\([^)]*\)\s*%\}(.*?)\{%-?\s*endmacro\s*%\}"
-        ).unwrap();
+        let macro_re =
+            Regex::new(r"(?s)\{%-?\s*macro\s+(\w+)\s*\([^)]*\)\s*%\}(.*?)\{%-?\s*endmacro\s*%\}")
+                .unwrap();
 
         for caps in macro_re.captures_iter(content) {
             let full_match = caps.get(0).unwrap();
@@ -168,20 +168,71 @@ impl MacroPostProcessor {
 
         // Known prefixes for qualified variables
         let qualified_prefixes = [
-            "values.", "release.", "pack.", "capabilities.", "_with_ctx.",
-            "loop.", "item.", "key.", "value.", "self.",
+            "values.",
+            "release.",
+            "pack.",
+            "capabilities.",
+            "_with_ctx.",
+            "loop.",
+            "item.",
+            "key.",
+            "value.",
+            "self.",
         ];
 
         // Known Jinja2/template keywords and builtins to ignore
         let keywords = [
-            "true", "false", "none", "null", "and", "or", "not", "in", "is",
-            "if", "else", "elif", "endif", "for", "endfor", "set", "endset",
-            "macro", "endmacro", "import", "from", "include", "block", "endblock",
-            "extends", "call", "filter", "raw", "endraw", "with", "endwith",
+            "true",
+            "false",
+            "none",
+            "null",
+            "and",
+            "or",
+            "not",
+            "in",
+            "is",
+            "if",
+            "else",
+            "elif",
+            "endif",
+            "for",
+            "endfor",
+            "set",
+            "endset",
+            "macro",
+            "endmacro",
+            "import",
+            "from",
+            "include",
+            "block",
+            "endblock",
+            "extends",
+            "call",
+            "filter",
+            "raw",
+            "endraw",
+            "with",
+            "endwith",
             // Common filter/function names
-            "nindent", "indent", "quote", "toyaml", "tojson", "trunc", "default",
-            "trimsuffix", "trimprefix", "replace", "lower", "upper", "title",
-            "dictsort", "merge", "tpl", "toString", "semver_match", "b64encode",
+            "nindent",
+            "indent",
+            "quote",
+            "toyaml",
+            "tojson",
+            "trunc",
+            "default",
+            "trimsuffix",
+            "trimprefix",
+            "replace",
+            "lower",
+            "upper",
+            "title",
+            "dictsort",
+            "merge",
+            "tpl",
+            "toString",
+            "semver_match",
+            "b64encode",
             "len",
         ];
 
@@ -189,13 +240,9 @@ impl MacroPostProcessor {
         // Pattern: {% for VAR, VAR in ... %} or {% set VAR = ... %}
         let mut declared_vars: Vec<String> = Vec::new();
 
-        let for_vars_pattern = Regex::new(
-            r"\{%-?\s*for\s+(\w+)(?:\s*,\s*(\w+))?\s+in\s+"
-        ).unwrap();
+        let for_vars_pattern = Regex::new(r"\{%-?\s*for\s+(\w+)(?:\s*,\s*(\w+))?\s+in\s+").unwrap();
 
-        let set_pattern = Regex::new(
-            r"\{%-?\s*set\s+(\w+)\s*="
-        ).unwrap();
+        let set_pattern = Regex::new(r"\{%-?\s*set\s+(\w+)\s*=").unwrap();
 
         for caps in for_vars_pattern.captures_iter(macro_body) {
             declared_vars.push(caps[1].to_string());
@@ -215,8 +262,9 @@ impl MacroPostProcessor {
         ).unwrap();
 
         let control_pattern = Regex::new(
-            r"\{%[^%]*?(?:if|elif)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:[|%}\.]|\s*\)|\s*~|\s*==|\s*!=)"
-        ).unwrap();
+            r"\{%[^%]*?(?:if|elif)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:[|%}\.]|\s*\)|\s*~|\s*==|\s*!=)",
+        )
+        .unwrap();
 
         // Also catch standalone variable references in various contexts
         let standalone_pattern = Regex::new(
@@ -241,7 +289,8 @@ impl MacroPostProcessor {
                 let var_pos = caps.get(1).unwrap().start();
                 let before = &macro_body[..var_pos];
                 let is_qualified = qualified_prefixes.iter().any(|prefix| {
-                    before.ends_with(prefix) || before.ends_with(&format!("({})", prefix.trim_end_matches('.')))
+                    before.ends_with(prefix)
+                        || before.ends_with(&format!("({})", prefix.trim_end_matches('.')))
                 });
 
                 if !is_qualified && !bare_vars.contains(&var_name) {
@@ -284,7 +333,8 @@ impl MacroPostProcessor {
                 match resolution {
                     ResolvedVariable::Unique(full_path) => {
                         // Replace this variable in the macro body
-                        result = Self::replace_bare_variable(&result, &macro_def.name, &var, &full_path);
+                        result =
+                            Self::replace_bare_variable(&result, &macro_def.name, &var, &full_path);
                     }
                     ResolvedVariable::Ambiguous(paths) => {
                         unresolved.push(UnresolvedVariable {
@@ -345,7 +395,12 @@ impl MacroPostProcessor {
     }
 
     /// Replace a bare variable with its qualified path within a specific macro
-    fn replace_bare_variable(content: &str, macro_name: &str, var: &str, full_path: &str) -> String {
+    fn replace_bare_variable(
+        content: &str,
+        macro_name: &str,
+        var: &str,
+        full_path: &str,
+    ) -> String {
         // Build a regex that matches the macro and replaces the variable inside it
         let macro_pattern = format!(
             r"(?s)(\{{% *-? *macro {} *\([^)]*\) *%\}})(.*?)(\{{% *-? *endmacro *%\}})",
@@ -354,16 +409,18 @@ impl MacroPostProcessor {
 
         let macro_re = Regex::new(&macro_pattern).unwrap();
 
-        macro_re.replace(content, |caps: &regex::Captures| {
-            let prefix = &caps[1];
-            let body = &caps[2];
-            let suffix = &caps[3];
+        macro_re
+            .replace(content, |caps: &regex::Captures| {
+                let prefix = &caps[1];
+                let body = &caps[2];
+                let suffix = &caps[3];
 
-            // Replace bare variable with qualified path in the body
-            let new_body = Self::replace_bare_in_body(body, var, full_path);
+                // Replace bare variable with qualified path in the body
+                let new_body = Self::replace_bare_in_body(body, var, full_path);
 
-            format!("{}{}{}", prefix, new_body, suffix)
-        }).to_string()
+                format!("{}{}{}", prefix, new_body, suffix)
+            })
+            .to_string()
     }
 
     /// Replace a bare variable in a macro body, being careful about context
@@ -511,7 +568,11 @@ defaultBackend:
             ResolvedVariable::Ambiguous(paths) => {
                 assert!(paths.len() >= 2);
                 assert!(paths.iter().any(|p| p.contains("controller.image.image")));
-                assert!(paths.iter().any(|p| p.contains("defaultBackend.image.image")));
+                assert!(
+                    paths
+                        .iter()
+                        .any(|p| p.contains("defaultBackend.image.image"))
+                );
             }
             _ => panic!("Expected ambiguous resolution for image"),
         }
@@ -583,7 +644,11 @@ defaultBackend:
         assert!(processed.contains("values.controller.image.chroot"));
         assert!(processed.contains("values.controller.image.digestChroot"));
         // No unresolved variables
-        assert!(unresolved.is_empty(), "Unexpected unresolved: {:?}", unresolved);
+        assert!(
+            unresolved.is_empty(),
+            "Unexpected unresolved: {:?}",
+            unresolved
+        );
     }
 
     #[test]
