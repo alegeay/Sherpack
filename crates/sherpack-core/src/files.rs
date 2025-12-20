@@ -512,7 +512,13 @@ mod tests {
         let temp = create_test_pack();
         let provider = SandboxedFileProvider::new(temp.path()).unwrap();
 
-        let result = provider.get("/etc/passwd");
+        // Use platform-appropriate absolute path
+        #[cfg(windows)]
+        let abs_path = "C:\\Windows\\System32\\config\\SAM";
+        #[cfg(not(windows))]
+        let abs_path = "/etc/passwd";
+
+        let result = provider.get(abs_path);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("absolute paths"));
     }
