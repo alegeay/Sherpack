@@ -21,11 +21,11 @@ categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
 # Internal crates
-sherpack-core = { path = "crates/sherpack-core" }
-sherpack-engine = { path = "crates/sherpack-engine" }
-sherpack-kube = { path = "crates/sherpack-kube" }
-sherpack-repo = { path = "crates/sherpack-repo" }
-sherpack-convert = { path = "crates/sherpack-convert" }
+sherpack-core = { path = "crates/sherpack-core", version = "0.1.0" }
+sherpack-engine = { path = "crates/sherpack-engine", version = "0.1.0" }
+sherpack-kube = { path = "crates/sherpack-kube", version = "0.1.0" }
+sherpack-repo = { path = "crates/sherpack-repo", version = "0.1.0" }
+sherpack-convert = { path = "crates/sherpack-convert", version = "0.1.0" }
 
 # Parser
 pest = "2.7"
