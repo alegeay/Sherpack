@@ -63,7 +63,7 @@ jobs:
           ls -la build/ | grep -E "^d" || echo "No subdirectories"
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: website/build
 
