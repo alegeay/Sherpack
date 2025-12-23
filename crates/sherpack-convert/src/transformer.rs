@@ -638,10 +638,10 @@ impl Transformer {
         }
 
         // not(x) → not x
-        if name == "not" {
-            if let Some(arg) = args.first() {
-                return Some(format!("not {}", self.transform_argument(arg)));
-            }
+        if name == "not"
+            && let Some(arg) = args.first()
+        {
+            return Some(format!("not {}", self.transform_argument(arg)));
         }
 
         // index(collection, key) → collection[key]
@@ -986,11 +986,11 @@ impl Transformer {
     /// Transform as a Jinja2 filter
     fn transform_as_filter(&self, name: &str, args: &[Argument]) -> String {
         // Special case: contains as filter (piped)
-        if name == "contains" {
-            if let Some(arg) = args.first() {
-                let needle = self.transform_argument(arg);
-                return format!("_in_({})", needle);
-            }
+        if name == "contains"
+            && let Some(arg) = args.first()
+        {
+            let needle = self.transform_argument(arg);
+            return format!("_in_({})", needle);
         }
 
         // Special case: default filter uses `or` for Helm compatibility
