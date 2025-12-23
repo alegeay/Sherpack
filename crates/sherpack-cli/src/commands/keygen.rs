@@ -3,8 +3,6 @@
 use console::style;
 use miette::{IntoDiagnostic, Result};
 use minisign::KeyPair;
-use std::fs::File;
-use std::io::BufWriter;
 use std::path::Path;
 
 /// Default directory for Sherpack keys
@@ -60,27 +58,31 @@ pub fn run(output_dir: Option<&Path>, force: bool, no_password: bool) -> Result<
         }
     };
 
-    // Generate key pair and write directly to files
-    // Note: minisign 0.8+ requires using generate_and_write_encrypted_keypair
-    // because generate_encrypted_keypair wipes secret key material from memory
-    let password_for_gen = if password.is_some() {
-        password.clone()
-    } else {
-        Some(String::new())
-    };
+    // Generate key pair
+    // We use generate_unencrypted_keypair and then manually encrypt/serialize
+    // to have full control over the output format
+    let KeyPair { pk, mut sk } = KeyPair::generate_unencrypted_keypair()
+        .map_err(|e| miette::miette!("Failed to generate key pair: {}", e))?;
 
-    let pk_file = File::create(&public_key_path).into_diagnostic()?;
-    let sk_file = File::create(&secret_key_path).into_diagnostic()?;
-    let pk_writer = BufWriter::new(pk_file);
-    let sk_writer = BufWriter::new(sk_file);
+    // Encrypt secret key if password is provided
+    if let Some(ref pwd) = password {
+        sk.encrypt(pwd)
+            .map_err(|e| miette::miette!("Failed to encrypt secret key: {}", e))?;
+    }
 
-    KeyPair::generate_and_write_encrypted_keypair(
-        pk_writer,
-        sk_writer,
-        Some("sherpack secret key"),
-        password_for_gen,
-    )
-    .map_err(|e| miette::miette!("Failed to generate key pair: {}", e))?;
+    // Create key boxes with comments
+    let pk_box = pk
+        .to_box()
+        .map_err(|e| miette::miette!("Failed to create public key box: {}", e))?;
+
+    // Use "sherpack secret key" as comment to satisfy test expectations
+    let sk_box = sk
+        .to_box(Some("sherpack secret key"))
+        .map_err(|e| miette::miette!("Failed to create secret key box: {}", e))?;
+
+    // Write keys
+    std::fs::write(&public_key_path, pk_box.to_string()).into_diagnostic()?;
+    std::fs::write(&secret_key_path, sk_box.to_string()).into_diagnostic()?;
 
     // Set restrictive permissions on secret key (Unix only)
     #[cfg(unix)]
