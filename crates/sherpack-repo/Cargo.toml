@@ -43,7 +43,7 @@ sha2 = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 url = "2"
-dirs = "5"
+dirs = "6"
 hex = "0.4"
 tracing = "0.1"
 
