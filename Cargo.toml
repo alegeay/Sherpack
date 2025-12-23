@@ -74,7 +74,7 @@ humantime-serde = "1"
 jsonschema = "0.26"
 
 # Terminal
-console = "0.15"
+console = "0.16"
 indicatif = "0.18"
 
 # Testing
