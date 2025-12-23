@@ -71,7 +71,7 @@ indexmap = { version = "2", features = ["serde"] }
 humantime-serde = "1"
 
 # Validation
-jsonschema = "0.26"
+jsonschema = "0.37"
 
 # Terminal
 console = "0.16"

@@ -488,7 +488,7 @@ impl SchemaValidator {
             .compiled
             .iter_errors(values)
             .map(|e| {
-                let path = e.instance_path.to_string();
+                let path = e.instance_path().to_string();
                 ValidationErrorInfo {
                     path: if path.is_empty() {
                         "(root)".to_string()
