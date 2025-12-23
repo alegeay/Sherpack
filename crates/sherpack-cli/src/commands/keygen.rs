@@ -3,6 +3,8 @@
 use console::style;
 use miette::{IntoDiagnostic, Result};
 use minisign::KeyPair;
+use std::fs::File;
+use std::io::BufWriter;
 use std::path::Path;
 
 /// Default directory for Sherpack keys
@@ -58,28 +60,27 @@ pub fn run(output_dir: Option<&Path>, force: bool, no_password: bool) -> Result<
         }
     };
 
-    // Generate key pair
-    // Note: minisign prompts interactively if None is passed, so we use empty string for no password
+    // Generate key pair and write directly to files
+    // Note: minisign 0.8+ requires using generate_and_write_encrypted_keypair
+    // because generate_encrypted_keypair wipes secret key material from memory
     let password_for_gen = if password.is_some() {
         password.clone()
     } else {
         Some(String::new())
     };
-    let KeyPair { pk, sk } = KeyPair::generate_encrypted_keypair(password_for_gen)
-        .map_err(|e| miette::miette!("Failed to generate key pair: {}", e))?;
 
-    // Create key boxes with comments
-    let pk_box = pk
-        .to_box()
-        .map_err(|e| miette::miette!("Failed to create public key box: {}", e))?;
+    let pk_file = File::create(&public_key_path).into_diagnostic()?;
+    let sk_file = File::create(&secret_key_path).into_diagnostic()?;
+    let pk_writer = BufWriter::new(pk_file);
+    let sk_writer = BufWriter::new(sk_file);
 
-    let sk_box = sk
-        .to_box(password.as_deref())
-        .map_err(|e| miette::miette!("Failed to create secret key box: {}", e))?;
-
-    // Write keys
-    std::fs::write(&public_key_path, pk_box.to_string()).into_diagnostic()?;
-    std::fs::write(&secret_key_path, sk_box.to_string()).into_diagnostic()?;
+    KeyPair::generate_and_write_encrypted_keypair(
+        pk_writer,
+        sk_writer,
+        Some("sherpack signing key"),
+        password_for_gen,
+    )
+    .map_err(|e| miette::miette!("Failed to generate key pair: {}", e))?;
 
     // Set restrictive permissions on secret key (Unix only)
     #[cfg(unix)]

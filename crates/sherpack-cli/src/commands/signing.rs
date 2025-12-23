@@ -2,7 +2,7 @@
 
 use console::style;
 use miette::{IntoDiagnostic, Result};
-use minisign::{SecretKey, SecretKeyBox};
+use minisign::SecretKey;
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 
@@ -10,25 +10,15 @@ use std::path::{Path, PathBuf};
 ///
 /// Tries empty password first (for unencrypted keys), then prompts for password.
 pub fn load_secret_key(key_path: &Path) -> Result<SecretKey> {
-    let key_content = std::fs::read_to_string(key_path).into_diagnostic()?;
-
-    // Try with empty password first (unencrypted keys)
-    if let Ok(sk) = try_decrypt(&key_content, Some(String::new())) {
+    // Try with empty password first (for unencrypted keys)
+    if let Ok(sk) = SecretKey::from_file(key_path, Some(String::new())) {
         return Ok(sk);
     }
 
     // Key is encrypted, prompt for password
     let password = rpassword::prompt_password("Enter key password: ").into_diagnostic()?;
-    try_decrypt(&key_content, Some(password))
-}
-
-/// Try to decrypt a secret key with a given password
-fn try_decrypt(content: &str, password: Option<String>) -> Result<SecretKey> {
-    let sk_box = SecretKeyBox::from_string(content)
-        .map_err(|e| miette::miette!("Failed to parse secret key: {}", e))?;
-    sk_box
-        .into_secret_key(password)
-        .map_err(|e| miette::miette!("Failed to decrypt key: {}", e))
+    SecretKey::from_file(key_path, Some(password))
+        .map_err(|e| miette::miette!("Failed to load secret key: {}", e))
 }
 
 /// Sign an archive file and create a .minisig signature file
