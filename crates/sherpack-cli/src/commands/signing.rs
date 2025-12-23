@@ -8,26 +8,22 @@ use std::path::{Path, PathBuf};
 
 /// Load a minisign secret key from a file
 ///
-/// Tries empty password first (for unencrypted keys), then prompts for password.
+/// minisign 0.8: Try unencrypted first, then prompt for password if encrypted.
 pub fn load_secret_key(key_path: &Path) -> Result<SecretKey> {
     let key_content = std::fs::read_to_string(key_path).into_diagnostic()?;
 
-    // Try with empty password first (unencrypted keys)
-    if let Ok(sk) = try_decrypt(&key_content, Some(String::new())) {
+    let sk_box = SecretKeyBox::from_string(&key_content)
+        .map_err(|e| miette::miette!("Failed to parse secret key: {}", e))?;
+
+    // Try loading as unencrypted key first
+    if let Ok(sk) = sk_box.clone().into_unencrypted_secret_key() {
         return Ok(sk);
     }
 
     // Key is encrypted, prompt for password
     let password = rpassword::prompt_password("Enter key password: ").into_diagnostic()?;
-    try_decrypt(&key_content, Some(password))
-}
-
-/// Try to decrypt a secret key with a given password
-fn try_decrypt(content: &str, password: Option<String>) -> Result<SecretKey> {
-    let sk_box = SecretKeyBox::from_string(content)
-        .map_err(|e| miette::miette!("Failed to parse secret key: {}", e))?;
     sk_box
-        .into_secret_key(password)
+        .into_secret_key(Some(password))
         .map_err(|e| miette::miette!("Failed to decrypt key: {}", e))
 }
 
@@ -98,5 +94,81 @@ fn build_default_comment(archive_path: &Path) -> Result<String> {
                 .unwrap_or_else(|| "unknown".to_string());
             Ok(format!("file:{}", filename))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use minisign::KeyPair;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_minisign_unencrypted_roundtrip() {
+        // 1. Generate unencrypted keypair (for --no-password case)
+        println!("1. Generating unencrypted keypair...");
+        let KeyPair { pk: _, sk } =
+            KeyPair::generate_unencrypted_keypair().expect("Failed to generate keypair");
+
+        // 2. Create key box
+        println!("2. Creating key box...");
+        let sk_box = sk.to_box(Some("test")).expect("sk box");
+        let sk_str = sk_box.to_string();
+        println!(
+            "Key string (first 100 chars): {}",
+            &sk_str[..sk_str.len().min(100)]
+        );
+
+        // 3. Parse - use into_unencrypted_secret_key for unencrypted keys
+        println!("3. Parsing secret key...");
+        let parsed_sk_box = SecretKeyBox::from_string(&sk_str).expect("parse sk");
+        let decrypted_sk = parsed_sk_box
+            .into_unencrypted_secret_key()
+            .expect("load unencrypted sk");
+
+        // 4. Sign
+        println!("4. Signing...");
+        let data = b"test data";
+        let mut cursor = Cursor::new(data.as_slice());
+        let sig =
+            minisign::sign(None, &decrypted_sk, &mut cursor, Some("comment"), None).expect("sign");
+
+        println!("5. Success! Signature:\n{}", sig.to_string());
+        assert!(sig.to_string().contains("untrusted comment"));
+    }
+
+    #[test]
+    fn test_minisign_encrypted_roundtrip() {
+        // 1. Generate encrypted keypair with actual password
+        println!("1. Generating encrypted keypair...");
+        let password = "test_password".to_string();
+        let KeyPair { pk: _, sk } = KeyPair::generate_encrypted_keypair(Some(password.clone()))
+            .expect("Failed to generate keypair");
+
+        // 2. Create key box
+        println!("2. Creating key box...");
+        let sk_box = sk.to_box(Some("test")).expect("sk box");
+        let sk_str = sk_box.to_string();
+        println!(
+            "Key string (first 100 chars): {}",
+            &sk_str[..sk_str.len().min(100)]
+        );
+
+        // 3. Parse and decrypt with same password
+        println!("3. Parsing and decrypting...");
+        let parsed_sk_box = SecretKeyBox::from_string(&sk_str).expect("parse sk");
+        let decrypted_sk = parsed_sk_box
+            .into_secret_key(Some(password))
+            .expect("decrypt sk");
+
+        // 4. Sign
+        println!("4. Signing...");
+        let data = b"test data";
+        let mut cursor = Cursor::new(data.as_slice());
+        let sig =
+            minisign::sign(None, &decrypted_sk, &mut cursor, Some("comment"), None).expect("sign");
+
+        println!("5. Success! Signature:\n{}", sig.to_string());
+        assert!(sig.to_string().contains("untrusted comment"));
     }
 }

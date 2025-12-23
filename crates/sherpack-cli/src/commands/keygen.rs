@@ -59,22 +59,24 @@ pub fn run(output_dir: Option<&Path>, force: bool, no_password: bool) -> Result<
     };
 
     // Generate key pair
-    // Note: minisign prompts interactively if None is passed, so we use empty string for no password
-    let password_for_gen = if password.is_some() {
-        password.clone()
+    // minisign 0.8: use generate_unencrypted_keypair for no password,
+    // generate_encrypted_keypair(Some(pwd)) for password-protected keys
+    let KeyPair { pk, sk } = if password.is_some() {
+        KeyPair::generate_encrypted_keypair(password.clone())
+            .map_err(|e| miette::miette!("Failed to generate key pair: {}", e))?
     } else {
-        Some(String::new())
+        KeyPair::generate_unencrypted_keypair()
+            .map_err(|e| miette::miette!("Failed to generate key pair: {}", e))?
     };
-    let KeyPair { pk, sk } = KeyPair::generate_encrypted_keypair(password_for_gen)
-        .map_err(|e| miette::miette!("Failed to generate key pair: {}", e))?;
 
     // Create key boxes with comments
     let pk_box = pk
         .to_box()
         .map_err(|e| miette::miette!("Failed to create public key box: {}", e))?;
 
+    // Use "sherpack secret key" as comment to satisfy test expectations
     let sk_box = sk
-        .to_box(password.as_deref())
+        .to_box(Some("sherpack secret key"))
         .map_err(|e| miette::miette!("Failed to create secret key box: {}", e))?;
 
     // Write keys
