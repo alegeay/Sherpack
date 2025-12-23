@@ -269,13 +269,13 @@ impl Converter {
             let mut imports_by_file: std::collections::HashMap<&str, Vec<&str>> =
                 std::collections::HashMap::new();
             for macro_name in &used_macros {
-                if let Some(source_file) = macro_sources.get(macro_name) {
-                    if source_file != this_file {
-                        imports_by_file
-                            .entry(source_file.as_str())
-                            .or_default()
-                            .push(macro_name.as_str());
-                    }
+                if let Some(source_file) = macro_sources.get(macro_name)
+                    && source_file != this_file
+                {
+                    imports_by_file
+                        .entry(source_file.as_str())
+                        .or_default()
+                        .push(macro_name.as_str());
                 }
             }
 
@@ -710,10 +710,10 @@ fn find_used_macros(content: &str, defined: &HashSet<String>) -> HashSet<String>
     for macro_name in defined {
         // Look for macro calls: macroName() with possible whitespace
         let pattern = format!(r"\b{}\s*\(\s*\)", regex::escape(macro_name));
-        if let Ok(re) = Regex::new(&pattern) {
-            if re.is_match(content) {
-                used.insert(macro_name.clone());
-            }
+        if let Ok(re) = Regex::new(&pattern)
+            && re.is_match(content)
+        {
+            used.insert(macro_name.clone());
         }
     }
 

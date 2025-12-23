@@ -30,7 +30,7 @@ sherpack-convert = { path = "crates/sherpack-convert", version = "0.2.0" }
 # Parser
 pest = "2.7"
 pest_derive = "2.7"
-phf = { version = "0.11", features = ["macros"] }
+phf = { version = "0.13", features = ["macros"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -53,8 +53,8 @@ async-trait = "0.1"
 futures = "0.3"
 
 # Kubernetes
-kube = { version = "0.98", features = ["runtime", "client", "derive"] }
-k8s-openapi = { version = "0.24", features = ["v1_31"] }
+kube = { version = "2.0", features = ["runtime", "client", "derive"] }
+k8s-openapi = { version = "0.26", features = ["v1_32"] }
 
 # Utils
 semver = { version = "1.0", features = ["serde"] }
@@ -65,7 +65,7 @@ md-5 = "0.10"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1"
-rand = "0.8"
+rand = "0.9"
 once_cell = "1"
 indexmap = { version = "2", features = ["serde"] }
 humantime-serde = "1"
