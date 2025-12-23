@@ -75,7 +75,7 @@ jsonschema = "0.26"
 
 # Terminal
 console = "0.15"
-indicatif = "0.17"
+indicatif = "0.18"
 
 # Testing
 insta = { version = "1", features = ["yaml"] }
