@@ -59,16 +59,14 @@ pub fn run(output_dir: Option<&Path>, force: bool, no_password: bool) -> Result<
     };
 
     // Generate key pair
-    // We use generate_unencrypted_keypair and then manually encrypt/serialize
-    // to have full control over the output format
-    let KeyPair { pk, mut sk } = KeyPair::generate_unencrypted_keypair()
+    // Note: minisign prompts interactively if None is passed, so we use empty string for no password
+    let password_for_gen = if password.is_some() {
+        password.clone()
+    } else {
+        Some(String::new())
+    };
+    let KeyPair { pk, sk } = KeyPair::generate_encrypted_keypair(password_for_gen)
         .map_err(|e| miette::miette!("Failed to generate key pair: {}", e))?;
-
-    // Encrypt secret key if password is provided
-    if let Some(ref pwd) = password {
-        sk.encrypt(pwd)
-            .map_err(|e| miette::miette!("Failed to encrypt secret key: {}", e))?;
-    }
 
     // Create key boxes with comments
     let pk_box = pk
