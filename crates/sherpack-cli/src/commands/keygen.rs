@@ -77,7 +77,7 @@ pub fn run(output_dir: Option<&Path>, force: bool, no_password: bool) -> Result<
     KeyPair::generate_and_write_encrypted_keypair(
         pk_writer,
         sk_writer,
-        Some("sherpack signing key"),
+        Some("sherpack secret key"),
         password_for_gen,
     )
     .map_err(|e| miette::miette!("Failed to generate key pair: {}", e))?;
