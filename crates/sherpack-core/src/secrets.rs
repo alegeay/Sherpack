@@ -20,7 +20,7 @@
 
 use chrono::{DateTime, Utc};
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng, TryRngCore};
+use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -249,7 +249,7 @@ impl SecretGenerator {
     pub fn new() -> Self {
         Self {
             state: SecretState::new(),
-            rng: StdRng::from_rng(&mut rand::rng()).expect("RNG initialization failed"),
+            rng: StdRng::from_rng(&mut rand::rng()),
         }
     }
 
@@ -257,7 +257,7 @@ impl SecretGenerator {
     pub fn with_state(state: SecretState) -> Self {
         Self {
             state,
-            rng: StdRng::from_rng(&mut rand::rng()).expect("RNG initialization failed"),
+            rng: StdRng::from_rng(&mut rand::rng()),
         }
     }
 
