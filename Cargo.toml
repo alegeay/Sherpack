@@ -71,7 +71,7 @@ indexmap = { version = "2", features = ["serde"] }
 humantime-serde = "1"
 
 # Validation
-jsonschema = "0.37"
+jsonschema = "0.38"
 
 # Terminal
 console = "0.16"
@@ -95,7 +95,7 @@ flate2 = "1.0"
 minisign = "0.8"
 
 # HTTP & Networking
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "stream"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "gzip", "stream"] }
 url = "2"
 
 # OCI
