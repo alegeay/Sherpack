@@ -1227,6 +1227,9 @@ data:
 
     #[tokio::test]
     async fn test_hook_executor_execute_phase_empty() {
+        // Install rustls crypto provider for kube client
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
         let mut executor = HookExecutor::new();
         let client = kube::Client::try_default().await.ok();
 

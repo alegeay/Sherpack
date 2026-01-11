@@ -54,3 +54,4 @@ console = { workspace = true }
 [dev-dependencies]
 insta = { workspace = true }
 tempfile = "3"
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs"] }
