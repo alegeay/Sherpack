@@ -315,6 +315,23 @@ sherpack recover <NAME> [OPTIONS]
 |--------|-------------|
 | `-n, --namespace <NS>` | Namespace |
 
+### test
+
+Run `test`-phase hooks against an installed release. Locates resources
+annotated with `sherpack.io/hook: test` (or `helm.sh/hook: test`) in the
+latest stored manifest and executes them against the cluster.
+
+```bash
+sherpack test <NAME> [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `-n, --namespace <NS>` | Namespace (default: `default`) |
+
+The command exits non-zero if any test hook reports failure; pass/fail
+results and per-hook duration are printed to stdout.
+
 ---
 
 ## Repository Commands
@@ -359,6 +376,28 @@ Remove repository.
 
 ```bash
 sherpack repo remove <NAME>
+```
+
+### repo index
+
+Generate a repository `index.yaml` from a directory of `*.tgz` packs.
+Equivalent to `helm repo index`.
+
+```bash
+sherpack repo index <DIR> [OPTIONS]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--url <URL>` | Base URL prepended to each archive filename in the index |
+| `--merge <PATH>` | Existing `index.yaml` to merge into (existing entries kept, new ones appended) |
+
+```bash
+# Generate an index with absolute URLs
+sherpack repo index ./charts --url https://charts.example.com
+
+# Incremental update — only adds new (name, version) entries
+sherpack repo index ./charts --merge ./charts/index.yaml
 ```
 
 ### search
@@ -439,6 +478,31 @@ Show dependency tree.
 
 ```bash
 sherpack dependency tree <PACK>
+```
+
+---
+
+## Shell Completion
+
+### completion
+
+Generate a shell completion script and write it to stdout.
+
+```bash
+sherpack completion <SHELL>
+```
+
+`<SHELL>` is one of `bash`, `zsh`, `fish`, `powershell`, `elvish`.
+
+```bash
+# Bash
+sherpack completion bash > ~/.local/share/bash-completion/completions/sherpack
+
+# Zsh (assumes ${fpath[1]} is on your path)
+sherpack completion zsh > "${fpath[1]}/_sherpack"
+
+# Fish
+sherpack completion fish > ~/.config/fish/completions/sherpack.fish
 ```
 
 ---

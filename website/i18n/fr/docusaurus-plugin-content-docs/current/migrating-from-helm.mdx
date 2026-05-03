@@ -1,0 +1,580 @@
+---
+id: migrating-from-helm
+title: Migration depuis Helm
+description: Un guide pratique pour les utilisateurs Helm qui veulent prendre Sherpack en main — syntaxe, commandes, pièges, et une recette de migration en 60 secondes.
+sidebar_position: 2
+slug: /migrating-from-helm
+---
+
+<div className="migration-hero">
+  <div className="migration-hero-badge">
+    <span className="migration-hero-badge-pulse" aria-hidden="true" />
+    <span>POUR LES UTILISATEURS HELM · COMPATIBILITÉ D'ABORD</span>
+  </div>
+
+  <h1 className="migration-hero-title">
+    De <span className="migration-hero-strike">Helm</span> à{' '}
+    <span className="migration-hero-brand">Sherpack</span>
+    <span className="migration-hero-cursor" aria-hidden="true" />
+  </h1>
+
+  <p className="migration-hero-lead">
+    Même modèle mental. Syntaxe Jinja2 familière. Vrai <code>lookup()</code>,
+    CRDs intelligents, lock files. Écrit en Rust, un seul binaire, sans
+    écosystème de plugins à gérer.
+  </p>
+
+  <div className="migration-hero-terminal" role="img" aria-label="Terminal qui montre la commande sherpack convert">
+    <div className="migration-hero-terminal-bar">
+      <span className="migration-dot migration-dot-r" />
+      <span className="migration-dot migration-dot-y" />
+      <span className="migration-dot migration-dot-g" />
+      <span className="migration-hero-terminal-title">~/charts</span>
+    </div>
+    <pre className="migration-hero-terminal-body">
+      <span className="migration-terminal-line"><span className="migration-prompt">$</span> <span className="migration-typing">sherpack convert ./mon-helm-chart</span></span>
+      <span className="migration-terminal-line migration-terminal-reveal-1"><span className="migration-ok">✓</span> <span className="migration-acc">43</span> templates analysés</span>
+      <span className="migration-terminal-line migration-terminal-reveal-2"><span className="migration-ok">✓</span> Go templates → Jinja2</span>
+      <span className="migration-terminal-line migration-terminal-reveal-3"><span className="migration-ok">✓</span> Écrit dans <span className="migration-acc">./mon-helm-chart-pack/Pack.yaml</span></span>
+      <span className="migration-terminal-line migration-terminal-reveal-4"><span className="migration-prompt">$</span> <span className="migration-caret">_</span></span>
+    </pre>
+  </div>
+</div>
+
+## Pourquoi se donner la peine ?
+
+Sherpack n'essaie pas de remplacer Helm partout — il essaie d'être **meilleur
+que Helm sur ce qui fait mal**, et un quasi drop-in pour le reste. Si tu
+as déjà souhaité que l'un des points ci-dessous soit différent, ce guide
+est pour toi.
+
+<div className="migration-pain-grid">
+  <div className="migration-pain-card">
+    <div className="migration-pain-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 3v18M16 3v18M3 8h18M3 16h18" />
+      </svg>
+    </div>
+    <h3>Les Go templates font mal</h3>
+    <p>
+      <code>{`{{- if .Values.foo -}}`}</code> et la gymnastique des
+      pipelines, c'est une taxe quotidienne. Sherpack utilise{' '}
+      <strong>Jinja2</strong> — la syntaxe que les développeurs Python
+      connaissent par cœur.
+    </p>
+  </div>
+
+  <div className="migration-pain-card">
+    <div className="migration-pain-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2v6M12 22v-6M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M22 12h-6M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24" />
+      </svg>
+    </div>
+    <h3>Les CRDs sont gelés sous Helm</h3>
+    <p>
+      Helm ne met <em>jamais</em> à jour les CRDs après l'install. Sherpack
+      analyse les changements (24 catégories), classe la sûreté, et te
+      laisse mettre à jour en confiance.
+    </p>
+  </div>
+
+  <div className="migration-pain-card">
+    <div className="migration-pain-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <path d="m9 12 2 2 4-4" />
+      </svg>
+    </div>
+    <h3>Reproductible par défaut</h3>
+    <p>
+      <code>Pack.lock.yaml</code> avec policies de version (Strict,
+      SemverPatch, SemverMinor). Les conflits de dépendance en losange
+      remontent comme erreurs, pas comme overrides silencieux.
+    </p>
+  </div>
+
+  <div className="migration-pain-card">
+    <div className="migration-pain-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        <path d="m9 11 3 3L22 4" />
+      </svg>
+    </div>
+    <h3>Un binaire, ~19 Mo</h3>
+    <p>
+      Rust natif. Pas de runtime Go. Pas de gestionnaire de plugins.
+      Server-Side Apply, chunking du release storage au-delà de 1 Mo,
+      et génération de secrets idempotente sont nativement intégrés.
+    </p>
+  </div>
+</div>
+
+## Migrer en 60 secondes
+
+<div className="migration-flow-section">
+
+  <ol className="migration-flow-steps">
+    <li>
+      <span className="migration-step-number">01</span>
+      <div>
+        <h3>Convertir</h3>
+        <p>Lance <code>sherpack convert</code> sur ton chart Helm existant.</p>
+        <pre className="migration-code">{`$ sherpack convert ./mon-helm-chart -o ./mon-pack`}</pre>
+      </div>
+    </li>
+    <li>
+      <span className="migration-step-number">02</span>
+      <div>
+        <h3>Rendre</h3>
+        <p>Vérifie le rendu exactement comme avec <code>helm template</code>.</p>
+        <pre className="migration-code">{`$ sherpack template ma-release ./mon-pack`}</pre>
+      </div>
+    </li>
+    <li>
+      <span className="migration-step-number">03</span>
+      <div>
+        <h3>Installer</h3>
+        <p>Même commande, mêmes flags, même cycle de vie de release.</p>
+        <pre className="migration-code">{`$ sherpack install ma-release ./mon-pack -n production`}</pre>
+      </div>
+    </li>
+  </ol>
+
+  <svg
+    viewBox="0 0 800 220"
+    className="migration-flow-svg"
+    role="img"
+    aria-label="Flux de migration : chart Helm vers sherpack convert, sherpack install, et déploiement sur le cluster Kubernetes"
+  >
+    <defs>
+      <linearGradient id="flowStrokeFr" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stopColor="#00d4aa" stopOpacity="0.2" />
+        <stop offset="50%" stopColor="#00d4aa" stopOpacity="1" />
+        <stop offset="100%" stopColor="#00d4aa" stopOpacity="0.2" />
+      </linearGradient>
+      <filter id="flowGlowFr" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="3" result="blur" />
+        <feMerge>
+          <feMergeNode in="blur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+    </defs>
+
+    <path
+      d="M 60 110 L 220 110 L 380 110 L 540 110 L 740 110"
+      fill="none"
+      stroke="url(#flowStrokeFr)"
+      strokeWidth="2"
+      strokeDasharray="900"
+      strokeDashoffset="900"
+      className="migration-flow-path"
+    />
+
+    <circle r="5" fill="#00d4aa" filter="url(#flowGlowFr)" className="migration-flow-pulse">
+      <animateMotion dur="4s" repeatCount="indefinite" rotate="auto"
+        path="M 60 110 L 220 110 L 380 110 L 540 110 L 740 110" />
+    </circle>
+
+    <g className="migration-flow-node" style={{ animationDelay: '0.1s' }}>
+      <rect x="20" y="80" width="80" height="60" rx="8" className="migration-flow-box" />
+      <text x="60" y="105" textAnchor="middle" className="migration-flow-label">Chart</text>
+      <text x="60" y="125" textAnchor="middle" className="migration-flow-label">Helm</text>
+    </g>
+
+    <g className="migration-flow-node" style={{ animationDelay: '0.5s' }}>
+      <rect x="160" y="70" width="120" height="80" rx="8" className="migration-flow-action" />
+      <text x="220" y="100" textAnchor="middle" className="migration-flow-action-label">$ sherpack</text>
+      <text x="220" y="120" textAnchor="middle" className="migration-flow-action-label">convert</text>
+    </g>
+
+    <g className="migration-flow-node" style={{ animationDelay: '0.9s' }}>
+      <rect x="340" y="80" width="80" height="60" rx="8" className="migration-flow-box" />
+      <text x="380" y="105" textAnchor="middle" className="migration-flow-label">Pack</text>
+      <text x="380" y="125" textAnchor="middle" className="migration-flow-sublabel">.yaml</text>
+    </g>
+
+    <g className="migration-flow-node" style={{ animationDelay: '1.3s' }}>
+      <rect x="480" y="70" width="120" height="80" rx="8" className="migration-flow-action" />
+      <text x="540" y="100" textAnchor="middle" className="migration-flow-action-label">$ sherpack</text>
+      <text x="540" y="120" textAnchor="middle" className="migration-flow-action-label">install</text>
+    </g>
+
+    <g className="migration-flow-node" style={{ animationDelay: '1.7s' }}>
+      <circle cx="740" cy="110" r="36" className="migration-flow-cluster" />
+      <path d="M 740 86 L 760 100 L 760 122 L 740 134 L 720 122 L 720 100 Z"
+        fill="none" stroke="#00d4aa" strokeWidth="1.5" />
+      <text x="740" y="170" textAnchor="middle" className="migration-flow-label">cluster</text>
+    </g>
+  </svg>
+
+</div>
+
+## Antisèche de syntaxe
+
+Quasiment chaque construction de template Helm a un équivalent en une
+ligne dans Sherpack. Le converter le fait pour toi, mais connaître la
+correspondance aide à lire et ajuster le résultat.
+
+<div className="migration-syntax-grid">
+  <div className="migration-syntax-col">
+    <div className="migration-syntax-label">
+      <span className="migration-syntax-badge migration-syntax-badge-helm">HELM</span>
+      <span>Go templates</span>
+    </div>
+
+```handlebars
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "myapp.fullname" . }}
+  labels:
+    {{- include "myapp.labels" . | nindent 4 }}
+spec:
+{{- range .Values.ingress.hosts }}
+  - host: {{ .host | quote }}
+{{- end }}
+{{- end }}
+```
+
+  </div>
+
+  <div className="migration-syntax-arrow" aria-hidden="true">
+    <svg viewBox="0 0 60 24" width="60" height="24">
+      <path d="M 0 12 L 50 12 M 42 5 L 50 12 L 42 19"
+        stroke="#00d4aa" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  </div>
+
+  <div className="migration-syntax-col">
+    <div className="migration-syntax-label">
+      <span className="migration-syntax-badge migration-syntax-badge-sherpack">SHERPACK</span>
+      <span>Jinja2</span>
+    </div>
+
+```jinja
+{% if values.ingress.enabled %}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ release.name }}
+  labels:
+    {{ labels() | nindent(4) }}
+spec:
+{% for h in values.ingress.hosts %}
+  - host: {{ h.host | quote }}
+{% endfor %}
+{% endif %}
+```
+
+  </div>
+</div>
+
+<details>
+<summary>Plus de correspondances</summary>
+
+| Concept | Helm | Sherpack |
+|---|---|---|
+| Conditionnel | `{{- if .Values.x }}…{{- end }}` | `{% if values.x %}…{% endif %}` |
+| Boucle | `{{- range .Values.list }}` | `{% for x in values.list %}` |
+| Filtre pipeline | `{{ .Values.x \| upper }}` | `{{ values.x \| upper }}` |
+| Helper indent | `{{ … \| nindent 4 }}` | `{{ … \| nindent(4) }}` |
+| Define / include | `{{ define "x" }}` + `{{ include "x" . }}` | `{% macro x() %}` + `{{ x() }}` |
+| Whitespace | `{{- … -}}` | `{%- … -%}` |
+| Données chart | `.Chart.Name` | `pack.name` |
+| Release | `.Release.Name` | `release.name` |
+| Values | `.Values.x` | `values.x` |
+| API Files | `.Files.Get "config.json"` | `files.Get("config.json")` |
+| Lookup | `lookup "v1" "Secret" .Release.Namespace "x"` | `lookup("v1", "Secret", release.namespace, "x")` |
+
+</details>
+
+## Équivalence des commandes
+
+Pas besoin de réapprendre la CLI. Les verbes mappent presque un pour un.
+
+<div className="migration-cmd-table-wrap">
+
+| Helm | Sherpack | Notes |
+|---|---|---|
+| `helm install` | `sherpack install` | `--wait`, `--atomic`, `--dry-run` supportés |
+| `helm upgrade` | `sherpack upgrade` | `--install`, `--reuse-values`, `--reset-values` |
+| `helm uninstall` | `sherpack uninstall` | `--keep-history` supporté |
+| `helm rollback` | `sherpack rollback` | |
+| `helm list` | `sherpack list` | `--all-namespaces` supporté |
+| `helm status` | `sherpack status` | flags `--manifest`, `--show-values` |
+| `helm history` | `sherpack history` | |
+| `helm template` | `sherpack template` | `--set`, `-f`, `--show-only` |
+| `helm lint` | `sherpack lint` | + validation JSON Schema |
+| `helm package` | `sherpack package` | avec manifest SHA256 |
+| `helm verify` | `sherpack verify` | Minisign à la place de PGP |
+| `helm test` | `sherpack test` | exécute les hooks de phase `test` |
+| `helm repo add` | `sherpack repo add` | HTTP + OCI |
+| `helm repo update` | `sherpack repo update` | |
+| `helm repo index` | `sherpack repo index` | `--url`, `--merge` |
+| `helm search repo` | `sherpack search` | cache SQLite FTS5 |
+| `helm pull` | `sherpack pull` | |
+| `helm push` | `sherpack push` | registres OCI |
+| `helm dependency update` | `sherpack dependency update` | avec `Pack.lock.yaml` |
+| `helm completion bash` | `sherpack completion bash` | bash, zsh, fish, powershell, elvish |
+
+</div>
+
+## Le nouveau modèle de `lookup()`
+
+Le `lookup` de Helm interroge le cluster au moment du rendu pendant
+`install`/`upgrade` et retourne `{}` pendant `helm template`. Sherpack
+fait **exactement la même chose**, mais avec un twist : chaque résultat
+non-vide produit un warning structuré pour que le non-déterminisme
+ne soit pas silencieux.
+
+<div className="migration-lookup-section">
+  <svg
+    viewBox="0 0 720 280"
+    className="migration-lookup-svg"
+    role="img"
+    aria-label="Cycle de vie de lookup() : retourne vide en mode template, interroge le cluster en mode install/upgrade"
+  >
+    <defs>
+      <linearGradient id="lookupGradFr" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="#00d4aa" stopOpacity="0.4" />
+        <stop offset="100%" stopColor="#00d4aa" stopOpacity="0" />
+      </linearGradient>
+    </defs>
+
+    <g>
+      <rect x="20" y="20" width="320" height="240" rx="14" className="migration-lookup-box" />
+      <text x="40" y="50" className="migration-lookup-box-title">sherpack template</text>
+      <text x="40" y="72" className="migration-lookup-box-kicker">HORS-LIGNE · DÉTERMINISTE</text>
+
+      <g transform="translate(40, 100)">
+        <rect width="240" height="38" rx="6" className="migration-lookup-call-a" />
+        <text x="14" y="24" className="migration-lookup-call">lookup("v1","Secret",…)</text>
+      </g>
+
+      <path d="M 160 145 L 160 175" stroke="#8b949e" strokeWidth="1.5"
+        strokeDasharray="3 3" />
+      <path d="M 154 169 L 160 178 L 166 169" fill="none" stroke="#8b949e" strokeWidth="1.5" />
+
+      <g transform="translate(40, 184)">
+        <rect width="240" height="50" rx="6" className="migration-lookup-result-a" />
+        <text x="14" y="22" className="migration-lookup-result-label">retourne</text>
+        <text x="14" y="40" className="migration-lookup-result-value">{`{}`}</text>
+      </g>
+    </g>
+
+    <line x1="370" y1="40" x2="370" y2="240"
+      stroke="#1a2332" strokeWidth="1" strokeDasharray="2 4" />
+
+    <g>
+      <rect x="400" y="20" width="300" height="240" rx="14" className="migration-lookup-box-live" />
+      <text x="420" y="50" className="migration-lookup-box-title-live">sherpack install / upgrade</text>
+      <text x="420" y="72" className="migration-lookup-box-kicker-live">LIVE · CONNECTÉ AU CLUSTER</text>
+
+      <g transform="translate(420, 100)">
+        <rect width="220" height="38" rx="6" className="migration-lookup-call-b" />
+        <text x="14" y="24" className="migration-lookup-call">lookup("v1","Secret",…)</text>
+      </g>
+
+      <path d="M 530 145 L 530 175" stroke="#00d4aa" strokeWidth="1.5"
+        className="migration-lookup-arrow" />
+      <path d="M 524 169 L 530 178 L 536 169" fill="none" stroke="#00d4aa" strokeWidth="1.5" />
+
+      <g transform="translate(420, 184)">
+        <rect width="220" height="50" rx="6" className="migration-lookup-result-b" />
+        <text x="14" y="22" className="migration-lookup-result-label">retourne le Secret</text>
+        <text x="14" y="40" className="migration-lookup-result-value-live">vivant du cluster</text>
+      </g>
+
+      <circle cx="660" cy="160" r="3" fill="#00d4aa" className="migration-lookup-signal" />
+      <circle cx="660" cy="160" r="6" fill="none" stroke="#00d4aa" strokeWidth="1" className="migration-lookup-ring" />
+      <circle cx="660" cy="160" r="10" fill="none" stroke="#00d4aa" strokeWidth="1" className="migration-lookup-ring-2" />
+    </g>
+  </svg>
+
+  <div className="migration-lookup-note">
+    <strong>Ce qui change</strong> par rapport à Helm : timeout (5s par
+    défaut, override avec <code>SHERPACK_LOOKUP_TIMEOUT_SECS</code>), cache
+    par-rendu pour dédupliquer les appels identiques, et warnings agrégés
+    pour faire remonter le non-déterminisme GitOps. Voir le guide dédié <a href="https://github.com/alegeay/Sherpack/blob/main/docs/LOOKUP.md">LOOKUP.md</a> pour les patterns de migration.
+  </div>
+</div>
+
+## Parité fonctionnelle d'un coup d'œil
+
+<div className="migration-parity-wrap">
+
+| | Helm | Sherpack |
+|---|:---:|:---:|
+| Moteur de templates | Go templates | **Jinja2 (MiniJinja)** |
+| API `.Files` | ✓ | ✓ |
+| `templates/NOTES.txt` | ✓ | ✓ |
+| Subcharts (scoping values + globals) | ✓ | ✓ |
+| Hooks (9 phases) | ✓ | ✓ + sync waves |
+| Server-Side Apply | ✓ | ✓ |
+| `lookup()` | ✓ | ✓ + timeout + warnings |
+| Runner `helm test` | ✓ | ✓ (`sherpack test`) |
+| `helm repo index` | ✓ | ✓ (`sherpack repo index`) |
+| Shell completion | ✓ | ✓ |
+| Push/pull OCI | ✓ | ✓ |
+| `Pack.lock.yaml` (policies semver) | ✗ | **✓** |
+| Détection conflit en losange | ✗ | **✓** |
+| Mises à jour CRD intelligentes | ✗ | **✓** (24 types de changement) |
+| Chunking du release storage > 1 Mo | ✗ | **✓** |
+| Génération de secrets idempotente | ✗ | **✓** (`generate_secret`) |
+| Protection redirect cross-origine | ✗ | **✓** |
+| Système de plugins | ✓ | ✗ |
+| `helm get notes/hooks/metadata` | ✓ | partiel |
+| Recherche Artifact Hub | ✓ | ✗ |
+
+</div>
+
+## Pièges à connaître
+
+<div className="migration-gotcha-list">
+
+  <details className="migration-gotcha">
+    <summary>
+      <span className="migration-gotcha-icon" aria-hidden="true">⚠</span>
+      Les warnings <code>lookup()</code> demandent un niveau de log élevé
+    </summary>
+    <p>
+      Sherpack utilise <code>tracing</code>. La CLI est en niveau{' '}
+      <code>warn</code> par défaut sur les crates sherpack et écrit sur
+      stderr — tu vois donc les warnings lookup. Pour plus de détail,
+      mets <code>RUST_LOG=info</code> ou utilise <code>--debug</code>.
+    </p>
+  </details>
+
+  <details className="migration-gotcha">
+    <summary>
+      <span className="migration-gotcha-icon" aria-hidden="true">⚠</span>
+      <code>.helmignore</code> n'est pas honoré au packaging
+    </summary>
+    <p>
+      Le converter le renomme en <code>.sherpackignore</code> mais{' '}
+      <code>sherpack package</code> ne le lit pas encore. Si tu as des
+      fichiers à exclure du paquet, supprime-les avant de packager.
+    </p>
+  </details>
+
+  <details className="migration-gotcha">
+    <summary>
+      <span className="migration-gotcha-icon" aria-hidden="true">⚠</span>
+      Certaines fonctions Sprig n'ont pas d'équivalent direct
+    </summary>
+    <p>
+      <code>dateModify</code>, <code>dateInZone</code>, <code>htpasswd</code>,
+      <code>bcrypt</code>, <code>fromToml</code>/<code>toToml</code>, et
+      les helpers OS/URL ne sont pas portés. Le converter les flag pour
+      qu'ils apparaissent dans le rapport de warnings.
+    </p>
+  </details>
+
+  <details className="migration-gotcha">
+    <summary>
+      <span className="migration-gotcha-icon" aria-hidden="true">⚠</span>
+      Pas (encore) d'écosystème de plugins
+    </summary>
+    <p>
+      Des outils comme helm-diff, helm-secrets, helm-git n'ont pas de
+      remplaçants directs. Le natif Sherpack couvre le diff
+      (<code>--diff</code>), la génération idempotente de secrets, et les
+      lock files — mais si tu dépends fortement de plugins, évalue
+      avec attention.
+    </p>
+  </details>
+
+  <details className="migration-gotcha">
+    <summary>
+      <span className="migration-gotcha-icon" aria-hidden="true">✓</span>
+      Tu peux faire tourner Sherpack et Helm côte à côte
+    </summary>
+    <p>
+      Sherpack stocke les releases sous un label différent
+      (<code>app.kubernetes.io/managed-by=sherpack</code>) et utilise des
+      annotations différentes. Les releases Helm restent invisibles à
+      Sherpack et inversement — pratique pendant une migration progressive.
+    </p>
+  </details>
+
+</div>
+
+## FAQ
+
+<details className="migration-faq">
+<summary>Mes charts Helm existants continueront-ils de fonctionner avec Helm ?</summary>
+<p>
+Oui. <code>sherpack convert</code> écrit un nouveau Pack dans un dossier
+séparé ; ton chart d'origine n'est pas touché. Fais tourner les deux côte
+à côte tant que tu n'es pas confiant dans la migration.
+</p>
+</details>
+
+<details className="migration-faq">
+<summary>Et les subcharts et les umbrella charts ?</summary>
+<p>
+Sherpack gère les subcharts avec la même sémantique de scoping de values
+et de globals que Helm. Le dossier <code>charts/</code> devient{' '}
+<code>packs/</code> ; les références dans <code>Pack.yaml</code> miroitent
+le bloc dependency du <code>Chart.yaml</code> de Helm.
+</p>
+</details>
+
+<details className="migration-faq">
+<summary>La sortie rendue est-elle byte-identique à celle de Helm ?</summary>
+<p>
+Pour la plupart des charts, oui — modulo les whitespaces et les
+différences listées dans l'antisèche. Lance{' '}
+<code>sherpack template</code> et <code>helm template</code> sur les mêmes
+entrées et fais un diff pour vérifier avant d'installer en production.
+</p>
+</details>
+
+<details className="migration-faq">
+<summary>Puis-je utiliser Sherpack avec ArgoCD ou Flux ?</summary>
+<p>
+Oui — rends avec <code>sherpack template</code> et laisse le contrôleur
+GitOps appliquer. <strong>Ne mélange pas <code>sherpack install</code> impératif</strong>
+avec la réconciliation GitOps ; choisis l'un ou l'autre.
+</p>
+</details>
+
+<details className="migration-faq">
+<summary>Performance vs Helm ?</summary>
+<p>
+Binaire Rust natif, ~19 Mo, pas de runtime Go. Les temps de rendu pour
+les charts typiques sont sub-secondes. Le moteur MiniJinja est rapide,
+mais les vrais gains sont sur la recherche (SQLite FTS5) et la
+résolution de dépendances.
+</p>
+</details>
+
+## Étapes suivantes
+
+<div className="migration-cta-grid">
+  <a href="/Sherpack/fr/docs/getting-started/installation" className="migration-cta">
+    <div className="migration-cta-kicker">1.</div>
+    <h3>Installer Sherpack</h3>
+    <p>Cargo, binaire, ou Docker.</p>
+  </a>
+
+  <a href="/Sherpack/fr/docs/getting-started/quick-start" className="migration-cta">
+    <div className="migration-cta-kicker">2.</div>
+    <h3>Démarrage rapide</h3>
+    <p>Tour en cinq minutes d'un Pack réel.</p>
+  </a>
+
+  <a href="/Sherpack/fr/docs/cli-reference" className="migration-cta">
+    <div className="migration-cta-kicker">3.</div>
+    <h3>Référence CLI</h3>
+    <p>Toutes les commandes, tous les flags.</p>
+  </a>
+
+  <a href="/Sherpack/fr/docs/templating/functions" className="migration-cta">
+    <div className="migration-cta-kicker">4.</div>
+    <h3>Référence templating</h3>
+    <p>Fonctions et filtres Jinja2 + Sherpack.</p>
+  </a>
+</div>

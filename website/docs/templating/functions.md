@@ -136,6 +136,90 @@ Unlike Helm's `randAlphaNum`, `generate_secret` is designed for GitOps workflows
 The state can be persisted between renders, ensuring secrets don't change on every upgrade.
 :::
 
+## Parsing
+
+### fromjson
+
+Parse a JSON string into a value (Helm-compatible `fromJson`):
+
+```yaml
+# Parse a JSON string from values
+{% set parsed = fromjson(values.json_blob) %}
+host: {{ parsed.database.host }}
+
+# Inline literal
+{{ fromjson('{"name":"test","port":8080}').port }}
+# Output: 8080
+```
+
+Available as both a filter (`values.json_blob | fromjson`) and a function.
+Errors out if the input is not valid JSON.
+
+### fromyaml
+
+Parse a YAML string into a value (Helm-compatible `fromYaml`):
+
+```yaml
+{% set config = fromyaml(values.raw_yaml) %}
+{{ config | toyaml }}
+
+# Inline literal
+{{ fromyaml('a:\n  b: deep').a.b }}
+# Output: deep
+```
+
+Available as both a filter and a function.
+
+## Cluster Lookup
+
+### lookup
+
+Read existing cluster resources at render time (Helm-compatible). See
+[the dedicated guide](https://github.com/alegeay/Sherpack/blob/main/docs/LOOKUP.md)
+for the full contract, gotchas, and alternatives.
+
+**Signature:** `lookup(api_version, kind, namespace, name)`
+
+```yaml
+# Reuse an existing TLS secret if it already exists
+{%- set existing = lookup("v1", "Secret", release.namespace, release.name ~ "-tls") %}
+data:
+  tls.crt: {{ existing.data["tls.crt"] if existing else "" }}
+  tls.key: {{ existing.data["tls.key"] if existing else "" }}
+
+# Conditional install if a CRD is present
+{%- if lookup("apiextensions.k8s.io/v1", "CustomResourceDefinition", "", "issuers.cert-manager.io") %}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ release.name }}
+{%- endif %}
+
+# List mode (empty name argument)
+{%- set pods = lookup("v1", "Pod", "production", "") %}
+podCount: {{ pods["items"] | length }}
+```
+
+| Mode | Behavior |
+|---|---|
+| `sherpack template` | Always returns `{}` (no cluster access). |
+| `sherpack install/upgrade` | Queries the cluster live. |
+| Resource not found / 403 / 404 / timeout | Returns `{}` silently. |
+| Empty `name` argument | Returns `{items: [...]}` (list mode). |
+
+**Configurable timeout** (default 5s):
+
+```bash
+SHERPACK_LOOKUP_TIMEOUT_SECS=15 sherpack install myapp ./pack
+```
+
+:::warning Non-deterministic by design
+Templates that use `lookup` produce different manifests against different
+clusters. Prefer `generate_secret` for random values, and explicit values
+for cluster-state-aware logic. See [LOOKUP.md](https://github.com/alegeay/Sherpack/blob/main/docs/LOOKUP.md)
+for migration patterns.
+:::
+
 ## Error Handling
 
 ### fail

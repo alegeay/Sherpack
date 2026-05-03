@@ -38,6 +38,28 @@ data:
     {{ values.config | tojson_pretty | indent(4) }}
 ```
 
+### fromjson
+
+Parse a JSON string into a value (Helm-compatible `fromJson`):
+
+```yaml
+{% set parsed = values.json_string | fromjson %}
+host: {{ parsed.database.host }}
+```
+
+Also usable as a global function: `{{ fromjson(values.json_string) }}`.
+
+### fromyaml
+
+Parse a YAML string into a value (Helm-compatible `fromYaml`):
+
+```yaml
+{% set config = values.raw_yaml | fromyaml %}
+{{ config | toyaml }}
+```
+
+Also usable as a global function: `{{ fromyaml(values.raw_yaml) }}`.
+
 ## Encoding
 
 ### b64encode
