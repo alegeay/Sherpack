@@ -1,6 +1,7 @@
 //! Sherpack CLI - The Kubernetes package manager with Jinja2 templates
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -566,9 +567,35 @@ enum Commands {
         destination: String,
     },
 
+    /// Run `test`-phase hooks against an installed release
+    ///
+    /// Equivalent to `helm test`. Locates resources annotated with
+    /// `sherpack.io/hook: test` (or `helm.sh/hook: test`) in the latest
+    /// stored release manifest and executes them against the cluster.
+    Test {
+        /// Release name
+        name: String,
+
+        /// Namespace
+        #[arg(short, long, default_value = "default")]
+        namespace: String,
+    },
+
     /// Manage pack dependencies
     #[command(subcommand, name = "dependency", alias = "dep")]
     Dependency(DependencyCommands),
+
+    /// Generate shell completion script (writes to stdout)
+    ///
+    /// Examples:
+    ///   sherpack completion bash > ~/.local/share/bash-completion/completions/sherpack
+    ///   sherpack completion zsh  > ${fpath[1]}/_sherpack
+    ///   sherpack completion fish > ~/.config/fish/completions/sherpack.fish
+    Completion {
+        /// Shell to generate completion for
+        #[arg(value_enum)]
+        shell: Shell,
+    },
 }
 
 /// Repository subcommands
@@ -615,6 +642,23 @@ enum RepoCommands {
         /// Repository name
         name: String,
     },
+
+    /// Generate a repository index.yaml from a directory of *.tgz packs
+    ///
+    /// Equivalent to `helm repo index`. Walks the directory for archives,
+    /// reads Pack.yaml from each, hashes the archive, and writes index.yaml.
+    Index {
+        /// Directory containing the *.tgz pack archives
+        dir: PathBuf,
+
+        /// Base URL prepended to each archive filename in the index
+        #[arg(long)]
+        url: Option<String>,
+
+        /// Existing index.yaml to merge into (entries from `dir` are added)
+        #[arg(long)]
+        merge: Option<PathBuf>,
+    },
 }
 
 /// Dependency subcommands
@@ -659,6 +703,25 @@ fn main() -> ExitCode {
     miette::set_panic_hook();
 
     let cli = Cli::parse();
+
+    // Initialize tracing.
+    //
+    // Default: only show WARN+ from sherpack crates; silence noisy
+    // dependencies (kube, hyper, rustls). Honor RUST_LOG when set.
+    // `--debug` raises sherpack crates to DEBUG.
+    let default_filter = if cli.debug {
+        "sherpack=debug,sherpack_engine=debug,sherpack_kube=debug,sherpack_repo=debug,sherpack_core=debug,sherpack_convert=debug,warn"
+    } else {
+        "sherpack=warn,sherpack_engine=warn,sherpack_kube=warn,sherpack_repo=warn,sherpack_core=warn,sherpack_convert=warn,error"
+    };
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_filter));
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_writer(std::io::stderr)
+        .without_time()
+        .with_target(false)
+        .init();
 
     // Set debug level
     if cli.debug {
@@ -966,6 +1029,12 @@ fn run_command(cli: Cli) -> error::Result<()> {
             rt.block_on(commands::recover::run(&name, &namespace))
         }
 
+        Commands::Test { name, namespace } => {
+            let rt =
+                tokio::runtime::Runtime::new().map_err(|e| CliError::internal(e.to_string()))?;
+            rt.block_on(commands::test::run(&name, &namespace))
+        }
+
         // Phase 5: Repository management commands
         Commands::Repo(subcmd) => {
             let rt =
@@ -989,6 +1058,11 @@ fn run_command(cli: Cli) -> error::Result<()> {
                     rt.block_on(commands::repo::update(name.as_deref()))
                 }
                 RepoCommands::Remove { name } => rt.block_on(commands::repo::remove(&name)),
+                RepoCommands::Index { dir, url, merge } => rt.block_on(commands::repo::index(
+                    &dir,
+                    url.as_deref(),
+                    merge.as_deref(),
+                )),
             }
         }
 
@@ -1044,6 +1118,13 @@ fn run_command(cli: Cli) -> error::Result<()> {
                 }
                 DependencyCommands::Tree { path } => rt.block_on(commands::dep::tree(&path)),
             }
+        }
+
+        Commands::Completion { shell } => {
+            let mut cmd = Cli::command();
+            let bin_name = cmd.get_name().to_string();
+            clap_complete::generate(shell, &mut cmd, bin_name, &mut std::io::stdout());
+            Ok(())
         }
     }
 }

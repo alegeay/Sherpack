@@ -1480,3 +1480,92 @@ error1: {{ values.app.name | unknownfilter }}
         );
     }
 }
+
+mod repo_index_command {
+    use super::*;
+    use tempfile::TempDir;
+
+    /// Create a packaged archive in `dir` from a fixture, return its path
+    fn package_into(fixture: &str, dir: &Path, output_name: &str) -> PathBuf {
+        let out = dir.join(output_name);
+        let output = sherpack(&[
+            "package",
+            &fixture_pack(fixture),
+            "-o",
+            out.to_str().unwrap(),
+        ]);
+        assert!(
+            output.status.success(),
+            "package failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        out
+    }
+
+    #[test]
+    fn test_repo_index_writes_index_yaml() {
+        let tmp = TempDir::new().unwrap();
+        package_into("simple-pack", tmp.path(), "simple-pack-0.1.0.tgz");
+        package_into("demo-pack", tmp.path(), "demo-pack-1.0.0.tgz");
+
+        let output = sherpack(&[
+            "repo",
+            "index",
+            tmp.path().to_str().unwrap(),
+            "--url",
+            "https://example.com/charts",
+        ]);
+        assert!(
+            output.status.success(),
+            "repo index failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let index_path = tmp.path().join("index.yaml");
+        assert!(index_path.exists(), "index.yaml should be created");
+        let content = std::fs::read_to_string(&index_path).unwrap();
+        assert!(content.contains("apiVersion: v1"));
+        assert!(content.contains("simple-pack"));
+        assert!(content.contains("demo-pack"));
+        assert!(content.contains("https://example.com/charts/simple-pack-0.1.0.tgz"));
+        assert!(content.contains("digest:"));
+    }
+
+    #[test]
+    fn test_repo_index_merge_skips_existing() {
+        let tmp = TempDir::new().unwrap();
+        package_into("simple-pack", tmp.path(), "simple-pack-0.1.0.tgz");
+
+        // First run creates the index
+        let first = sherpack(&["repo", "index", tmp.path().to_str().unwrap()]);
+        assert!(first.status.success());
+
+        // Second run with --merge should report 0 new entries
+        let index_path = tmp.path().join("index.yaml");
+        let second = sherpack(&[
+            "repo",
+            "index",
+            tmp.path().to_str().unwrap(),
+            "--merge",
+            index_path.to_str().unwrap(),
+        ]);
+        assert!(second.status.success());
+        let stdout = String::from_utf8_lossy(&second.stdout);
+        assert!(
+            stdout.contains("0 new"),
+            "expected '0 new' in: {}",
+            stdout
+        );
+    }
+
+    #[test]
+    fn test_repo_index_empty_dir_fails() {
+        let tmp = TempDir::new().unwrap();
+        let output = sherpack(&["repo", "index", tmp.path().to_str().unwrap()]);
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let combined = format!("{}{}", stdout, stderr);
+        assert!(combined.contains("No *.tgz archives"));
+    }
+}

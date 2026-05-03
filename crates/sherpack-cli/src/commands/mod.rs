@@ -20,6 +20,7 @@ pub mod list;
 pub mod recover;
 pub mod rollback;
 pub mod status;
+pub mod test;
 pub mod uninstall;
 pub mod upgrade;
 
