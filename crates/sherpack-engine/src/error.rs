@@ -339,15 +339,14 @@ fn extract_filter_from_display(display: &str) -> Option<String> {
 /// Calculate the source span for a given line number
 fn calculate_span(source: &str, line_num: usize) -> Option<SourceSpan> {
     let mut offset = 0;
-    let mut current_line = 1;
 
-    for line in source.lines() {
+    for (idx, line) in source.lines().enumerate() {
+        let current_line = idx + 1;
         if current_line == line_num {
             // Return span for the entire line
             return Some(SourceSpan::new(offset.into(), line.len()));
         }
         offset += line.len() + 1; // +1 for newline
-        current_line += 1;
     }
 
     None
