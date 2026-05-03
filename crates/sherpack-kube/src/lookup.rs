@@ -29,8 +29,8 @@ use kube::{
     core::GroupVersionKind,
     discovery::{Discovery, Scope},
 };
-use sherpack_engine::cluster_reader::ClusterReader;
 use serde_json::Value as JsonValue;
+use sherpack_engine::cluster_reader::ClusterReader;
 
 /// Default per-call timeout for cluster lookups.
 ///
@@ -142,12 +142,7 @@ impl ClusterReader for KubeClusterReader {
         .flatten()
     }
 
-    fn lookup_list(
-        &self,
-        api_version: &str,
-        kind: &str,
-        namespace: &str,
-    ) -> Vec<JsonValue> {
+    fn lookup_list(&self, api_version: &str, kind: &str, namespace: &str) -> Vec<JsonValue> {
         let timeout = self.timeout;
         let kind_for_log = kind.to_string();
         block_on_current(async move {
@@ -176,11 +171,7 @@ impl ClusterReader for KubeClusterReader {
                     .collect(),
                 Ok(Err(_)) => Vec::new(),
                 Err(_) => {
-                    tracing::warn!(
-                        "lookup list {} timed out after {:?}",
-                        kind_for_log,
-                        timeout
-                    );
+                    tracing::warn!("lookup list {} timed out after {:?}", kind_for_log, timeout);
                     Vec::new()
                 }
             }
@@ -209,7 +200,10 @@ fn resolve_or_none(
     discovery: &Discovery,
     api_version: &str,
     kind: &str,
-) -> Option<(kube::discovery::ApiResource, kube::discovery::ApiCapabilities)> {
+) -> Option<(
+    kube::discovery::ApiResource,
+    kube::discovery::ApiCapabilities,
+)> {
     let (group, version) = match api_version.rsplit_once('/') {
         Some((g, v)) => (g.to_string(), v.to_string()),
         None => (String::new(), api_version.to_string()),
@@ -269,11 +263,8 @@ mod tests {
         // calls with — verifies our timeout mechanism produces Err(_) when
         // the inner future doesn't complete in time.
         let timeout = Duration::from_millis(50);
-        let result = tokio::time::timeout(
-            timeout,
-            tokio::time::sleep(Duration::from_millis(500)),
-        )
-        .await;
+        let result =
+            tokio::time::timeout(timeout, tokio::time::sleep(Duration::from_millis(500))).await;
         assert!(result.is_err(), "expected timeout error");
     }
 

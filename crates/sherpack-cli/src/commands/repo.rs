@@ -309,17 +309,12 @@ fn build_pack_entry(archive: &Path, url_base: Option<&str>) -> Result<PackEntry>
     let pack_yaml_bytes = sherpack_core::read_file_from_archive(archive, "Pack.yaml")
         .map_err(|e| CliError::input(format!("{}: {}", archive.display(), e)))?;
     let pack: sherpack_core::Pack = serde_yaml::from_slice(&pack_yaml_bytes).map_err(|e| {
-        CliError::input(format!(
-            "Invalid Pack.yaml in {}: {}",
-            archive.display(),
-            e
-        ))
+        CliError::input(format!("Invalid Pack.yaml in {}: {}", archive.display(), e))
     })?;
 
     // SHA256 of the archive bytes (Helm-compatible digest)
-    let archive_bytes = std::fs::read(archive).map_err(|e| {
-        CliError::internal(format!("Failed to read {}: {}", archive.display(), e))
-    })?;
+    let archive_bytes = std::fs::read(archive)
+        .map_err(|e| CliError::internal(format!("Failed to read {}: {}", archive.display(), e)))?;
     let mut hasher = sha2::Sha256::new();
     hasher.update(&archive_bytes);
     let digest = format!("{:x}", hasher.finalize());

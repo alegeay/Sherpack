@@ -88,7 +88,9 @@ pub async fn run(name: &str, namespace: &str) -> Result<()> {
     match result {
         Ok(()) => {
             if executor.has_failures() {
-                Err(CliError::internal("One or more test hooks reported failures"))
+                Err(CliError::internal(
+                    "One or more test hooks reported failures",
+                ))
             } else {
                 Ok(())
             }

@@ -1551,11 +1551,7 @@ mod repo_index_command {
         ]);
         assert!(second.status.success());
         let stdout = String::from_utf8_lossy(&second.stdout);
-        assert!(
-            stdout.contains("0 new"),
-            "expected '0 new' in: {}",
-            stdout
-        );
+        assert!(stdout.contains("0 new"), "expected '0 new' in: {}", stdout);
     }
 
     #[test]

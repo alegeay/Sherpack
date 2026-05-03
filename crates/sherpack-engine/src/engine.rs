@@ -799,20 +799,11 @@ replicas: 3
 
     /// Mock reader for engine integration tests.
     struct MockClusterReader {
-        data: std::collections::HashMap<
-            (String, String, String, String),
-            serde_json::Value,
-        >,
+        data: std::collections::HashMap<(String, String, String, String), serde_json::Value>,
     }
 
     impl crate::cluster_reader::ClusterReader for MockClusterReader {
-        fn lookup_one(
-            &self,
-            av: &str,
-            k: &str,
-            ns: &str,
-            n: &str,
-        ) -> Option<serde_json::Value> {
+        fn lookup_one(&self, av: &str, k: &str, ns: &str, n: &str) -> Option<serde_json::Value> {
             self.data
                 .get(&(av.into(), k.into(), ns.into(), n.into()))
                 .cloned()
@@ -847,9 +838,7 @@ replicas: 3
         );
         let reader = std::sync::Arc::new(MockClusterReader { data });
 
-        let engine = Engine::builder()
-            .with_cluster_reader(reader)
-            .build();
+        let engine = Engine::builder().with_cluster_reader(reader).build();
         let ctx = create_test_context();
         let template = r#"{% set s = lookup("v1", "Secret", "default", "tls") %}cert: {{ s.data["tls.crt"] }}"#;
         let out = engine.render_string(template, &ctx, "t.yaml").unwrap();
@@ -865,9 +854,7 @@ replicas: 3
         let reader = std::sync::Arc::new(MockClusterReader {
             data: std::collections::HashMap::new(),
         });
-        let engine = Engine::builder()
-            .with_cluster_reader(reader)
-            .build();
+        let engine = Engine::builder().with_cluster_reader(reader).build();
         let ctx = create_test_context();
         let template = r#"{% set s = lookup("v1", "Secret", "default", "missing") %}{% if s %}has{% else %}empty{% endif %}"#;
         let out = engine.render_string(template, &ctx, "t.yaml").unwrap();

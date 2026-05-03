@@ -85,7 +85,10 @@ impl<S: StorageDriver> KubeClient<S> {
                     reader = reader.with_timeout(std::time::Duration::from_secs(parsed));
                 }
                 let arc: Arc<dyn ClusterReader> = Arc::new(reader);
-                Engine::builder().strict(true).with_cluster_reader(arc).build()
+                Engine::builder()
+                    .strict(true)
+                    .with_cluster_reader(arc)
+                    .build()
             }
             Err(e) => {
                 // Discovery can fail in tests / restricted RBAC. Fall back to

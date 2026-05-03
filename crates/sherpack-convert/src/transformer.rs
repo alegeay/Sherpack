@@ -811,10 +811,7 @@ impl Transformer {
         // Helm-compatible signature: 4 args, all strings.
         if name == "lookup" {
             if args.len() == 4 {
-                let parts: Vec<String> = args
-                    .iter()
-                    .map(|a| self.transform_argument(a))
-                    .collect();
+                let parts: Vec<String> = args.iter().map(|a| self.transform_argument(a)).collect();
                 return Some(format!("lookup({})", parts.join(", ")));
             }
             // Malformed call — fall back to {} so converted templates don't fail
@@ -1679,9 +1676,7 @@ controller:
 
     #[test]
     fn test_lookup_with_release_namespace() {
-        let result = transform(
-            r#"{{ lookup "v1" "Secret" .Release.Namespace "tls-cert" }}"#,
-        );
+        let result = transform(r#"{{ lookup "v1" "Secret" .Release.Namespace "tls-cert" }}"#);
         // .Release.Namespace becomes release.namespace
         assert_eq!(
             result,
@@ -1702,6 +1697,10 @@ controller:
     fn test_lookup_malformed_falls_back_to_empty() {
         // Wrong arity — fall back to {} so converted templates compile
         let result = transform(r#"{{ lookup "v1" }}"#);
-        assert!(result.contains("{}"), "expected fallback to {{}} in: {}", result);
+        assert!(
+            result.contains("{}"),
+            "expected fallback to {{}} in: {}",
+            result
+        );
     }
 }

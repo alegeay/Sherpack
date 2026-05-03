@@ -128,13 +128,7 @@ impl LookupState {
         std::mem::take(&mut *w)
     }
 
-    fn do_lookup(
-        &self,
-        api_version: &str,
-        kind: &str,
-        namespace: &str,
-        name: &str,
-    ) -> Value {
+    fn do_lookup(&self, api_version: &str, kind: &str, namespace: &str, name: &str) -> Value {
         let key = LookupKey {
             api_version: api_version.to_string(),
             kind: kind.to_string(),
@@ -152,12 +146,9 @@ impl LookupState {
             let items = self.reader.lookup_list(api_version, kind, namespace);
             // Match Helm's list shape: {items: [...]}
             JsonValue::Object(
-                serde_json::Map::from_iter([(
-                    "items".to_string(),
-                    JsonValue::Array(items),
-                )])
-                .into_iter()
-                .collect(),
+                serde_json::Map::from_iter([("items".to_string(), JsonValue::Array(items))])
+                    .into_iter()
+                    .collect(),
             )
         } else {
             self.reader
@@ -177,7 +168,11 @@ impl LookupState {
             self.warnings.lock().unwrap().push(format!(
                 "lookup() returned cluster state for {}/{}{} — render is non-deterministic",
                 kind,
-                if namespace.is_empty() { "<all-ns>" } else { namespace },
+                if namespace.is_empty() {
+                    "<all-ns>"
+                } else {
+                    namespace
+                },
                 if name.is_empty() {
                     String::new()
                 } else {
@@ -222,10 +217,8 @@ mod tests {
         }
 
         fn with(mut self, av: &str, kind: &str, ns: &str, name: &str, val: JsonValue) -> Self {
-            self.objects.insert(
-                (av.into(), kind.into(), ns.into(), name.into()),
-                val,
-            );
+            self.objects
+                .insert((av.into(), kind.into(), ns.into(), name.into()), val);
             self
         }
     }
@@ -255,15 +248,13 @@ mod tests {
 
     #[test]
     fn test_lookup_returns_existing_resource() {
-        let reader = Arc::new(
-            MockReader::new().with(
-                "v1",
-                "Secret",
-                "default",
-                "tls-cert",
-                serde_json::json!({"data": {"tls.crt": "abc"}}),
-            ),
-        );
+        let reader = Arc::new(MockReader::new().with(
+            "v1",
+            "Secret",
+            "default",
+            "tls-cert",
+            serde_json::json!({"data": {"tls.crt": "abc"}}),
+        ));
         let state = LookupState::new(reader);
         let v = state.do_lookup("v1", "Secret", "default", "tls-cert");
         let data = v.get_attr("data").unwrap();
@@ -307,15 +298,13 @@ mod tests {
 
     #[test]
     fn test_warning_emitted_only_for_nonempty_results() {
-        let reader = Arc::new(
-            MockReader::new().with(
-                "v1",
-                "Secret",
-                "default",
-                "real",
-                serde_json::json!({"data": {"x": "y"}}),
-            ),
-        );
+        let reader = Arc::new(MockReader::new().with(
+            "v1",
+            "Secret",
+            "default",
+            "real",
+            serde_json::json!({"data": {"x": "y"}}),
+        ));
         let state = LookupState::new(reader);
 
         state.do_lookup("v1", "Secret", "default", "missing"); // empty → no warn
@@ -329,15 +318,13 @@ mod tests {
 
     #[test]
     fn test_warning_deduped_by_kind_and_name() {
-        let reader = Arc::new(
-            MockReader::new().with(
-                "v1",
-                "Secret",
-                "default",
-                "real",
-                serde_json::json!({"data": {"x": "y"}}),
-            ),
-        );
+        let reader = Arc::new(MockReader::new().with(
+            "v1",
+            "Secret",
+            "default",
+            "real",
+            serde_json::json!({"data": {"x": "y"}}),
+        ));
         let state = LookupState::new(reader);
 
         // 10 calls — only 1 warning
@@ -350,15 +337,13 @@ mod tests {
 
     #[test]
     fn test_take_warnings_clears() {
-        let reader = Arc::new(
-            MockReader::new().with(
-                "v1",
-                "ConfigMap",
-                "default",
-                "x",
-                serde_json::json!({"data": {"k": "v"}}),
-            ),
-        );
+        let reader = Arc::new(MockReader::new().with(
+            "v1",
+            "ConfigMap",
+            "default",
+            "x",
+            serde_json::json!({"data": {"k": "v"}}),
+        ));
         let state = LookupState::new(reader);
         state.do_lookup("v1", "ConfigMap", "default", "x");
 

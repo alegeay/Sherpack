@@ -588,9 +588,9 @@ enum Commands {
     /// Generate shell completion script (writes to stdout)
     ///
     /// Examples:
-    ///   sherpack completion bash > ~/.local/share/bash-completion/completions/sherpack
-    ///   sherpack completion zsh  > ${fpath[1]}/_sherpack
-    ///   sherpack completion fish > ~/.config/fish/completions/sherpack.fish
+    ///   `sherpack completion bash > ~/.local/share/bash-completion/completions/sherpack`
+    ///   `sherpack completion zsh  > ${fpath[1]}/_sherpack`
+    ///   `sherpack completion fish > ~/.config/fish/completions/sherpack.fish`
     Completion {
         /// Shell to generate completion for
         #[arg(value_enum)]
