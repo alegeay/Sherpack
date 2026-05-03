@@ -1,21 +1,27 @@
-# Helm Feature Gap Analysis - December 2025
+# Helm Feature Gap Analysis
 
-This document provides a comprehensive comparison between Helm features and Sherpack's current implementation status.
+Last refreshed against the codebase: 2026-05-03.
+For a detailed CLI/template/feature mapping, see [HELM_COMPARISON.md](HELM_COMPARISON.md).
+For `lookup()` specifics, see [LOOKUP.md](LOOKUP.md).
 
 ## Executive Summary
 
 | Category | Helm Features | Sherpack Status | Gap |
 |----------|--------------|-----------------|-----|
-| Templating | 100+ functions | **~95 functions** | **~5%** |
-| Subcharts | Full support | **Implemented** | 0% |
-| Repositories | Full support | **Implemented** | 0% |
+| Templating | 100+ functions | **~98 functions** (incl. fromJson/fromYaml, regex, dig, pick/omit, lookup) | **~2%** |
+| Subcharts | Full support | **Implemented** (value scoping + globals) | 0% |
+| Repositories | Full support | **Implemented** (HTTP, OCI, file; `repo index` generation) | 0% |
 | OCI Registries | Full support | **Implemented** | 0% |
-| Lifecycle Hooks | 9 phases | **Implemented** | 0% |
-| CRDs | Full support | **Phase 1 Complete** | ~20% |
-| Testing | helm test | Partial | ~50% |
+| Lifecycle Hooks | 9 phases | **Implemented** + `sherpack test` runner | 0% |
+| CRDs | Full support | **Phase 1 Complete** (analyzer/strategy/apply, basic detection) | ~20% (CR storage migration, conversion webhooks) |
+| Testing | `helm test` | **Implemented** (`sherpack test <release>`) | 0% |
+| `lookup()` | Cluster-aware | **Implemented** with timeout + warnings ([LOOKUP.md](LOOKUP.md)) | 0% |
+| Shell completion | bash/zsh/fish | **Implemented** (`sherpack completion <shell>`) | 0% |
+| `templates/NOTES.txt` | Post-install notes | **Implemented** (rendered + shown in `status`) | 0% |
+| `.Files` API | File access in templates | **Implemented** | 0% |
 | Plugins | Full ecosystem | Not implemented | 100% |
-
-**Phase 1 Complete**: All high-priority template functions have been implemented.
+| `helm get notes/hooks/metadata` | Release introspection | Not implemented | 100% |
+| Artifact Hub search | `helm search hub` | Not implemented | 100% |
 
 ---
 

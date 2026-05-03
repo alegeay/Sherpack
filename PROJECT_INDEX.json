@@ -1,0 +1,147 @@
+{
+  "project": {
+    "name": "sherpack",
+    "version": "0.3.0",
+    "description": "Kubernetes package manager in Rust with Jinja2 (MiniJinja) templating; modern Helm alternative.",
+    "license": "Apache-2.0",
+    "repository": "https://github.com/alegeay/sherpack",
+    "edition": "2024",
+    "rust_version": "1.88",
+    "generated": "2026-05-03"
+  },
+  "stats": {
+    "crates": 6,
+    "rust_files": 101,
+    "lines_of_rust": 78146,
+    "tests_passing": 685,
+    "tests_per_crate": {
+      "sherpack-core": 68,
+      "sherpack-engine": 151,
+      "sherpack-convert": 96,
+      "sherpack-kube": 225,
+      "sherpack-repo": 54,
+      "sherpack-cli": 91
+    },
+    "doc_files": 35
+  },
+  "workspace": {
+    "manifest": "Cargo.toml",
+    "members": [
+      "crates/sherpack-core",
+      "crates/sherpack-engine",
+      "crates/sherpack-kube",
+      "crates/sherpack-repo",
+      "crates/sherpack-convert",
+      "crates/sherpack-cli"
+    ],
+    "release_profile": {
+      "lto": true,
+      "codegen_units": 1,
+      "strip": true
+    }
+  },
+  "entry_points": {
+    "cli_binary": "crates/sherpack-cli/src/main.rs",
+    "library_roots": [
+      "crates/sherpack-core/src/lib.rs",
+      "crates/sherpack-engine/src/lib.rs",
+      "crates/sherpack-kube/src/lib.rs",
+      "crates/sherpack-repo/src/lib.rs",
+      "crates/sherpack-convert/src/lib.rs"
+    ],
+    "integration_tests": [
+      "crates/sherpack-cli/tests/integration_tests.rs",
+      "crates/sherpack-cli/tests/snapshot_tests.rs"
+    ]
+  },
+  "crates": {
+    "sherpack-core": {
+      "path": "crates/sherpack-core",
+      "purpose": "Foundational types (Pack, Values, Release, Schema, Manifest, Archive, Secrets, Files, TemplateContext).",
+      "modules": ["archive", "context", "error", "files", "manifest", "pack", "release", "schema", "secrets", "values"],
+      "key_exports": ["Pack", "LoadedPack", "Values", "Release", "TemplateContext", "Schema", "SchemaValidator", "Manifest", "VerificationResult", "SecretGenerator", "FileProvider", "SandboxedFileProvider"]
+    },
+    "sherpack-engine": {
+      "path": "crates/sherpack-engine",
+      "purpose": "MiniJinja-based template engine with Helm-compatible filters/functions.",
+      "modules": ["engine", "error", "filters", "functions", "secrets", "pack_renderer", "subchart", "files_object", "suggestions"],
+      "filters": ["toyaml", "tojson", "b64encode", "indent", "nindent", "quote", "kebabcase", "sha256", "int", "float"],
+      "functions": ["get", "ternary", "now", "uuidv4", "fail", "tostring", "toint", "tofloat", "generate_secret"]
+    },
+    "sherpack-kube": {
+      "path": "crates/sherpack-kube",
+      "purpose": "Kubernetes lifecycle management (async).",
+      "modules": ["actions", "annotations", "client", "diff", "error", "health", "hooks", "progress", "release", "resources", "waves"],
+      "submodules": {
+        "crd": ["analyzer", "apply", "detection", "parser", "policy", "protection", "schema", "strategy"],
+        "storage": ["chunked", "configmap", "file", "mock", "secrets"]
+      },
+      "key_types": ["KubeClient", "ResourceManager", "StorageDriver", "StoredRelease", "ReleaseState"],
+      "hook_phases": 11
+    },
+    "sherpack-repo": {
+      "path": "crates/sherpack-repo",
+      "purpose": "Repository, dependency, and lock management.",
+      "modules": ["backend", "cache", "config", "credentials", "dependency", "error", "http", "index", "lock", "oci"],
+      "backends": ["http", "oci", "file"],
+      "version_policies": ["Strict", "Version", "SemverPatch", "SemverMinor"]
+    },
+    "sherpack-convert": {
+      "path": "crates/sherpack-convert",
+      "purpose": "Helm chart → Sherpack pack converter using pest PEG.",
+      "modules": ["ast", "chart", "converter", "error", "macro_processor", "parser", "transformer", "type_inference"],
+      "supports": ["define", "include", "if/else", "range", "with", "variable pipelines", "randAlphaNum", "randAlpha", "randNumeric"]
+    },
+    "sherpack-cli": {
+      "path": "crates/sherpack-cli",
+      "purpose": "Clap-based CLI binary with 26 subcommands.",
+      "modules": ["commands", "display", "error", "exit_codes", "main", "util"],
+      "command_groups": {
+        "templating": ["template", "lint", "validate", "show", "create", "convert"],
+        "packaging": ["package", "inspect", "keygen", "sign", "verify", "signing"],
+        "kubernetes": ["install", "upgrade", "uninstall", "rollback", "list", "history", "status", "recover"],
+        "repository": ["repo", "search", "pull", "push"],
+        "dependencies": ["dep"]
+      }
+    }
+  },
+  "pack_structure": {
+    "required": ["Pack.yaml", "values.yaml", "templates/"],
+    "optional": ["values.schema.yaml", "Pack.lock.yaml", "packs/", "templates/_helpers.tpl"],
+    "template_context": ["values.*", "release.name", "release.namespace", "pack.name", "pack.version", "capabilities.kubeVersion"]
+  },
+  "fixtures": ["simple-pack", "demo-pack", "helm-nginx", "pack-with-subcharts"],
+  "documentation": {
+    "root": ["README.md", "CLAUDE.md", "RELEASE_NOTES_v0.1.0.md", "LICENSE"],
+    "design_docs": "docs/",
+    "website": "website/ (Docusaurus)",
+    "per_crate_readmes": true
+  },
+  "ci": {
+    "workflows": [".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/deploy-docs.yml", ".github/workflows/security.yml"]
+  },
+  "key_dependencies": {
+    "templating": {"minijinja": "2"},
+    "parsing": {"pest": "2.7", "pest_derive": "2.7"},
+    "kubernetes": {"kube": "2.0", "k8s-openapi": "0.26 (v1_32)"},
+    "registry": {"oci-distribution": "0.11"},
+    "search_db": {"rusqlite": "0.38 (bundled, FTS5)"},
+    "signing": {"minisign": "0.8"},
+    "cli": {"clap": "4"},
+    "async": {"tokio": "1", "async-trait": "0.1", "futures": "0.3"},
+    "http": {"reqwest": "0.13 (rustls)"},
+    "validation": {"jsonschema": "0.38"},
+    "serialization": {"serde": "1.0", "serde_yaml": "0.9", "serde_json": "1.0"},
+    "errors": {"thiserror": "2", "miette": "7"},
+    "testing": {"insta": "1", "wiremock": "0.6", "tempfile": "3"}
+  },
+  "build_commands": {
+    "build_debug": "cargo build --workspace",
+    "build_release": "cargo build --release",
+    "test_all": "cargo test --workspace",
+    "test_crate": "cargo test -p <crate-name>",
+    "lint": "cargo clippy --workspace",
+    "fmt": "cargo fmt --all",
+    "run": "cargo run -p sherpack -- <command>"
+  }
+}
