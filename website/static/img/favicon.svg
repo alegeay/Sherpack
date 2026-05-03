@@ -1,0 +1,15 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <defs>
+    <linearGradient id="f" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0dffc4"/>
+      <stop offset="100%" stop-color="#00b396"/>
+    </linearGradient>
+  </defs>
+  <!-- Two stacked chevrons, simplified for small sizes -->
+  <path d="M6 14 L16 5 L26 14"
+        stroke="url(#f)" stroke-width="3.2"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M6 25 L16 16 L26 25"
+        stroke="url(#f)" stroke-width="3.2"
+        stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.55"/>
+</svg>
