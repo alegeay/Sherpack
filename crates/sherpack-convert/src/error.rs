@@ -413,8 +413,8 @@ pub mod warnings {
         ConversionWarning::gitops(
             file.to_path_buf(),
             "lookup",
-            "'lookup' queries the cluster at render time - incompatible with GitOps",
-            "Returns {} in template mode. Use explicit values for GitOps compatibility.",
+            "'lookup' queries the cluster at render time — same Pack rendered against different clusters produces different manifests",
+            "Preserved by the converter. Returns the live resource during `sherpack install/upgrade`, returns {} in `sherpack template`. For GitOps reproducibility, prefer explicit values + the existingSecret pattern.",
         )
     }
 

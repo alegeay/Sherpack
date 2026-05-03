@@ -51,6 +51,9 @@ reqwest = { workspace = true }
 # Terminal (for progress reporting)
 console = { workspace = true }
 
+# Logging
+tracing = { workspace = true }
+
 [dev-dependencies]
 insta = { workspace = true }
 tempfile = "3"
