@@ -40,11 +40,11 @@ Generate shell completions for your shell:
 
 ```bash
 # Bash
-sherpack completions bash > ~/.local/share/bash-completion/completions/sherpack
+sherpack completion bash > ~/.local/share/bash-completion/completions/sherpack
 
 # Zsh
-sherpack completions zsh > ~/.zfunc/_sherpack
+sherpack completion zsh > ~/.zfunc/_sherpack
 
 # Fish
-sherpack completions fish > ~/.config/fish/completions/sherpack.fish
+sherpack completion fish > ~/.config/fish/completions/sherpack.fish
 ```

@@ -65,6 +65,6 @@ pub use dependency::{
 };
 pub use error::{RepoError, Result};
 pub use http::HttpRepository;
-pub use index::{PackEntry, RepositoryIndex};
+pub use index::{IndexDependency, Maintainer, PackEntry, RepositoryIndex};
 pub use lock::{LockFile, LockPolicy, LockedDependency, VerifyResult};
 pub use oci::{OciReference, OciRegistry};

@@ -160,8 +160,10 @@ static UNSUPPORTED_FEATURES: phf::Map<&'static str, &'static str> = phf_map! {
     "Files.AsConfig" => "Use native ConfigMap in templates",
     "Files.AsSecrets" => "Use native Secret in templates",
 
-    // Lookup - anti-GitOps (runtime cluster query)
-    "lookup" => "Returns {} in template mode - use explicit values for GitOps",
+    // (Removed: `lookup` is now supported. The `transform_special_function`
+    //  handler preserves the call so the engine can resolve it against the
+    //  cluster during install/upgrade. See lookup_function() in error.rs
+    //  for the warning emitted alongside the conversion.)
 };
 
 // =============================================================================
@@ -803,9 +805,16 @@ impl Transformer {
             return Some(format!("tpl({})", template));
         }
 
-        // lookup returns {} - add warning
+        // lookup(apiVersion, kind, namespace, name) — preserve the call.
+        // At render time, the engine resolves it via a cluster reader if
+        // one is configured (install/upgrade), or returns {} (template mode).
+        // Helm-compatible signature: 4 args, all strings.
         if name == "lookup" {
-            // Lookup returns empty dict in template mode (GitOps compatible)
+            if args.len() == 4 {
+                let parts: Vec<String> = args.iter().map(|a| self.transform_argument(a)).collect();
+                return Some(format!("lookup({})", parts.join(", ")));
+            }
+            // Malformed call — fall back to {} so converted templates don't fail
             return Some("{}".to_string());
         }
 
@@ -1652,6 +1661,46 @@ controller:
         assert_eq!(
             result,
             "{%- for k, v in values.podAnnotations | dictsort %}{%- endfor %}"
+        );
+    }
+
+    // =========================================================================
+    // lookup() — preserved as a real call (engine resolves at render time)
+    // =========================================================================
+
+    #[test]
+    fn test_lookup_preserves_4_arg_call() {
+        let result = transform(r#"{{ lookup "v1" "Secret" "default" "tls" }}"#);
+        assert_eq!(result, r#"{{ lookup("v1", "Secret", "default", "tls") }}"#);
+    }
+
+    #[test]
+    fn test_lookup_with_release_namespace() {
+        let result = transform(r#"{{ lookup "v1" "Secret" .Release.Namespace "tls-cert" }}"#);
+        // .Release.Namespace becomes release.namespace
+        assert_eq!(
+            result,
+            r#"{{ lookup("v1", "Secret", release.namespace, "tls-cert") }}"#
+        );
+    }
+
+    #[test]
+    fn test_lookup_list_mode_empty_name() {
+        let result = transform(r#"{{ lookup "v1" "ConfigMap" "kube-system" "" }}"#);
+        assert_eq!(
+            result,
+            r#"{{ lookup("v1", "ConfigMap", "kube-system", "") }}"#
+        );
+    }
+
+    #[test]
+    fn test_lookup_malformed_falls_back_to_empty() {
+        // Wrong arity — fall back to {} so converted templates compile
+        let result = transform(r#"{{ lookup "v1" }}"#);
+        assert!(
+            result.contains("{}"),
+            "expected fallback to {{}} in: {}",
+            result
         );
     }
 }

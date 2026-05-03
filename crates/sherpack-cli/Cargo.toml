@@ -21,6 +21,7 @@ sherpack-kube = { workspace = true }
 sherpack-repo = { workspace = true }
 sherpack-convert = { workspace = true }
 clap = { workspace = true }
+clap_complete = "4"
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
@@ -35,6 +36,9 @@ chrono = { workspace = true }
 indexmap = { workspace = true }
 flate2 = { workspace = true }
 tar = { workspace = true }
+sha2 = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 rpassword = "7"
 dirs = "6"
 

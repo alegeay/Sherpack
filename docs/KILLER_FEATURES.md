@@ -2,9 +2,16 @@
 
 Based on extensive research of [Helm GitHub issues](https://github.com/helm/helm/issues), [community discussions](https://helm.sh/community/hips/hip-0012/), and [user pain points](https://medium.com/archetypical-software/6-awesome-alternatives-to-helm-for-managing-your-kubernetes-applications-084b1ff6ccfe), here are killer features that would differentiate Sherpack.
 
+> **Status legend** — each feature is tagged with one of:
+> - 🟢 **Delivered** — implemented in the current codebase
+> - 🟡 **Partial** — partially implemented, see notes
+> - 🔴 **Roadmap** — designed but not yet implemented; do **not** rely on this in production
+
 ---
 
-## 1. Smart CRD Management
+## 1. Smart CRD Management — 🟡 Partial
+
+> Phase 1 (parser, analyzer, strategy, apply, policy, protection) is implemented under `crates/sherpack-kube/src/crd/`. The advanced flows below — backup of CRs before schema change, automatic CR migration when CRD version changes, automatic rollback on upgrade failure — are **not yet implemented**.
 
 ### The Problem
 Helm has [notoriously poor CRD support](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/):
@@ -43,7 +50,9 @@ sherpack crd validate mypack       # Validate CRD changes
 
 ---
 
-## 2. Chunked Release Storage (Break the 1MB Limit)
+## 2. Chunked Release Storage (Break the 1MB Limit) — 🟢 Delivered
+
+> Implemented in `crates/sherpack-kube/src/storage/chunked.rs`.
 
 ### The Problem
 [Helm stores releases in Kubernetes Secrets limited to 1MB](https://azure.github.io/azure-service-operator/design/adr-2023-02-helm-chart-size-limitations/):
@@ -81,7 +90,9 @@ sherpack migrate myrelease --chunked     # Convert existing release
 
 ---
 
-## 3. Native Drift Detection
+## 3. Native Drift Detection — 🔴 Roadmap
+
+> **Not implemented.** No drift detection module exists in the codebase. Use ArgoCD or Flux today.
 
 ### The Problem
 [Drift detection](https://komodor.com/blog/drift-detection-in-kubernetes/) is critical for GitOps but Helm doesn't support it:
@@ -122,7 +133,9 @@ sherpack drift history myrelease         # View drift events
 
 ---
 
-## 4. Smart Dependency Resolution
+## 4. Smart Dependency Resolution — 🟡 Partial
+
+> Diamond conflict detection and lock file with version policies are implemented (`crates/sherpack-repo/src/{dependency,lock}.rs`). SAT solver, `dependency why`, and conflict declarations are **not yet implemented**.
 
 ### The Problem
 [Helm dependency resolution is fragile](https://github.com/helm/helm/issues/30875):
@@ -172,7 +185,9 @@ sherpack dependency why redis            # Why is redis included?
 
 ---
 
-## 5. Template Debugging & Profiling
+## 5. Template Debugging & Profiling — 🔴 Roadmap
+
+> **Not implemented.** Contextual error messages with suggestions exist (`engine/src/suggestions.rs`), but interactive debugger, breakpoints, profiling, hot reload are not yet built.
 
 ### The Problem
 Helm template debugging is painful:
@@ -214,7 +229,9 @@ sherpack template myrelease ./mypack --explain    # Show variable sources
 
 ---
 
-## 6. Resource Ordering & Wave Deployment
+## 6. Resource Ordering & Wave Deployment — 🟢 Delivered
+
+> Implemented in `crates/sherpack-kube/src/waves.rs` with `sherpack.io/sync-wave` annotation.
 
 ### The Problem
 Helm applies resources in a fixed order that doesn't always work:
@@ -261,7 +278,9 @@ sherpack install myrelease ./mypack --wave=1     # Deploy only wave 1
 
 ---
 
-## 7. Multi-Environment Templating
+## 7. Multi-Environment Templating — 🔴 Roadmap
+
+> **Not implemented.** Multiple `--values` files work today, but `environments/` directory, `_inherit`, `sherpack diff staging production`, and `sherpack promote` are not built.
 
 ### The Problem
 Managing multiple environments with Helm is clunky:
@@ -312,7 +331,9 @@ sherpack promote staging production ./mypack # Promote config
 
 ---
 
-## 8. Built-in Secret Management
+## 8. Built-in Secret Management — 🔴 Roadmap
+
+> **Not implemented.** Idempotent secret *generation* exists (`generate_secret()` in `engine/src/secrets.rs`), but encrypted-values, SOPS/Age integration, and Vault/SSM/GCP-SM/Key-Vault providers are not built. Use sops-nix, sealed-secrets, or external-secrets-operator today.
 
 ### The Problem
 Helm has no native secret management:
@@ -355,7 +376,9 @@ sherpack secrets pull gcp://sm/myapp        # Pull from GCP SM
 
 ---
 
-## 9. Intelligent Rollback
+## 9. Intelligent Rollback — 🟡 Partial
+
+> Basic rollback works (`sherpack rollback`). `--dry-run --diff`, partial rollback (`--only`/`--except`), and auto-rollback triggers are **not yet implemented**.
 
 ### The Problem
 Helm rollback is all-or-nothing:
@@ -392,7 +415,9 @@ sherpack upgrade myrelease ./mypack --auto-rollback \
 
 ---
 
-## 10. Live Template Preview (IDE Integration)
+## 10. Live Template Preview (IDE Integration) — 🔴 Roadmap
+
+> **Not implemented.** No LSP server exists. No `sherpack lsp` command.
 
 ### The Problem
 No real-time feedback when editing templates:
@@ -429,7 +454,9 @@ sherpack lsp
 
 ---
 
-## 11. Test Framework
+## 11. Test Framework — 🔴 Roadmap
+
+> **Not implemented.** The `test` hook *phase* is recognized (matching Helm's annotation), but no `sherpack test` command runs them, and no unit-test framework for templates exists.
 
 ### The Problem
 No built-in way to test Helm charts:
@@ -478,7 +505,9 @@ sherpack test ./mypack --snapshot         # Snapshot testing
 
 ---
 
-## 12. GitOps-Native Mode
+## 12. GitOps-Native Mode — 🔴 Roadmap
+
+> **Not implemented.** No `PackRelease` CRD, no controller, no `sherpack gitops` subcommand. Use ArgoCD or Flux today.
 
 ### The Problem
 Helm requires external tools for GitOps:

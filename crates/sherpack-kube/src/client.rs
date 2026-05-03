@@ -3,14 +3,18 @@
 //! This module provides a unified interface for all Sherpack Kubernetes operations,
 //! combining storage, rendering, hooks, health checks, and resource management.
 
+use std::sync::Arc;
+
 use sherpack_core::{LoadedPack, ReleaseInfo, TemplateContext, Values};
 use sherpack_engine::Engine;
+use sherpack_engine::cluster_reader::ClusterReader;
 
 use crate::actions::{InstallOptions, RollbackOptions, UninstallOptions, UpgradeOptions};
 use crate::diff::{DiffEngine, DiffResult};
 use crate::error::{KubeError, Result};
 use crate::health::{HealthCheckConfig, HealthChecker, HealthStatus};
 use crate::hooks::{HookExecutor, HookPhase, parse_hooks_from_manifest};
+use crate::lookup::KubeClusterReader;
 use crate::release::{ReleaseState, StoredRelease};
 use crate::resources::ResourceManager;
 use crate::storage::StorageDriver;
@@ -23,9 +27,6 @@ pub struct KubeClient<S: StorageDriver> {
     /// Storage driver
     storage: S,
 
-    /// Template engine
-    engine: Engine,
-
     /// Diff engine
     diff_engine: DiffEngine,
 }
@@ -34,26 +35,22 @@ impl<S: StorageDriver> KubeClient<S> {
     /// Create a new KubeClient with the given storage driver
     pub async fn new(storage: S) -> Result<Self> {
         let client = kube::Client::try_default().await?;
-        let engine = Engine::builder().strict(true).build();
         let diff_engine = DiffEngine::new();
 
         Ok(Self {
             client,
             storage,
-            engine,
             diff_engine,
         })
     }
 
     /// Create with an existing Kubernetes client
     pub fn with_client(client: kube::Client, storage: S) -> Self {
-        let engine = Engine::builder().strict(true).build();
         let diff_engine = DiffEngine::new();
 
         Self {
             client,
             storage,
-            engine,
             diff_engine,
         }
     }
@@ -66,6 +63,54 @@ impl<S: StorageDriver> KubeClient<S> {
     /// Get the storage driver
     pub fn storage(&self) -> &S {
         &self.storage
+    }
+
+    /// Build a render-time engine with cluster-aware `lookup()`.
+    ///
+    /// Used by install/upgrade so templates can read existing cluster
+    /// state. The reader holds its own discovery cache. After rendering,
+    /// pull warnings via `engine.lookup_state().take_warnings()` so users
+    /// see the GitOps non-determinism notices.
+    ///
+    /// The per-call lookup timeout can be overridden via the
+    /// `SHERPACK_LOOKUP_TIMEOUT_SECS` environment variable. Default is
+    /// 5 seconds. A timed-out lookup resolves to `{}` (Helm-compat).
+    async fn engine_with_lookup(&self) -> Engine {
+        match KubeClusterReader::new(self.client.clone()).await {
+            Ok(mut reader) => {
+                if let Ok(secs) = std::env::var("SHERPACK_LOOKUP_TIMEOUT_SECS")
+                    && let Ok(parsed) = secs.parse::<u64>()
+                    && parsed > 0
+                {
+                    reader = reader.with_timeout(std::time::Duration::from_secs(parsed));
+                }
+                let arc: Arc<dyn ClusterReader> = Arc::new(reader);
+                Engine::builder()
+                    .strict(true)
+                    .with_cluster_reader(arc)
+                    .build()
+            }
+            Err(e) => {
+                // Discovery can fail in tests / restricted RBAC. Fall back to
+                // a lookup-less engine rather than failing the install — the
+                // user's templates may not actually use lookup at all.
+                tracing::warn!(
+                    "Cluster discovery for lookup() failed; lookup() will return empty: {}",
+                    e
+                );
+                Engine::builder().strict(true).build()
+            }
+        }
+    }
+
+    /// Surface lookup warnings (if any) from a render-time engine to
+    /// the user via tracing. Called after each install/upgrade render.
+    fn surface_lookup_warnings(engine: &Engine) {
+        if let Some(state) = engine.lookup_state() {
+            for w in state.take_warnings() {
+                tracing::warn!("{}", w);
+            }
+        }
     }
 
     // ========== Install ==========
@@ -93,11 +138,12 @@ impl<S: StorageDriver> KubeClient<S> {
         let release_info = ReleaseInfo::for_install(&options.name, &options.namespace);
         let context = TemplateContext::new(values.clone(), release_info, &pack.pack.metadata);
 
-        // Render templates
-        let render_result = self
-            .engine
+        // Render templates with cluster-aware lookup() enabled
+        let engine = self.engine_with_lookup().await;
+        let render_result = engine
             .render_pack(pack, &context)
             .map_err(|e| KubeError::Template(e.to_string()))?;
+        Self::surface_lookup_warnings(&engine);
 
         // Create release
         let mut release = StoredRelease::for_install(
@@ -299,11 +345,12 @@ impl<S: StorageDriver> KubeClient<S> {
             ReleaseInfo::for_upgrade(&options.name, &options.namespace, existing.version + 1);
         let context = TemplateContext::new(final_values.clone(), release_info, &pack.pack.metadata);
 
-        // Render templates
-        let render_result = self
-            .engine
+        // Render templates with cluster-aware lookup() enabled
+        let engine = self.engine_with_lookup().await;
+        let render_result = engine
             .render_pack(pack, &context)
             .map_err(|e| KubeError::Template(e.to_string()))?;
+        Self::surface_lookup_warnings(&engine);
 
         // Create new release
         let manifest = render_result

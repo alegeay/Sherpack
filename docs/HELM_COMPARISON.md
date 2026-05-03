@@ -47,7 +47,7 @@ Ce document analyse les fonctionnalités de Helm et identifie ce qui manque dans
 | `helm show crds` | - | ❌ | **MANQUANT** |
 | `helm show all` | `sherpack show --all` | ✅ | |
 | `helm verify` | `sherpack verify` | ✅ | Minisign au lieu de PGP |
-| `helm test` | - | ❌ | **MANQUANT** |
+| `helm test` | `sherpack test` | ✅ | `commands/test.rs`, exécute les hooks `test` du release stocké |
 
 ### Commandes de Repository
 
@@ -57,7 +57,7 @@ Ce document analyse les fonctionnalités de Helm et identifie ce qui manque dans
 | `helm repo list` | `sherpack repo list` | ✅ | |
 | `helm repo update` | `sherpack repo update` | ✅ | |
 | `helm repo remove` | `sherpack repo remove` | ✅ | |
-| `helm repo index` | - | ❌ | **MANQUANT** (génération d'index.yaml) |
+| `helm repo index` | `sherpack repo index` | ✅ | `commands/repo.rs::index`, supporte `--url` et `--merge` |
 | `helm search repo` | `sherpack search` | ✅ | Avec cache SQLite FTS5 |
 | `helm search hub` | - | ❌ | **MANQUANT** (Artifact Hub) |
 | `helm pull` | `sherpack pull` | ✅ | |
@@ -77,7 +77,7 @@ Ce document analyse les fonctionnalités de Helm et identifie ce qui manque dans
 |---------------|----------|--------|-------|
 | `helm env` | - | ❌ | **MANQUANT** |
 | `helm version` | `sherpack --version` | ✅ | Via Clap |
-| `helm completion` | - | ❌ | **MANQUANT** (bash/zsh/fish) |
+| `helm completion` | `sherpack completion` | ✅ | bash/zsh/fish/powershell/elvish via `clap_complete` |
 | `helm plugin` | - | ❌ | **MANQUANT** (système de plugins) |
 | `helm registry login` | - | ❌ | **MANQUANT** (auth interactive OCI) |
 | `helm registry logout` | - | ❌ | **MANQUANT** |
@@ -94,43 +94,33 @@ Ce document analyse les fonctionnalités de Helm et identifie ce qui manque dans
 | `.Release.Name` | `release.name` | ✅ | |
 | `.Release.Namespace` | `release.namespace` | ✅ | |
 | `.Release.Revision` | `release.revision` | ✅ | |
-| `.Release.IsUpgrade` | `release.isUpgrade` | ⚠️ | À vérifier |
-| `.Release.IsInstall` | `release.isInstall` | ⚠️ | À vérifier |
+| `.Release.IsUpgrade` | `release.isUpgrade` | ✅ | `release.rs:94` |
+| `.Release.IsInstall` | `release.isInstall` | ✅ | `release.rs:91` |
 | `.Release.Service` | - | ❌ | Toujours "Sherpack" |
 | `.Chart.Name` | `pack.name` | ✅ | Renommé |
 | `.Chart.Version` | `pack.version` | ✅ | |
 | `.Chart.AppVersion` | `pack.appVersion` | ✅ | |
 | `.Chart.*` (autres) | `pack.*` | ⚠️ | Partiel |
 | `.Capabilities.KubeVersion` | `capabilities.kubeVersion` | ✅ | |
-| `.Capabilities.APIVersions` | `capabilities.apiVersions` | ⚠️ | À vérifier |
+| `.Capabilities.APIVersions` | `capabilities.apiVersions` | ✅ | `context.rs:61` |
 | `.Capabilities.HelmVersion` | - | 🚫 | N/A |
 | `.Template.Name` | - | ❌ | **MANQUANT** |
 | `.Template.BasePath` | - | ❌ | **MANQUANT** |
-| `.Files` | - | ❌ | **MANQUANT** (critique) |
+| `.Files` | `files` | ✅ | `engine.rs:411`, `files_object.rs` |
 
-### Objet `.Files` (MANQUANT)
+### Objet `.Files` (Implémenté)
 
-Helm permet d'accéder aux fichiers du chart :
+Sherpack expose `files` aux templates via `SandboxedFileProvider` (sandbox restreint à la racine du pack) :
 
-```go
-{{ .Files.Get "config.json" }}
-{{ .Files.GetBytes "binary.dat" }}
-{{ .Files.Glob "files/*.yaml" }}
-{{ .Files.Lines "file.txt" }}
-{{ .Files.AsConfig }}
-{{ .Files.AsSecrets }}
+```jinja
+{{ files.Get("config.json") }}
+{{ files.Glob("files/*.yaml") }}
+{{ files.AsConfig() }}
+{{ files.AsSecrets() }}
+{{ files.Lines("file.txt") }}
 ```
 
-**Impact :** ~30% des charts publics utilisent `.Files`. Sans cette fonctionnalité, ces charts ne peuvent pas être convertis.
-
-**Solution proposée :**
-```rust
-// Dans sherpack-engine/src/functions.rs
-fn files_get(path: &str) -> Result<String>
-fn files_glob(pattern: &str) -> Result<Vec<String>>
-fn files_as_config() -> Result<Value>
-fn files_as_secrets() -> Result<Value>
-```
+Le converter Helm transforme automatiquement `.Files.Get`, `.Files.Glob`, etc. vers cette API.
 
 ---
 
@@ -195,9 +185,9 @@ fn files_as_secrets() -> Result<Value>
 | Helm | Sherpack | Status |
 |------|----------|--------|
 | `toJson` | `tojson` | ✅ |
-| `fromJson` | - | ❌ **MANQUANT** |
+| `fromJson` | `fromjson` | ✅ | filtre + fonction (`filters.rs`) |
 | `toYaml` | `toyaml` | ✅ |
-| `fromYaml` | - | ❌ **MANQUANT** |
+| `fromYaml` | `fromyaml` | ✅ | filtre + fonction (`filters.rs`) |
 | `toToml` | - | ❌ |
 | `fromToml` | - | ❌ |
 | `toPrettyJson` | `tojson_pretty` | ✅ |
@@ -246,8 +236,8 @@ fn files_as_secrets() -> Result<Value>
 | `unset` | - | ❌ |
 | `hasKey` | `has()` | ✅ |
 | `pluck` | - | ❌ |
-| `dig` | - | ❌ **MANQUANT** |
-| `merge` | - | ❌ |
+| `dig` | `dig()` | ✅ | `functions.rs:150`, `dig(d, "a", "b", default)` |
+| `merge` | `merge` | ✅ | filtre dict (`filters.rs::merge`) |
 | `mergeOverwrite` | - | ❌ |
 | `keys` | `keys` | ✅ |
 | `values` | `values` | ✅ |
@@ -309,8 +299,8 @@ fn files_as_secrets() -> Result<Value>
 
 | Helm | Sherpack | Status |
 |------|----------|--------|
-| `lookup` | `{}` (empty dict) | ⚠️ Workaround |
-| `.Capabilities.APIVersions.Has` | - | ❌ **MANQUANT** |
+| `lookup` | `lookup()` | ✅ | Cluster-aware en mode install/upgrade ; `{}` en `sherpack template`. Voir [docs/LOOKUP.md](LOOKUP.md) |
+| `.Capabilities.APIVersions.Has` | `"x" in capabilities.apiVersions` | ⚠️ | Méthode `.Has` absente, mais le pattern Jinja2 natif `in` fonctionne (`apiVersions: Vec<String>` exposé) |
 
 ### Autres Fonctions
 
@@ -368,12 +358,12 @@ fn files_as_secrets() -> Result<Value>
 | `values.yaml` | ✅ | ✅ | |
 | `values.schema.json` | ✅ | ✅ | JSON Schema + format simplifié |
 | `templates/` | ✅ | ✅ | |
-| `templates/NOTES.txt` | ✅ | ❌ | **MANQUANT** |
-| `crds/` directory | ✅ | ❌ | **MANQUANT** (CRDs non-templated) |
+| `templates/NOTES.txt` | ✅ | ✅ | `engine.rs:20`, exposé via `status` |
+| `crds/` directory | ✅ | ⚠️ | Détection présente (`crd/detection.rs`), wiring full pas vérifié |
 | `charts/` dependencies | ✅ | `packs/` | ✅ |
-| `.helmignore` | ✅ | ❌ | **MANQUANT** |
+| `.helmignore` | ✅ | ⚠️ | Converter renomme en `.sherpackignore` mais pas honoré au `package` |
 | Library charts | ✅ | `kind: library` | ✅ (défini, pas testé) |
-| Subcharts | ✅ | ❌ | **MANQUANT** (scoping values) |
+| Subcharts | ✅ | ✅ | Value scoping + globals (`pack_renderer.rs:339`, `Values::for_subchart_json`) |
 
 ### Repository
 
@@ -410,48 +400,44 @@ fn files_as_secrets() -> Result<Value>
 
 ## 6. Résumé des Manques Critiques
 
-### Priorité Haute (bloquant pour migration)
+### Priorité Haute (bloquant pour migration de charts Helm)
 
-1. **`.Files` API** - ~30% des charts l'utilisent
-   - `.Files.Get`, `.Files.Glob`, `.Files.AsConfig`, `.Files.AsSecrets`
-
-2. **`helm test` command** - Tests de release
-   - La phase `test` existe mais pas de commande CLI
-
-3. **`templates/NOTES.txt`** - Instructions post-install
-   - Affiché après install/upgrade dans Helm
-
-4. **`crds/` directory** - CRDs non-templated
-   - Helm les applique avant les autres resources
-
-5. **Subchart value scoping** - Values préfixées par nom du subchart
-   - `postgresql.auth.username` → `auth.username` dans le subchart
+_(plus de bloquants — tous les manques critiques précédents sont fermés)_
 
 ### Priorité Moyenne
 
-6. **`helm get` subcommands**
+2. **`helm get` subcommands**
    - `helm get notes`, `helm get hooks`, `helm get metadata`
 
-7. **`helm repo index`** - Génération d'index.yaml
-   - Nécessaire pour héberger un repo HTTP
+3. **`helm search hub`** - Recherche Artifact Hub
 
-8. **`helm search hub`** - Recherche Artifact Hub
+4. **`.Template.Name` / `.Template.BasePath`**
 
-9. **`fromJson` / `fromYaml`** - Parsing inline
-
-10. **`.Template.Name` / `.Template.BasePath`**
-
-11. **Fonctions manquantes** : `dig`, `merge`, `pick`, `omit`, `wrap`, `dateModify`, regex functions
+5. **Fonctions manquantes** : `dateModify`, `dateInZone`, `fromToml`/`toToml`, `htpasswd`, `bcrypt`, `urlParse`/`urlJoin`, `osBase`/`osDir`/`osExt`, `pluck`, `mergeOverwrite`
 
 ### Priorité Basse
 
-12. **Plugin system** - Extension de Sherpack
+6. **Plugin system** - Extension de Sherpack
 
-13. **Shell completion** - bash/zsh/fish
+7. **`.helmignore` honoré au packaging** - Converter le renomme déjà mais le `sherpack package` ne le lit pas
 
-14. **`.helmignore`** équivalent
+8. **`helm env`** - Variables d'environnement
 
-15. **`helm env`** - Variables d'environnement
+### Déjà implémenté (corrections vs anciennes versions de ce doc)
+
+- ✅ `.Files` API (`files_object.rs`)
+- ✅ `templates/NOTES.txt` (`engine.rs:20`)
+- ✅ Subchart value scoping + globals (`pack_renderer.rs:339`)
+- ✅ `dig`, `pick`, `omit`, `set`, `unset`, `values` (dict functions)
+- ✅ `regex_match`, `regex_replace`, `regex_find`, `regex_find_all`
+- ✅ `basename`, `dirname`, `extname`, `cleanpath`
+- ✅ `sha1`, `sha256`, `sha512`, `md5`
+- ✅ `floor`, `ceil`, `abs`
+- ✅ `fromJson` / `fromYaml` (filtres + fonctions globales, `filters.rs`)
+- ✅ `sherpack repo index` (génération d'index.yaml, supporte `--url` et `--merge`)
+- ✅ `sherpack test` (exécute les hooks `test` du release stocké)
+- ✅ `sherpack completion <shell>` (bash/zsh/fish/powershell/elvish)
+- ✅ `lookup()` réel en install/upgrade (`engine/cluster_reader.rs`, `kube/lookup.rs`) — Helm-compat : 4-arg, swallow d'erreurs, cache intra-render, timeout configurable (`SHERPACK_LOOKUP_TIMEOUT_SECS`, défaut 5s), warning aggregé sur résultats non-vides ; converter Helm préserve l'appel. Doc utilisateur : [LOOKUP.md](LOOKUP.md)
 
 ---
 

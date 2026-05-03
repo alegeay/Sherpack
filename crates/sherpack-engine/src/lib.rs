@@ -8,6 +8,7 @@
 //! - Files API for accessing pack files from templates
 //! - Subchart rendering with recursive support
 
+pub mod cluster_reader;
 pub mod engine;
 pub mod error;
 pub mod files_object;
@@ -18,6 +19,7 @@ pub mod secrets;
 pub mod subchart;
 pub mod suggestions;
 
+pub use cluster_reader::{ClusterReader, LookupState};
 pub use engine::{Engine, EngineBuilder, RenderResult};
 pub use error::{
     EngineError, IssueSeverity, RenderIssue, RenderReport, RenderResultWithReport, TemplateError,

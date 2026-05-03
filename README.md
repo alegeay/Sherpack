@@ -7,7 +7,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg?style=flat-square)](LICENSE)
 [![Build](https://img.shields.io/badge/build-passing-brightgreen.svg?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/tests-600%20passed-brightgreen.svg?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/tests-685%20passed-brightgreen.svg?style=flat-square)]()
 
 *A modern Helm alternative written in Rust, featuring familiar Jinja2 templating syntax*
 
@@ -346,6 +346,9 @@ sherpack uninstall myrelease
 | `now()` | Current ISO timestamp |
 | `uuidv4()` | Random UUID |
 | `fail(msg)` | Fail with message |
+| `lookup(apiVersion, kind, ns, name)` | Read existing cluster state (install/upgrade only — see [docs/LOOKUP.md](docs/LOOKUP.md)) |
+| `fromjson(str)` / `fromyaml(str)` | Parse a JSON / YAML string into a value |
+| `generate_secret(name, length)` | Idempotent random secret, persisted in release state |
 
 ---
 

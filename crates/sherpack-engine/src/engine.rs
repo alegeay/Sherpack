@@ -33,6 +33,7 @@ pub struct RenderResult {
 pub struct EngineBuilder {
     strict_mode: bool,
     secret_state: Option<crate::secrets::SecretFunctionState>,
+    lookup_state: Option<crate::cluster_reader::LookupState>,
 }
 
 impl Default for EngineBuilder {
@@ -46,6 +47,7 @@ impl EngineBuilder {
         Self {
             strict_mode: true,
             secret_state: None,
+            lookup_state: None,
         }
     }
 
@@ -64,11 +66,33 @@ impl EngineBuilder {
         self
     }
 
+    /// Enable cluster-aware `lookup()` by providing a reader.
+    ///
+    /// When set, the `lookup(apiVersion, kind, namespace, name)` template
+    /// function will query the cluster via the provided reader. Without
+    /// this, `lookup()` always returns an empty dict (matching `helm template`).
+    ///
+    /// # Determinism warning
+    ///
+    /// Templates that use `lookup` are non-deterministic — the same Pack
+    /// rendered against different clusters produces different manifests.
+    /// Sherpack records a warning every time `lookup` returns a non-empty
+    /// result; surface those warnings via `LookupState::take_warnings()`
+    /// after the render.
+    pub fn with_cluster_reader(
+        mut self,
+        reader: std::sync::Arc<dyn crate::cluster_reader::ClusterReader>,
+    ) -> Self {
+        self.lookup_state = Some(crate::cluster_reader::LookupState::new(reader));
+        self
+    }
+
     /// Build the engine
     pub fn build(self) -> Engine {
         Engine {
             strict_mode: self.strict_mode,
             secret_state: self.secret_state,
+            lookup_state: self.lookup_state,
         }
     }
 }
@@ -77,6 +101,7 @@ impl EngineBuilder {
 pub struct Engine {
     strict_mode: bool,
     secret_state: Option<crate::secrets::SecretFunctionState>,
+    lookup_state: Option<crate::cluster_reader::LookupState>,
 }
 
 impl Engine {
@@ -92,6 +117,7 @@ impl Engine {
         Self {
             strict_mode,
             secret_state: None,
+            lookup_state: None,
         }
     }
 
@@ -104,6 +130,7 @@ impl Engine {
         Self {
             strict_mode: true,
             secret_state: None,
+            lookup_state: None,
         }
     }
 
@@ -116,6 +143,7 @@ impl Engine {
         Self {
             strict_mode: false,
             secret_state: None,
+            lookup_state: None,
         }
     }
 
@@ -148,6 +176,8 @@ impl Engine {
         env.add_filter("toyaml", filters::toyaml);
         env.add_filter("tojson", filters::tojson);
         env.add_filter("tojson_pretty", filters::tojson_pretty);
+        env.add_filter("fromjson", filters::fromjson);
+        env.add_filter("fromyaml", filters::fromyaml);
         env.add_filter("b64encode", filters::b64encode);
         env.add_filter("b64decode", filters::b64decode);
         env.add_filter("quote", filters::quote);
@@ -232,13 +262,29 @@ impl Engine {
         env.add_function("tpl", functions::tpl);
         env.add_function("tpl_ctx", functions::tpl_ctx);
         env.add_function("lookup", functions::lookup);
+        env.add_function("fromjson", filters::fromjson);
+        env.add_function("fromyaml", filters::fromyaml);
 
         // Register generate_secret function if secret state is available
         if let Some(ref secret_state) = self.secret_state {
             secret_state.register(&mut env);
         }
 
+        // If a cluster reader is configured, replace the no-op `lookup`
+        // stub above with a real implementation backed by the reader.
+        if let Some(ref lookup_state) = self.lookup_state {
+            lookup_state.register(&mut env);
+        }
+
         env
+    }
+
+    /// Get a reference to the lookup state (if any).
+    ///
+    /// Use this after rendering to extract `take_warnings()` and surface
+    /// any non-determinism notices to the user.
+    pub fn lookup_state(&self) -> Option<&crate::cluster_reader::LookupState> {
+        self.lookup_state.as_ref()
     }
 
     /// Render a single template string
@@ -747,5 +793,73 @@ replicas: 3
 
         // State should NOT be dirty (secret already existed)
         assert!(!secret_state2.is_dirty());
+    }
+
+    // -------- Cluster reader integration --------
+
+    /// Mock reader for engine integration tests.
+    struct MockClusterReader {
+        data: std::collections::HashMap<(String, String, String, String), serde_json::Value>,
+    }
+
+    impl crate::cluster_reader::ClusterReader for MockClusterReader {
+        fn lookup_one(&self, av: &str, k: &str, ns: &str, n: &str) -> Option<serde_json::Value> {
+            self.data
+                .get(&(av.into(), k.into(), ns.into(), n.into()))
+                .cloned()
+        }
+
+        fn lookup_list(&self, _: &str, _: &str, _: &str) -> Vec<serde_json::Value> {
+            Vec::new()
+        }
+    }
+
+    #[test]
+    fn test_lookup_returns_empty_without_reader() {
+        let engine = Engine::new(true);
+        let ctx = create_test_context();
+        let template =
+            r#"{% set s = lookup("v1", "Secret", "default", "tls") %}got: {{ s | tojson }}"#;
+        let out = engine.render_string(template, &ctx, "t.yaml").unwrap();
+        assert_eq!(out, "got: {}");
+    }
+
+    #[test]
+    fn test_lookup_uses_reader_when_set() {
+        let mut data = std::collections::HashMap::new();
+        data.insert(
+            (
+                "v1".to_string(),
+                "Secret".to_string(),
+                "default".to_string(),
+                "tls".to_string(),
+            ),
+            serde_json::json!({"data": {"tls.crt": "xyz"}}),
+        );
+        let reader = std::sync::Arc::new(MockClusterReader { data });
+
+        let engine = Engine::builder().with_cluster_reader(reader).build();
+        let ctx = create_test_context();
+        let template = r#"{% set s = lookup("v1", "Secret", "default", "tls") %}cert: {{ s.data["tls.crt"] }}"#;
+        let out = engine.render_string(template, &ctx, "t.yaml").unwrap();
+        assert_eq!(out, "cert: xyz");
+
+        // Render produced a non-empty lookup result → one warning recorded
+        let warnings = engine.lookup_state().unwrap().take_warnings();
+        assert_eq!(warnings.len(), 1);
+    }
+
+    #[test]
+    fn test_lookup_missing_resource_returns_empty_dict() {
+        let reader = std::sync::Arc::new(MockClusterReader {
+            data: std::collections::HashMap::new(),
+        });
+        let engine = Engine::builder().with_cluster_reader(reader).build();
+        let ctx = create_test_context();
+        let template = r#"{% set s = lookup("v1", "Secret", "default", "missing") %}{% if s %}has{% else %}empty{% endif %}"#;
+        let out = engine.render_string(template, &ctx, "t.yaml").unwrap();
+        assert_eq!(out, "empty");
+        // No warnings for empty lookups
+        assert!(engine.lookup_state().unwrap().take_warnings().is_empty());
     }
 }

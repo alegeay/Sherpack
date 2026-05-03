@@ -46,6 +46,41 @@ pub fn tojson_pretty(value: Value) -> Result<String, Error> {
         .map_err(|e| Error::new(ErrorKind::InvalidOperation, e.to_string()))
 }
 
+/// Parse a JSON string into a value (Helm-compatible `fromJson`)
+///
+/// Usage as filter:    `{{ values.json_string | fromjson }}`
+/// Usage as function:  `{{ fromjson(values.json_string) }}`
+pub fn fromjson(value: String) -> Result<Value, Error> {
+    let parsed: serde_json::Value = serde_json::from_str(&value).map_err(|e| {
+        Error::new(
+            ErrorKind::InvalidOperation,
+            format!("fromjson: invalid JSON: {}", e),
+        )
+    })?;
+    Ok(Value::from_serialize(parsed))
+}
+
+/// Parse a YAML string into a value (Helm-compatible `fromYaml`)
+///
+/// Usage as filter:    `{{ values.yaml_string | fromyaml }}`
+/// Usage as function:  `{{ fromyaml(values.yaml_string) }}`
+pub fn fromyaml(value: String) -> Result<Value, Error> {
+    let parsed: serde_yaml::Value = serde_yaml::from_str(&value).map_err(|e| {
+        Error::new(
+            ErrorKind::InvalidOperation,
+            format!("fromyaml: invalid YAML: {}", e),
+        )
+    })?;
+    // Round-trip through JSON to normalize tags/anchors and produce a clean Value
+    let json_value: serde_json::Value = serde_json::to_value(&parsed).map_err(|e| {
+        Error::new(
+            ErrorKind::InvalidOperation,
+            format!("fromyaml: failed to normalize parsed YAML: {}", e),
+        )
+    })?;
+    Ok(Value::from_serialize(json_value))
+}
+
 /// Base64 encode a string
 ///
 /// Usage: {{ secret | b64encode }}
@@ -1077,6 +1112,63 @@ mod tests {
         let yaml = toyaml(value).unwrap();
         assert!(yaml.contains("name: test"));
         assert!(yaml.contains("port: 8080"));
+    }
+
+    #[test]
+    fn test_fromjson_object() {
+        let v = fromjson(r#"{"name":"test","port":8080}"#.to_string()).unwrap();
+        assert_eq!(v.get_attr("name").unwrap().to_string(), "test");
+        assert_eq!(v.get_attr("port").unwrap().as_i64().unwrap(), 8080);
+    }
+
+    #[test]
+    fn test_fromjson_array() {
+        let v = fromjson(r#"[1,2,3]"#.to_string()).unwrap();
+        let len = v.len().unwrap();
+        assert_eq!(len, 3);
+    }
+
+    #[test]
+    fn test_fromjson_invalid() {
+        let err = fromjson("not json".to_string()).unwrap_err();
+        assert!(err.to_string().contains("fromjson"));
+    }
+
+    #[test]
+    fn test_fromyaml_object() {
+        let yaml = "name: test\nport: 8080\n".to_string();
+        let v = fromyaml(yaml).unwrap();
+        assert_eq!(v.get_attr("name").unwrap().to_string(), "test");
+        assert_eq!(v.get_attr("port").unwrap().as_i64().unwrap(), 8080);
+    }
+
+    #[test]
+    fn test_fromyaml_nested() {
+        let yaml = "a:\n  b:\n    c: deep\n".to_string();
+        let v = fromyaml(yaml).unwrap();
+        let a = v.get_attr("a").unwrap();
+        let b = a.get_attr("b").unwrap();
+        assert_eq!(b.get_attr("c").unwrap().to_string(), "deep");
+    }
+
+    #[test]
+    fn test_fromyaml_invalid() {
+        // unbalanced bracket → invalid YAML flow
+        let err = fromyaml("a: [1, 2".to_string()).unwrap_err();
+        assert!(err.to_string().contains("fromyaml"));
+    }
+
+    #[test]
+    fn test_tojson_fromjson_roundtrip() {
+        let original = Value::from_serialize(serde_json::json!({
+            "list": [1, 2, 3],
+            "nested": {"key": "value"}
+        }));
+        let json_str = tojson(original.clone()).unwrap();
+        let parsed = fromjson(json_str).unwrap();
+        let reparsed_str = tojson(parsed).unwrap();
+        let original_str = tojson(original).unwrap();
+        assert_eq!(reparsed_str, original_str);
     }
 
     #[test]

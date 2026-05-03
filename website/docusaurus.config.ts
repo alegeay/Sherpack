@@ -5,7 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 const config: Config = {
   title: 'Sherpack',
   tagline: 'A blazingly fast Kubernetes package manager with Jinja2 templating',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.svg',
 
   future: {
     v4: true,
@@ -81,6 +81,8 @@ const config: Config = {
       logo: {
         alt: 'Sherpack Logo',
         src: 'img/logo.svg',
+        width: 32,
+        height: 32,
       },
       items: [
         {
