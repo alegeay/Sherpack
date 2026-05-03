@@ -139,7 +139,7 @@ impl StorageDriver for FileDriver {
         }
 
         // Sort by version descending
-        releases.sort_by(|a, b| b.version.cmp(&a.version));
+        releases.sort_by_key(|r| std::cmp::Reverse(r.version));
 
         // Filter to latest only if not including superseded
         if !include_superseded {
@@ -171,7 +171,7 @@ impl StorageDriver for FileDriver {
             .collect();
 
         // Sort by version descending
-        releases.sort_by(|a, b| b.version.cmp(&a.version));
+        releases.sort_by_key(|r| std::cmp::Reverse(r.version));
 
         if releases.is_empty() {
             return Err(KubeError::ReleaseNotFound {

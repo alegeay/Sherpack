@@ -172,7 +172,7 @@ impl StorageDriver for ConfigMapDriver {
             .filter_map(|cm| self.parse_configmap(cm).ok())
             .collect();
 
-        releases.sort_by(|a, b| b.version.cmp(&a.version));
+        releases.sort_by_key(|r| std::cmp::Reverse(r.version));
 
         if !include_superseded {
             let mut seen = std::collections::HashSet::new();
@@ -200,7 +200,7 @@ impl StorageDriver for ConfigMapDriver {
             .filter_map(|cm| self.parse_configmap(cm).ok())
             .collect();
 
-        releases.sort_by(|a, b| b.version.cmp(&a.version));
+        releases.sort_by_key(|r| std::cmp::Reverse(r.version));
 
         if releases.is_empty() {
             return Err(KubeError::ReleaseNotFound {

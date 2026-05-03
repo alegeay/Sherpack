@@ -261,7 +261,7 @@ impl StorageDriver for SecretsDriver {
         }
 
         // Sort by version descending (newest first)
-        releases.sort_by(|a, b| b.version.cmp(&a.version));
+        releases.sort_by_key(|r| std::cmp::Reverse(r.version));
 
         // Group by name and take only the latest if not including superseded
         if !include_superseded {
@@ -309,7 +309,7 @@ impl StorageDriver for SecretsDriver {
         }
 
         // Sort by version descending (newest first)
-        releases.sort_by(|a, b| b.version.cmp(&a.version));
+        releases.sort_by_key(|r| std::cmp::Reverse(r.version));
 
         if releases.is_empty() {
             return Err(KubeError::ReleaseNotFound {
