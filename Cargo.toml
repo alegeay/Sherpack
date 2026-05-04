@@ -87,7 +87,7 @@ strsim = "0.11"
 zstd = "0.13"
 
 # Diffing
-similar = "2"
+similar = "3"
 
 # Packaging
 tar = "0.4"
